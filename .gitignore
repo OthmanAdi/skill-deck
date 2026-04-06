@@ -1,0 +1,34 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules
+
+# Build output
+/build
+/.svelte-kit
+/package
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Research docs (local reference only, not published)
+.research/
+
+# Internal planning & agent session files — never publish
+.claude/
+task_plan.md
+progress.md
+findings.md
+
+# IDE
+.idea/
+*.swp
+*.swo

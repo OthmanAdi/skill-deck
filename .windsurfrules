@@ -1,0 +1,6 @@
+Tauri v2 + Svelte 5 + Rust desktop app. See AGENTS.md for full architecture.
+
+Build: pnpm install && pnpm tauri dev
+Test: cd src-tauri && cargo test
+
+Key files: lib.rs (entry), agents/registry.rs (agent definitions), models/skill.rs (types), parsers/frontmatter.rs (parser).

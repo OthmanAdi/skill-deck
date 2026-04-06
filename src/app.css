@@ -1,0 +1,370 @@
+@import "tailwindcss";
+
+/*
+ * @agent-context: Skill Deck theme system.
+ *
+ * ARCHITECTURE:
+ * - @theme maps --color-* token names to var(--t-*) intermediates
+ * - Each [data-theme="X"] block defines the actual --t-* values
+ * - Components use bg-[var(--color-surface-0)] pattern (arbitrary Tailwind values)
+ * - Adding a new theme = 1 CSS block + 1 entry in theme.svelte.ts
+ *
+ * TOKEN NAMING:
+ * --t-surface-*   Background layers (0 = outermost/darkest, 3 = innermost/lightest)
+ * --t-text-*      Text hierarchy (primary > secondary > muted)
+ * --t-accent-*    Brand accent color variants
+ * --t-border-*    Border colors
+ * --t-agent-*     Agent brand colors (consistent across themes)
+ */
+
+@theme {
+  /* Surface layers */
+  --color-surface-0: var(--t-surface-0);
+  --color-surface-1: var(--t-surface-1);
+  --color-surface-2: var(--t-surface-2);
+  --color-surface-3: var(--t-surface-3);
+
+  /* Text hierarchy */
+  --color-text-primary: var(--t-text-primary);
+  --color-text-secondary: var(--t-text-secondary);
+  --color-text-muted: var(--t-text-muted);
+
+  /* Accent */
+  --color-accent: var(--t-accent);
+  --color-accent-hover: var(--t-accent-hover);
+  --color-accent-muted: var(--t-accent-muted);
+  --color-accent-subtle: var(--t-accent-subtle);
+
+  /* Borders */
+  --color-border: var(--t-border);
+  --color-border-hover: var(--t-border-hover);
+  --color-border-active: var(--t-border-active);
+
+  /* Agent brand colors */
+  --color-agent-claude: var(--t-agent-claude);
+  --color-agent-cursor: var(--t-agent-cursor);
+  --color-agent-copilot: var(--t-agent-copilot);
+  --color-agent-codex: var(--t-agent-codex);
+  --color-agent-windsurf: var(--t-agent-windsurf);
+  --color-agent-gemini: var(--t-agent-gemini);
+  --color-agent-cline: var(--t-agent-cline);
+  --color-agent-aider: var(--t-agent-aider);
+
+  /* Status */
+  --color-update-available: var(--t-update-available);
+  --color-starred: var(--t-starred);
+
+  /* Effects */
+  --color-overlay-shadow: var(--t-overlay-shadow);
+  --color-search-glow: var(--t-search-glow);
+
+  /* Code block */
+  --color-code-bg: var(--t-code-bg);
+  --color-code-border: var(--t-code-border);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THEME: OBSIDIAN (dark) — default
+   shadcn/Linear/Notion inspired. Zero-chroma neutrals, cool blue accent.
+   ══════════════════════════════════════════════════════════════ */
+
+:root,
+[data-theme="obsidian"] {
+  color-scheme: dark;
+
+  /* Surfaces: zero-chroma neutrals. Near-black base, subtle elevation steps. */
+  --t-surface-0: oklch(0.145 0 0);
+  --t-surface-1: oklch(0.175 0.004 250);
+  --t-surface-2: oklch(0.205 0.004 250);
+  --t-surface-3: oklch(0.245 0.005 250);
+
+  /* Text: warm off-white primary, cool gray secondary/muted */
+  --t-text-primary:   oklch(0.93 0.005 250);
+  --t-text-secondary: oklch(0.65 0.010 250);
+  --t-text-muted:     oklch(0.47 0.010 250);
+
+  /* Accent: Linear-style cool blue */
+  --t-accent:        oklch(0.65 0.15 250);
+  --t-accent-hover:  oklch(0.70 0.17 250);
+  --t-accent-muted:  oklch(0.42 0.09 250);
+  --t-accent-subtle: oklch(0.22 0.04 250);
+
+  /* Borders: white-alpha (standard shadcn dark pattern) */
+  --t-border:        oklch(1 0 0 / 0.10);
+  --t-border-hover:  oklch(1 0 0 / 0.16);
+  --t-border-active: oklch(0.65 0.15 250 / 0.35);
+
+  /* Agent brand colors — perceptually consistent across themes */
+  --t-agent-claude:   oklch(0.70 0.18 25);
+  --t-agent-cursor:   oklch(0.70 0.15 280);
+  --t-agent-copilot:  oklch(0.70 0.10 220);
+  --t-agent-codex:    oklch(0.70 0.12 160);
+  --t-agent-windsurf: oklch(0.70 0.14 200);
+  --t-agent-gemini:   oklch(0.70 0.16 60);
+  --t-agent-cline:    oklch(0.70 0.12 310);
+  --t-agent-aider:    oklch(0.70 0.10 100);
+
+  /* Status */
+  --t-update-available: oklch(0.75 0.18 80);
+  --t-starred:          oklch(0.85 0.18 85);
+
+  /* Effects */
+  --t-overlay-shadow: oklch(0 0 0 / 0.55);
+  --t-search-glow:    oklch(0.65 0.15 250 / 0.10);
+
+  /* Code blocks */
+  --t-code-bg:     oklch(0.12 0.004 250);
+  --t-code-border: oklch(1 0 0 / 0.07);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THEME: OBSIDIAN LIGHT
+   Same design language, warm paper surfaces.
+   ══════════════════════════════════════════════════════════════ */
+
+[data-theme="obsidian-light"] {
+  color-scheme: light;
+
+  --t-surface-0: oklch(0.985 0.002 250);
+  --t-surface-1: oklch(1 0 0);
+  --t-surface-2: oklch(0.968 0.002 250);
+  --t-surface-3: oklch(0.940 0.003 250);
+
+  --t-text-primary:   oklch(0.145 0.005 250);
+  --t-text-secondary: oklch(0.390 0.010 250);
+  --t-text-muted:     oklch(0.545 0.010 250);
+
+  --t-accent:        oklch(0.52 0.15 250);
+  --t-accent-hover:  oklch(0.47 0.17 250);
+  --t-accent-muted:  oklch(0.65 0.09 250);
+  --t-accent-subtle: oklch(0.90 0.03 250);
+
+  --t-border:        oklch(0.900 0.004 250);
+  --t-border-hover:  oklch(0.855 0.006 250);
+  --t-border-active: oklch(0.52 0.15 250 / 0.25);
+
+  /* Slightly darker agent colors for light bg contrast */
+  --t-agent-claude:   oklch(0.55 0.18 25);
+  --t-agent-cursor:   oklch(0.55 0.15 280);
+  --t-agent-copilot:  oklch(0.55 0.10 220);
+  --t-agent-codex:    oklch(0.55 0.12 160);
+  --t-agent-windsurf: oklch(0.55 0.14 200);
+  --t-agent-gemini:   oklch(0.55 0.16 60);
+  --t-agent-cline:    oklch(0.55 0.12 310);
+  --t-agent-aider:    oklch(0.55 0.10 100);
+
+  --t-update-available: oklch(0.58 0.18 80);
+  --t-starred:          oklch(0.62 0.20 85);
+
+  --t-overlay-shadow: oklch(0 0 0 / 0.08);
+  --t-search-glow:    oklch(0.52 0.15 250 / 0.08);
+
+  --t-code-bg:     oklch(0.968 0.002 250);
+  --t-code-border: oklch(0.900 0.004 250);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BASE STYLES
+   ══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Inter with OpenType features for crisp glyphs */
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 13px;
+
+  /* Border radius scale */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SCROLLBAR
+   ══════════════════════════════════════════════════════════════ */
+
+.skill-list::-webkit-scrollbar {
+  width: 4px;
+}
+.skill-list::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 8px 0;
+}
+.skill-list::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 0.12);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.skill-list::-webkit-scrollbar-thumb:hover {
+  background: oklch(1 0 0 / 0.22);
+}
+[data-theme="obsidian-light"] .skill-list::-webkit-scrollbar-thumb {
+  background: oklch(0 0 0 / 0.10);
+}
+[data-theme="obsidian-light"] .skill-list::-webkit-scrollbar-thumb:hover {
+  background: oklch(0 0 0 / 0.18);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ANIMATIONS
+   Linear-style: functional, never decorative.
+   Entries slightly longer than exits. Max 250ms. No bounce.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Overlay entrance: slide up + fade. 250ms with forgiving ease. */
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Row entrance: simple fade-in-up. No blur, no overshoot. */
+@keyframes row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-shimmer {
+  0%   { opacity: 0.06; }
+  50%  { opacity: 0.14; }
+  100% { opacity: 0.06; }
+}
+
+/* Refresh spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Star press feedback */
+@keyframes star-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* ── Applied classes ── */
+
+.overlay-enter {
+  animation: overlay-enter 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.row-enter {
+  animation: row-enter 200ms ease-out both;
+}
+
+.skeleton-card {
+  background: var(--color-surface-1);
+  border-radius: var(--radius-md);
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+.star-pop {
+  animation: star-pop 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
+/* Alias for components using the old animation name */
+@keyframes refresh-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Breathing pulse for update indicators */
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.3); }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SKILL LIST SCROLL FADE
+   ══════════════════════════════════════════════════════════════ */
+
+.skill-list {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 10px,
+    black calc(100% - 10px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 10px,
+    black calc(100% - 10px),
+    transparent 100%
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SKILL CONTENT PREVIEW (monospace syntax-highlighted preview)
+   ══════════════════════════════════════════════════════════════ */
+
+.skill-content-preview {
+  font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  tab-size: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-secondary);
+}
+
+.skill-content-preview .fm-key       { color: oklch(0.72 0.10 200); }
+.skill-content-preview .fm-value     { color: oklch(0.75 0.09 145); }
+.skill-content-preview .fm-delimiter { color: var(--color-text-muted); opacity: 0.45; }
+.skill-content-preview .md-heading   { color: var(--color-accent); font-weight: 600; }
+.skill-content-preview .md-bullet    { color: var(--color-accent-muted); }
+
+[data-theme="obsidian-light"] .skill-content-preview .fm-key   { color: oklch(0.42 0.10 200); }
+[data-theme="obsidian-light"] .skill-content-preview .fm-value { color: oklch(0.38 0.09 145); }
+
+/* ══════════════════════════════════════════════════════════════
+   DRAG STATE
+   ══════════════════════════════════════════════════════════════ */
+
+[draggable="true"] {
+  -webkit-user-drag: element;
+  cursor: grab;
+}
+[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   KEYBOARD FOCUS (accessibility)
+   ══════════════════════════════════════════════════════════════ */
+
+.row-focused {
+  outline: 2px solid var(--color-accent-muted);
+  outline-offset: -1px;
+  border-radius: var(--radius-sm);
+}

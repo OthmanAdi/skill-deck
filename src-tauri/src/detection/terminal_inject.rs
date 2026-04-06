@@ -1,0 +1,238 @@
+// @agent-context: Terminal content injection via clipboard + synthetic keystroke.
+//
+// STRATEGY:
+// 1. Write the skill content/reference to the clipboard
+// 2. Bring the target terminal window to foreground
+// 3. Send Ctrl+V (paste) keystroke to the terminal
+//
+// PLATFORM STATUS:
+// - Windows: SetClipboardData + SetForegroundWindow + SendInput(Ctrl+V)
+// - macOS: stub (TODO: NSPasteboard + osascript)
+// - Linux: stub (TODO: xdotool type or xclip + xdotool key)
+
+use serde::{Deserialize, Serialize};
+
+/// Result of an injection attempt
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InjectionResult {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+/// Inject text content into a terminal window identified by PID.
+///
+/// The injection uses clipboard paste: write to clipboard, focus window, send Ctrl+V.
+/// This is the most reliable cross-terminal method — all terminals support Ctrl+V paste.
+pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
+    #[cfg(target_os = "windows")]
+    {
+        inject_windows(content, target_pid)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = (content, target_pid);
+        InjectionResult {
+            success: false,
+            error: Some("macOS injection not yet implemented".to_string()),
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (content, target_pid);
+        InjectionResult {
+            success: false,
+            error: Some("Linux injection not yet implemented".to_string()),
+        }
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        let _ = (content, target_pid);
+        InjectionResult {
+            success: false,
+            error: Some("Platform not supported".to_string()),
+        }
+    }
+}
+
+// ── Windows implementation ──────────────────────────────────────────────────
+
+#[cfg(target_os = "windows")]
+fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
+    use std::mem;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+        VK_CONTROL, VK_V,
+    };
+    use windows::Win32::System::DataExchange::{
+        OpenClipboard, CloseClipboard, EmptyClipboard, SetClipboardData,
+    };
+    use windows::Win32::System::Memory::{
+        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+    };
+
+    // Step 1: Find the window belonging to target_pid
+    let hwnd = find_window_for_pid_impl(target_pid);
+    let hwnd = match hwnd {
+        Some(h) => h,
+        None => return InjectionResult {
+            success: false,
+            error: Some(format!("No visible window found for PID {}", target_pid)),
+        },
+    };
+
+    // Step 2: Write content to clipboard as CF_UNICODETEXT
+    let wide: Vec<u16> = content.encode_utf16().chain(std::iter::once(0)).collect();
+    let byte_len = wide.len() * 2;
+
+    unsafe {
+        // Open clipboard
+        if OpenClipboard(None).is_err() {
+            return InjectionResult {
+                success: false,
+                error: Some("Failed to open clipboard".to_string()),
+            };
+        }
+
+        let _ = EmptyClipboard();
+
+        // Allocate global memory for the clipboard data
+        let hmem = match GlobalAlloc(GMEM_MOVEABLE, byte_len) {
+            Ok(h) => h,
+            Err(e) => {
+                let _ = CloseClipboard();
+                return InjectionResult {
+                    success: false,
+                    error: Some(format!("GlobalAlloc failed: {}", e)),
+                };
+            }
+        };
+
+        let ptr = GlobalLock(hmem);
+        if ptr.is_null() {
+            let _ = CloseClipboard();
+            return InjectionResult {
+                success: false,
+                error: Some("GlobalLock failed".to_string()),
+            };
+        }
+
+        std::ptr::copy_nonoverlapping(wide.as_ptr() as *const u8, ptr as *mut u8, byte_len);
+        let _ = GlobalUnlock(hmem);
+
+        // CF_UNICODETEXT = 13
+        let _ = SetClipboardData(13, Some(HANDLE(hmem.0)));
+        let _ = CloseClipboard();
+    }
+
+    // Step 3: Bring target window to foreground
+    unsafe {
+        let _ = SetForegroundWindow(hwnd);
+    }
+
+    // Small delay to let the window come to focus
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    // Step 4: Send Ctrl+V keystroke
+    unsafe {
+        let make_key_input = |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY, up: bool| -> INPUT {
+            let mut input: INPUT = mem::zeroed();
+            input.r#type = INPUT_KEYBOARD;
+            input.Anonymous.ki = KEYBDINPUT {
+                wVk: vk,
+                wScan: 0,
+                dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() },
+                time: 0,
+                dwExtraInfo: 0,
+            };
+            input
+        };
+
+        let inputs = [
+            make_key_input(VK_CONTROL, false),  // Ctrl down
+            make_key_input(VK_V, false),         // V down
+            make_key_input(VK_V, true),          // V up
+            make_key_input(VK_CONTROL, true),    // Ctrl up
+        ];
+
+        let sent = SendInput(&inputs, mem::size_of::<INPUT>() as i32);
+        if sent != 4 {
+            return InjectionResult {
+                success: false,
+                error: Some(format!("SendInput only sent {} of 4 inputs", sent)),
+            };
+        }
+    }
+
+    InjectionResult {
+        success: true,
+        error: None,
+    }
+}
+
+/// Find a visible window belonging to a given PID
+#[cfg(target_os = "windows")]
+fn find_window_for_pid_impl(target_pid: u32) -> Option<windows::Win32::Foundation::HWND> {
+    use windows::Win32::Foundation::{HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindowThreadProcessId, IsWindowVisible,
+    };
+
+    struct EnumState {
+        target_pid: u32,
+        found_hwnd: Option<HWND>,
+    }
+
+    unsafe extern "system" fn enum_callback(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+        let state = &mut *(lparam.0 as *mut EnumState);
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+
+        if pid == state.target_pid && IsWindowVisible(hwnd).as_bool() {
+            state.found_hwnd = Some(hwnd);
+            return windows::core::BOOL(0); // Stop enumeration
+        }
+        windows::core::BOOL(1) // Continue
+    }
+
+    let mut state = EnumState {
+        target_pid,
+        found_hwnd: None,
+    };
+
+    unsafe {
+        let _ = EnumWindows(
+            Some(enum_callback),
+            LPARAM(&mut state as *mut _ as isize),
+        );
+    }
+
+    state.found_hwnd
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_injection_result_serialization() {
+        let result = InjectionResult {
+            success: true,
+            error: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"success\":true"));
+    }
+
+    #[test]
+    fn test_injection_result_error() {
+        let result = InjectionResult {
+            success: false,
+            error: Some("test error".to_string()),
+        };
+        assert!(!result.success);
+        assert_eq!(result.error.as_deref(), Some("test error"));
+    }
+}

@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+            label: "Linux x64"
+          - platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+            label: "macOS ARM64"
+          - platform: macos-latest
+            args: "--target x86_64-apple-darwin"
+            label: "macOS x64"
+          - platform: windows-latest
+            args: ""
+            label: "Windows x64"
+
+    runs-on: ${{ matrix.platform }}
+    name: Build (${{ matrix.label }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Run Rust tests
+        run: cd src-tauri && cargo test
+
+      - name: Run Svelte type checks
+        run: pnpm check
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Skill Deck ${{ github.ref_name }}"
+          releaseBody: "Cross-platform release of Skill Deck."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  test:
+    runs-on: ubuntu-22.04
+    name: Test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - run: pnpm install
+
+      - name: Rust tests
+        run: cd src-tauri && cargo test
+
+      - name: Svelte type checks
+        run: pnpm check
+
+      - name: Rust clippy
+        run: cd src-tauri && cargo clippy -- -D warnings
