@@ -15,8 +15,6 @@
 
 ---
 
-<img src="media/screenshot.png" alt="Skill Deck in action" width="100%">
-
 ## What It Does
 
 Press `Ctrl+Shift+K` — a skill browser slides in. Search, filter, and browse every skill installed across all your coding agents in one place. Drag a skill card onto a terminal window and the install command injects directly. Close it with `Escape`.
@@ -56,8 +54,6 @@ No switching between editors. No hunting through dotfiles. One overlay, everythi
 - **Agent groups** — skills organized by agent with brand colors
 - **Theme system** — Dark, Obsidian, and Light themes
 - **Global hotkey** — `Ctrl+Shift+K` (configurable), `Escape` to close
-
-<img src="media/overlay.png" alt="Skill Deck overlay" width="420">
 
 ## Install & Run
 
