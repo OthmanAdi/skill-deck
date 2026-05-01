@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import tailwindcss from "@tailwindcss/vite";
 
-const host = process.env.TAURI_DEV_HOST;
+const host = /** @type {any} */ (globalThis).process?.env?.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
