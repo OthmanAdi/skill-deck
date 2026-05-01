@@ -463,6 +463,7 @@ fn detect_linux() -> TerminalContext {
 ///
 /// The algorithm does a breadth-first search for shell processes, then recurses
 /// into each shell to find the deepest one (handles tmux, screen, nested shells).
+#[cfg(target_os = "windows")]
 fn find_shell_child(sys: &sysinfo::System, parent_pid: sysinfo::Pid) -> Option<sysinfo::Pid> {
     const SHELLS: &[&str] = &[
         "bash", "zsh", "fish", "sh", "powershell", "pwsh", "cmd",
