@@ -30,33 +30,62 @@
     focusedIndex = -1;
   });
 
+  function getVisibleOptionIndices(): number[] {
+    if (!listEl) return [];
+    const options = Array.from(listEl.querySelectorAll<HTMLElement>('[role="option"]'));
+    return options
+      .map((el) => Number.parseInt(el.dataset.index ?? "-1", 10))
+      .filter((n) => Number.isFinite(n) && n >= 0);
+  }
+
+  function isTextEntryTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName.toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable;
+  }
+
   function handleKeydown(e: KeyboardEvent) {
-    const total = store.filteredSkills.length;
+    if (isTextEntryTarget(e.target)) {
+      return;
+    }
+
+    const visible = getVisibleOptionIndices();
+    const total = visible.length;
     if (total === 0) return;
 
-    if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+    const pos = visible.indexOf(focusedIndex);
+
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      focusedIndex = focusedIndex < total - 1 ? focusedIndex + 1 : 0;
+      const nextPos = pos < 0 ? 0 : (pos + 1) % total;
+      focusedIndex = visible[nextPos];
       scrollToFocused();
-    } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      focusedIndex = focusedIndex > 0 ? focusedIndex - 1 : total - 1;
+      const nextPos = pos < 0 ? total - 1 : (pos - 1 + total) % total;
+      focusedIndex = visible[nextPos];
       scrollToFocused();
     } else if (e.key === "Home") {
       e.preventDefault();
-      focusedIndex = 0;
+      focusedIndex = visible[0];
       scrollToFocused();
     } else if (e.key === "End") {
       e.preventDefault();
-      focusedIndex = total - 1;
+      focusedIndex = visible[total - 1];
+      scrollToFocused();
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      const row = listEl?.querySelector<HTMLElement>(`[data-index="${focusedIndex}"]`);
+      row?.click();
       scrollToFocused();
     }
   }
 
   function scrollToFocused() {
     requestAnimationFrame(() => {
-      const row = listEl?.querySelector(`[data-index="${focusedIndex}"]`);
+      const row = listEl?.querySelector<HTMLElement>(`[data-index="${focusedIndex}"]`);
       row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      row?.focus();
     });
   }
 </script>

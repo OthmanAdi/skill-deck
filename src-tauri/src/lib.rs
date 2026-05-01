@@ -70,8 +70,10 @@ pub fn run() {
         ])
         .setup(|app| {
             // The overlay window starts hidden — shown on global hotkey or tray click
-            let window = app.get_webview_window("overlay")
-                .expect("overlay window not found in tauri.conf.json");
+            let window = match app.get_webview_window("overlay") {
+                Some(window) => window,
+                None => return Err("overlay window not found in tauri.conf.json".into()),
+            };
 
             // Position overlay at bottom-right of primary monitor
             if let Ok(Some(monitor)) = window.primary_monitor() {
@@ -101,9 +103,14 @@ pub fn run() {
 
             let window_for_tray = window.clone();
             let window_for_menu = window.clone();
+            let default_icon = app
+                .default_window_icon()
+                .ok_or_else(|| "default window icon missing".to_string())?
+                .clone();
+
             TrayIconBuilder::new()
                 .tooltip("Skill Deck — Ctrl+Shift+K")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(default_icon)
                 .menu(&tray_menu)
                 .on_tray_icon_event(move |_tray, event| {
                     // Only toggle on left-click — right-click opens the context menu
@@ -146,5 +153,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Skill Deck");
+        .unwrap_or_else(|e| eprintln!("error while running Skill Deck: {}", e));
 }

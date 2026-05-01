@@ -7,8 +7,6 @@
   This component builds the visual tree client-side — no separate API call needed.
 -->
 <script lang="ts">
-  import { slide } from "svelte/transition";
-  import { cubicOut } from "svelte/easing";
   import type { Skill } from "$lib/types";
   import SkillCard from "./SkillCard.svelte";
 
@@ -33,109 +31,107 @@
     collapsed = next;
   }
 
-  /** Top-level skills (no parent) */
-  const roots = $derived(skills.filter((s) => !s.parentId));
+  const idSet = $derived(new Set(skills.map((s) => s.id)));
 
-  /** Get direct children of a given parent ID */
-  function childrenOf(parentId: string): Skill[] {
-    return skills.filter((s) => s.parentId === parentId);
+  /** Top-level visible roots: true roots + filtered orphans whose parent is not visible */
+  const roots = $derived(
+    skills.filter((s) => !s.parentId || !idSet.has(s.parentId))
+  );
+
+  function flattenVisible(
+    nodes: Skill[],
+    collapsedSet: Set<string>,
+    childrenLookup: Map<string, Skill[]>
+  ): Skill[] {
+    const result: Skill[] = [];
+    const visit = (node: Skill) => {
+      result.push(node);
+      if (collapsedSet.has(node.id)) return;
+      const kids = childrenLookup.get(node.id) ?? [];
+      for (const kid of kids) {
+        visit(kid);
+      }
+    };
+
+    for (const node of nodes) {
+      visit(node);
+    }
+    return result;
   }
 
-  /** Global index tracker for keyboard navigation across the tree */
-  let globalIdx = 0;
-  function nextIdx(): number {
-    return globalIdx++;
-  }
-
-  $effect(() => {
-    // Reset index on each skills update so focusedIndex aligns correctly
-    globalIdx = 0;
+  const childrenMap = $derived.by(() => {
+    const map = new Map<string, Skill[]>();
+    for (const skill of skills) {
+      if (!skill.parentId) continue;
+      const existing = map.get(skill.parentId) ?? [];
+      existing.push(skill);
+      map.set(skill.parentId, existing);
+    }
+    return map;
   });
+
+  const visibleOrder = $derived(
+    flattenVisible(roots, collapsed, childrenMap)
+  );
+
+  function visibleIndex(skillId: string): number {
+    return visibleOrder.findIndex((s) => s.id === skillId);
+  }
+
+  const indentById = $derived.by(() => {
+    const map = new Map<string, number>();
+    const walk = (node: Skill, depth: number) => {
+      map.set(node.id, depth);
+      if (collapsed.has(node.id)) return;
+      const kids = childrenMap.get(node.id) ?? [];
+      for (const kid of kids) {
+        walk(kid, depth + 1);
+      }
+    };
+    for (const root of roots) {
+      walk(root, 0);
+    }
+    return map;
+  });
+
+  function hasChildren(skillId: string): boolean {
+    return (childrenMap.get(skillId) ?? []).length > 0;
+  }
+
+  function childrenOfId(skillId: string): Skill[] {
+    return childrenMap.get(skillId) ?? [];
+  }
 </script>
 
 <div class="flex flex-col gap-1">
-  {#each roots as root (root.id)}
-    {@const kids = childrenOf(root.id)}
-    {@const isCollapsed = collapsed.has(root.id)}
+  {#each visibleOrder as skill (skill.id)}
+    {@const idx = visibleIndex(skill.id)}
+    {@const depth = indentById.get(skill.id) ?? 0}
+    {@const isCollapsed = collapsed.has(skill.id)}
+    {@const hasKids = hasChildren(skill.id)}
 
-    <div>
-      <!-- Parent row: skill card + collapse toggle if it has children -->
-      <div class="flex items-start gap-1">
-        <div class="flex-1 min-w-0">
-          <SkillCard skill={root} index={nextIdx()} isFocused={focusedIndex === nextIdx() - 1} />
-        </div>
-
-        {#if kids.length > 0}
-          <button
-            class="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
-              text-[var(--color-text-muted)] transition-all duration-150
-              hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
-            onclick={() => toggleCollapse(root.id)}
-            title="{isCollapsed ? 'Expand' : 'Collapse'} {kids.length} sub-skill{kids.length !== 1 ? 's' : ''}"
-            aria-label="{isCollapsed ? 'Expand' : 'Collapse'} children"
-          >
-            <svg
-              class="h-3 w-3 transition-transform duration-200"
-              style="transform: rotate({isCollapsed ? '-90deg' : '0deg'});"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        {/if}
+    <div class="flex items-start gap-1" style="margin-left: {depth * 16}px;">
+      <div class="flex-1 min-w-0">
+        <SkillCard skill={skill} index={idx} isFocused={focusedIndex === idx} />
       </div>
 
-      <!-- Children: indented, shown when not collapsed -->
-      {#if kids.length > 0 && !isCollapsed}
-        <div
-          class="ml-4 mt-1 flex flex-col gap-1 border-l pl-3"
-          style="border-color: var(--color-border);"
-          transition:slide={{ duration: 160, easing: cubicOut }}
+      {#if hasKids}
+        <button
+          class="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
+            text-[var(--color-text-muted)] transition-all duration-150
+            hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+          onclick={() => toggleCollapse(skill.id)}
+          title="{isCollapsed ? 'Expand' : 'Collapse'} {childrenOfId(skill.id).length} sub-skill{childrenOfId(skill.id).length !== 1 ? 's' : ''}"
+          aria-label="{isCollapsed ? 'Expand' : 'Collapse'} children"
         >
-          {#each kids as child (child.id)}
-            {@const grandkids = childrenOf(child.id)}
-            {@const childCollapsed = collapsed.has(child.id)}
-
-            <div>
-              <div class="flex items-start gap-1">
-                <div class="flex-1 min-w-0">
-                  <SkillCard skill={child} index={nextIdx()} isFocused={focusedIndex === nextIdx() - 1} />
-                </div>
-
-                {#if grandkids.length > 0}
-                  <button
-                    class="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
-                      text-[var(--color-text-muted)] transition-all duration-150
-                      hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
-                    onclick={() => toggleCollapse(child.id)}
-                    title="{childCollapsed ? 'Expand' : 'Collapse'} {grandkids.length} sub-skill{grandkids.length !== 1 ? 's' : ''}"
-                    aria-label="{childCollapsed ? 'Expand' : 'Collapse'} children"
-                  >
-                    <svg
-                      class="h-3 w-3 transition-transform duration-200"
-                      style="transform: rotate({childCollapsed ? '-90deg' : '0deg'});"
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
-                    >
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                {/if}
-              </div>
-
-              {#if grandkids.length > 0 && !childCollapsed}
-                <div
-                  class="ml-4 mt-1 flex flex-col gap-1 border-l pl-3"
-                  style="border-color: var(--color-border);"
-                  transition:slide={{ duration: 160, easing: cubicOut }}
-                >
-                  {#each grandkids as grandchild (grandchild.id)}
-                    <SkillCard skill={grandchild} index={nextIdx()} isFocused={focusedIndex === nextIdx() - 1} />
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/each}
-        </div>
+          <svg
+            class="h-3 w-3 transition-transform duration-200"
+            style="transform: rotate({isCollapsed ? '-90deg' : '0deg'});"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       {/if}
     </div>
   {/each}

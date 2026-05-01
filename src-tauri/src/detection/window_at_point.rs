@@ -13,7 +13,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Information about the window under the mouse cursor
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowAtPoint {
     pub found: bool,
@@ -21,18 +21,6 @@ pub struct WindowAtPoint {
     pub process_name: Option<String>,
     pub window_title: Option<String>,
     pub pid: Option<u32>,
-}
-
-impl Default for WindowAtPoint {
-    fn default() -> Self {
-        Self {
-            found: false,
-            is_terminal: false,
-            process_name: None,
-            window_title: None,
-            pid: None,
-        }
-    }
 }
 
 /// Get information about the window under the current mouse cursor position,

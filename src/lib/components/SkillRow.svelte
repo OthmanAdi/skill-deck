@@ -29,7 +29,8 @@
       contentLoading = true;
       try {
         fileContent = await invoke<string>("read_skill_content", {
-          filePath: skill.filePath,
+          skillId: skill.id,
+          projectPath: skill.projectPath,
         });
       } catch {
         fileContent = "// Could not read file";

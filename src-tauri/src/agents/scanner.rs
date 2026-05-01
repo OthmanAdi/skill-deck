@@ -11,7 +11,7 @@
 // Typical scan of ~100 skills across 5 agents completes in <50ms.
 
 use anyhow::Result;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -103,6 +103,71 @@ pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
     }
 }
 
+/// Scan additional user-provided markdown files/directories from config.custom_scan_paths.
+/// Files are parsed using generic markdown parser and marked as custom skills.
+pub fn scan_custom_paths(custom_scan_paths: &[String]) -> (Vec<Skill>, Vec<ScanError>) {
+    let mut skills = Vec::new();
+    let mut errors = Vec::new();
+
+    for raw in custom_scan_paths {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let path = Path::new(trimmed);
+        if path.is_file() {
+            match parse_custom_file(path) {
+                Ok(skill) => skills.push(skill),
+                Err(e) => errors.push(ScanError {
+                    file_path: trimmed.to_string(),
+                    message: e.to_string(),
+                }),
+            }
+            continue;
+        }
+
+        if path.is_dir() {
+            let pattern = format!("{}/**/*.md", path.to_string_lossy().replace('\\', "/"));
+            match glob::glob(&pattern) {
+                Ok(entries) => {
+                    for entry in entries {
+                        match entry {
+                            Ok(file_path) => match parse_custom_file(&file_path) {
+                                Ok(skill) => skills.push(skill),
+                                Err(e) => errors.push(ScanError {
+                                    file_path: file_path.to_string_lossy().to_string(),
+                                    message: e.to_string(),
+                                }),
+                            },
+                            Err(e) => errors.push(ScanError {
+                                file_path: pattern.clone(),
+                                message: e.to_string(),
+                            }),
+                        }
+                    }
+                }
+                Err(e) => errors.push(ScanError {
+                    file_path: pattern,
+                    message: e.to_string(),
+                }),
+            }
+            continue;
+        }
+
+        errors.push(ScanError {
+            file_path: trimmed.to_string(),
+            message: "custom scan path does not exist".to_string(),
+        });
+    }
+
+    (skills, errors)
+}
+
+fn parse_custom_file(path: &Path) -> Result<Skill> {
+    parse_generic_md(AgentId::Custom("custom-scan".to_string()), path, SkillScope::Global, None)
+}
+
 /// Detect parent/child relationships between skills based on filesystem paths.
 ///
 /// A skill B is a child of skill A if:
@@ -116,7 +181,7 @@ pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
 /// @agent-context: This is a post-processing step. It does NOT modify the flat list
 /// structure — the frontend receives all skills flat and renders tree/flat based on
 /// its own state. Tree IDs are used by SkillTree.svelte to group skills.
-pub fn build_skill_tree(skills: &mut Vec<Skill>) {
+pub fn build_skill_tree(skills: &mut [Skill]) {
     // Collect (skill_id, directory) pairs for all skills
     let id_dirs: Vec<(String, String)> = skills
         .iter()
@@ -149,7 +214,10 @@ pub fn build_skill_tree(skills: &mut Vec<Skill>) {
             let parent_dir = format!("{}{}", other_dir, std::path::MAIN_SEPARATOR);
             if skill_dir.starts_with(&parent_dir) || skill_dir.starts_with(other_dir.as_str()) && skill_dir.len() > other_dir.len() {
                 // Prefer the longest parent (nearest ancestor)
-                if best_parent.as_ref().map_or(true, |(_, len)| other_dir.len() > *len) {
+                if best_parent
+                    .as_ref()
+                    .is_none_or(|(_, len)| other_dir.len() > *len)
+                {
                     best_parent = Some((other_id.clone(), other_dir.len()));
                 }
             }
@@ -342,12 +410,19 @@ fn parse_config_file(
 }
 
 /// Check which agents are installed by testing if their directories exist.
-pub fn detect_installed_agents() -> Vec<AgentInfo> {
+pub fn detect_installed_agents(project_path: Option<&Path>) -> Vec<AgentInfo> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let mut registry = get_agent_registry();
+    let scan_result = scan_all_skills(project_path);
+
+    let mut counts: HashMap<AgentId, usize> = HashMap::new();
+    for skill in &scan_result.skills {
+        let entry = counts.entry(skill.agent_id.clone()).or_insert(0);
+        *entry += 1;
+    }
 
     for agent in &mut registry {
-        agent.installed = agent.global_paths.iter().any(|p| {
+        let installed_by_path = agent.global_paths.iter().any(|p| {
             let resolved = p.replace("$HOME", &home.to_string_lossy());
             // Check if the parent directory exists (not the glob itself)
             let parent = resolved
@@ -358,6 +433,10 @@ pub fn detect_installed_agents() -> Vec<AgentInfo> {
             let clean_parent = parent.split('*').next().unwrap_or(&parent);
             Path::new(clean_parent).exists()
         });
+
+        let count = *counts.get(&agent.id).unwrap_or(&0);
+        agent.skill_count = count;
+        agent.installed = installed_by_path || count > 0;
     }
 
     registry
@@ -367,6 +446,8 @@ pub fn detect_installed_agents() -> Vec<AgentInfo> {
 mod tests {
     use super::*;
     use crate::models::{AgentId, SkillMetadata, SkillScope};
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     fn make_skill(id: &str, file_path: &str) -> Skill {
         Skill {
@@ -446,5 +527,24 @@ mod tests {
         // and NOT each other
         assert_ne!(a.parent_id.as_deref(), Some("child-b"));
         assert_ne!(b.parent_id.as_deref(), Some("child-a"));
+    }
+
+    #[test]
+    fn test_scan_custom_paths_single_file() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "# Custom Skill").unwrap();
+        writeln!(file, "Description body").unwrap();
+
+        let (skills, errors) = scan_custom_paths(&[file.path().to_string_lossy().to_string()]);
+        assert_eq!(errors.len(), 0);
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].agent_id, AgentId::Custom("custom-scan".to_string()));
+    }
+
+    #[test]
+    fn test_scan_custom_paths_missing_path_reports_error() {
+        let (skills, errors) = scan_custom_paths(&["C:/definitely/not/here/skill.md".to_string()]);
+        assert_eq!(skills.len(), 0);
+        assert_eq!(errors.len(), 1);
     }
 }

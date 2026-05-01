@@ -2,6 +2,7 @@
 // Preferences are persisted as JSON in the OS app-data directory.
 
 use crate::models::AppConfig;
+use log::warn;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
@@ -13,7 +14,9 @@ pub struct ConfigState(pub Mutex<AppConfig>);
 fn config_path() -> PathBuf {
     let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("skill-deck");
-    std::fs::create_dir_all(&path).ok();
+    if let Err(e) = std::fs::create_dir_all(&path) {
+        warn!("Failed to create config directory {}: {}", path.to_string_lossy(), e);
+    }
     path.push("config.json");
     path
 }
@@ -28,17 +31,20 @@ pub fn load_config() -> AppConfig {
             .unwrap_or_default()
     } else {
         let config = AppConfig::default();
-        save_config(&config);
+        if let Err(e) = save_config(&config) {
+            warn!("Failed to save initial config {}: {}", path.to_string_lossy(), e);
+        }
         config
     }
 }
 
 /// Persist config to disk (public for use by other command modules)
-pub fn save_config(config: &AppConfig) {
+pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path();
-    if let Ok(json) = serde_json::to_string_pretty(config) {
-        std::fs::write(path, json).ok();
-    }
+    let json = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    std::fs::write(&path, json)
+        .map_err(|e| format!("Failed to write config {}: {}", path.to_string_lossy(), e))
 }
 
 /// Toggle star status for a skill
@@ -52,7 +58,9 @@ pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
         config.starred_skills.insert(skill_id);
         true
     };
-    save_config(&config);
+    if let Err(e) = save_config(&config) {
+        warn!("Failed to persist starred state: {}", e);
+    }
     is_starred
 }
 
@@ -61,7 +69,9 @@ pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
 pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String) {
     let mut config = state.0.lock().unwrap();
     config.skill_icons.insert(skill_id, icon);
-    save_config(&config);
+    if let Err(e) = save_config(&config) {
+        warn!("Failed to persist skill icon: {}", e);
+    }
 }
 
 /// Get the current app configuration
@@ -75,7 +85,9 @@ pub fn get_config(state: State<ConfigState>) -> AppConfig {
 pub fn set_hotkey(state: State<ConfigState>, hotkey: String) {
     let mut config = state.0.lock().unwrap();
     config.hotkey = hotkey;
-    save_config(&config);
+    if let Err(e) = save_config(&config) {
+        warn!("Failed to persist hotkey: {}", e);
+    }
 }
 
 /// Get all starred skill IDs
@@ -90,5 +102,7 @@ pub fn get_starred_skills(state: State<ConfigState>) -> Vec<String> {
 pub fn set_theme(state: State<ConfigState>, theme: String) {
     let mut config = state.0.lock().unwrap();
     config.theme = theme;
-    save_config(&config);
+    if let Err(e) = save_config(&config) {
+        warn!("Failed to persist theme: {}", e);
+    }
 }

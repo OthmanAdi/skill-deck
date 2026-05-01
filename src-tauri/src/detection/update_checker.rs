@@ -3,7 +3,7 @@
 // STRATEGY:
 // 1. Parse the repo URL to extract owner/repo
 // 2. Call GitHub API: GET /repos/{owner}/{repo}/commits?per_page=1&sha=HEAD
-// 3. Compare the remote SHA against a local reference (file content hash)
+// 3. Compare the remote SHA against a cached previous remote reference
 // 4. Cache results to avoid hammering the API (max 1 check per skill per hour)
 //
 // RATE LIMITS:
@@ -13,9 +13,6 @@
 use regex::Regex;
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::path::Path;
 
 use crate::models::UpdateCheckEntry;
 
@@ -28,6 +25,12 @@ pub struct UpdateCheckResult {
     pub update_available: bool,
     pub remote_ref: Option<String>,
     pub error: Option<String>,
+}
+
+pub enum UpdateComparison {
+    Same,
+    Different,
+    Unknown,
 }
 
 fn github_owner_repo_re() -> &'static Regex {
@@ -61,21 +64,13 @@ pub fn should_check(cache_entry: Option<&UpdateCheckEntry>) -> bool {
     }
 }
 
-/// Compute a simple hash of a file's content for local reference
-pub fn file_content_hash(file_path: &Path) -> Option<String> {
-    let content = std::fs::read(file_path).ok()?;
-    let mut hasher = DefaultHasher::new();
-    content.hash(&mut hasher);
-    Some(format!("{:016x}", hasher.finish()))
-}
-
 /// Check a single skill for updates by querying the GitHub API.
 ///
 /// This is async because it makes HTTP requests.
 /// Returns UpdateCheckResult with the check outcome.
 pub async fn check_github_update(
     repo_url: &str,
-    local_hash: Option<&str>,
+    local_ref: Option<&str>,
 ) -> UpdateCheckResult {
     let (owner, repo) = match parse_github_owner_repo(repo_url) {
         Some(pair) => pair,
@@ -92,7 +87,20 @@ pub async fn check_github_update(
         owner, repo
     );
 
-    let client = reqwest::Client::new();
+    let client = match reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(client) => client,
+        Err(e) => {
+            return UpdateCheckResult {
+                update_available: false,
+                remote_ref: None,
+                error: Some(format!("Failed to build HTTP client: {}", e)),
+            };
+        }
+    };
     let response = match client
         .get(&api_url)
         .header("User-Agent", "SkillDeck/0.1")
@@ -133,16 +141,23 @@ pub async fn check_github_update(
         .and_then(|sha| sha.as_str())
         .map(|s| s.to_string());
 
-    let update_available = match (&remote_sha, local_hash) {
-        (Some(remote), Some(local)) => remote != local,
-        (Some(_), None) => false, // No local reference to compare — assume up to date
-        _ => false,
+    let update_available = match compare_refs(remote_sha.as_deref(), local_ref) {
+        UpdateComparison::Different => true,
+        UpdateComparison::Same | UpdateComparison::Unknown => false,
     };
 
     UpdateCheckResult {
         update_available,
         remote_ref: remote_sha,
         error: None,
+    }
+}
+
+pub fn compare_refs(remote_ref: Option<&str>, local_ref: Option<&str>) -> UpdateComparison {
+    match (remote_ref, local_ref) {
+        (Some(remote), Some(local)) if remote == local => UpdateComparison::Same,
+        (Some(_), Some(_)) => UpdateComparison::Different,
+        _ => UpdateComparison::Unknown,
     }
 }
 
@@ -155,6 +170,7 @@ pub fn make_cache_entry(result: &UpdateCheckResult) -> UpdateCheckEntry {
             .as_secs(),
         update_available: result.update_available,
         remote_ref: result.remote_ref.clone(),
+        repo_ref: None,
     }
 }
 
@@ -201,6 +217,7 @@ mod tests {
             last_checked: now,
             update_available: false,
             remote_ref: None,
+            repo_ref: None,
         };
         assert!(!should_check(Some(&entry)));
     }
@@ -215,30 +232,32 @@ mod tests {
             last_checked: old,
             update_available: false,
             remote_ref: None,
+            repo_ref: None,
         };
         assert!(should_check(Some(&entry)));
     }
 
     #[test]
-    fn test_file_content_hash_deterministic() {
-        use std::io::Write;
-        let mut f = tempfile::NamedTempFile::new().unwrap();
-        f.write_all(b"test content").unwrap();
-        let h1 = file_content_hash(f.path());
-        let h2 = file_content_hash(f.path());
-        assert!(h1.is_some());
-        assert_eq!(h1, h2);
+    fn test_compare_refs_same() {
+        assert!(matches!(
+            compare_refs(Some("abc"), Some("abc")),
+            UpdateComparison::Same
+        ));
     }
 
     #[test]
-    fn test_file_content_hash_different_content() {
-        use std::io::Write;
-        let mut f1 = tempfile::NamedTempFile::new().unwrap();
-        f1.write_all(b"content A").unwrap();
-        let mut f2 = tempfile::NamedTempFile::new().unwrap();
-        f2.write_all(b"content B").unwrap();
-        let h1 = file_content_hash(f1.path());
-        let h2 = file_content_hash(f2.path());
-        assert_ne!(h1, h2);
+    fn test_compare_refs_different() {
+        assert!(matches!(
+            compare_refs(Some("abc"), Some("def")),
+            UpdateComparison::Different
+        ));
+    }
+
+    #[test]
+    fn test_compare_refs_unknown() {
+        assert!(matches!(
+            compare_refs(Some("abc"), None),
+            UpdateComparison::Unknown
+        ));
     }
 }

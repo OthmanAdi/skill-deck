@@ -4,9 +4,8 @@
 //
 // PLATFORM STATUS:
 // - Windows: GetForegroundWindow + process tree walk + PEB read (cmd.exe works, PowerShell limited)
-// - macOS: NSWorkspace.frontmostApplication + proc_pidinfo (reliable)
-// - Linux X11: _NET_ACTIVE_WINDOW + /proc/<pid>/cwd (reliable)
-// - Linux Wayland: compositor-specific (Sway/Hyprland supported, GNOME partial)
+// - macOS: TODO stub in v0.1
+// - Linux X11/Wayland: TODO stub in v0.1
 //
 // TODO(v2): OSC 9;9 shell integration for accurate PowerShell CWD
 
@@ -299,7 +298,7 @@ fn try_peb_cwd(pid: u32) -> Option<String> {
         let lib = windows::Win32::System::LibraryLoader::GetModuleHandleA(module).ok()?;
         let proc_name = windows::core::s!("NtQueryInformationProcess");
         let addr = windows::Win32::System::LibraryLoader::GetProcAddress(lib, proc_name)?;
-        mem::transmute::<_, NtQueryInformationProcessFn>(addr)
+        mem::transmute::<unsafe extern "system" fn() -> isize, NtQueryInformationProcessFn>(addr)
     };
 
     // Open the target process

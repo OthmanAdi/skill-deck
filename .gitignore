@@ -27,6 +27,8 @@ vite.config.ts.timestamp-*
 task_plan.md
 progress.md
 findings.md
+PROJECT_MEMORY.md
+PRODUCTION_READINESS_AUDIT.md
 
 # IDE
 .idea/

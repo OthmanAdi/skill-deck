@@ -55,6 +55,18 @@ No switching between editors. No hunting through dotfiles. One overlay, everythi
 - **Theme system** — Dark, Obsidian, and Light themes
 - **Global hotkey** — `Ctrl+Shift+K` (configurable), `Escape` to close
 
+## Platform Support
+
+Current status for v0.1:
+
+| Capability | Windows | macOS | Linux |
+|---|---|---|---|
+| Overlay, scan, search, starred, tree view | Yes | Yes | Yes |
+| Terminal context detection | Yes | Not yet | Not yet |
+| Drag to terminal injection | Yes | Not yet | Not yet |
+
+Until parity lands, terminal context and terminal injection should be considered Windows-first capabilities.
+
 ## Install & Run
 
 **Prerequisites:** [Rust](https://rustup.rs), [Node.js 22+](https://nodejs.org), [pnpm 10+](https://pnpm.io)
@@ -152,10 +164,12 @@ This repo is instrumented for multi-agent development:
 
 ## Contributing
 
+Please read `CONTRIBUTING.md` and `SECURITY.md` before opening pull requests.
+
 1. Fork the repo
 2. Add a new agent — edit only `registry.rs` (see [Adding a New Agent](#adding-a-new-agent))
 3. Or fix a bug, add a theme, improve a parser
-4. Run `cargo test && pnpm check` before submitting
+4. Run `cargo test && cargo clippy -- -D warnings && pnpm check` before submitting
 5. Open a PR
 
 ## License

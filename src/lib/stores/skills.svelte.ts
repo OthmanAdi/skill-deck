@@ -188,7 +188,9 @@ export async function scanSkills(silent = false) {
     store.scanDurationMs = result.scanDurationMs;
     store.lastScanTime = Date.now();
 
-    store.agents = await invoke("list_agents");
+    store.agents = await invoke("list_agents", {
+      projectPath: store.terminalContext.cwd,
+    });
 
     // Apply starred status from config
     const starred: string[] = await invoke("get_starred_skills");
@@ -315,8 +317,8 @@ export function stopDragPoll() {
 }
 
 /** Inject a skill's content into the terminal under the cursor */
-export async function injectSkillToTerminal(skill: Skill): Promise<boolean> {
-  const pid = store.dragTerminalPid;
+export async function injectSkillToTerminal(skill: Skill, targetPid?: number): Promise<boolean> {
+  const pid = targetPid ?? store.dragTerminalPid;
   if (!pid) return false;
 
   // Use the file path as the content to inject — terminals can open it or reference it
@@ -360,7 +362,6 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
     const updateAvailable: boolean = await invoke("check_skill_update", {
       skillId: skill.id,
       repoUrl,
-      filePath: skill.filePath,
     });
     store.skills = store.skills.map((s) =>
       s.id === skill.id ? { ...s, updateAvailable } : s

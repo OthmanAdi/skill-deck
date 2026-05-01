@@ -27,6 +27,16 @@ pub struct InjectionResult {
 pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
     #[cfg(target_os = "windows")]
     {
+        if !is_terminal_pid_windows(target_pid) {
+            return InjectionResult {
+                success: false,
+                error: Some(format!("Refusing to inject into non-terminal PID {}", target_pid)),
+            };
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
         inject_windows(content, target_pid)
     }
     #[cfg(target_os = "macos")]
@@ -53,6 +63,47 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
             error: Some("Platform not supported".to_string()),
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn is_terminal_pid_windows(target_pid: u32) -> bool {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(
+        sysinfo::ProcessesToUpdate::Some(&[sysinfo::Pid::from_u32(target_pid)]),
+        true,
+    );
+
+    let process_name = sys
+        .process(sysinfo::Pid::from_u32(target_pid))
+        .map(|p| p.name().to_string_lossy().to_lowercase());
+
+    match process_name {
+        Some(name) => is_terminal_process_name(&name),
+        None => false,
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_terminal_process_name(exe_name: &str) -> bool {
+    const TERMINALS: &[&str] = &[
+        "windowsterminal",
+        "wt",
+        "cmd",
+        "powershell",
+        "pwsh",
+        "mintty",
+        "alacritty",
+        "wezterm",
+        "kitty",
+        "hyper",
+        "tabby",
+        "conemu",
+        "terminus",
+        "fluent-terminal",
+        "rio",
+        "code",
+    ];
+    TERMINALS.iter().any(|t| exe_name.contains(t))
 }
 
 // ── Windows implementation ──────────────────────────────────────────────────
@@ -234,5 +285,15 @@ mod tests {
         };
         assert!(!result.success);
         assert_eq!(result.error.as_deref(), Some("test error"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_is_terminal_process_name() {
+        assert!(is_terminal_process_name("windowsterminal.exe"));
+        assert!(is_terminal_process_name("pwsh.exe"));
+        assert!(is_terminal_process_name("code.exe"));
+        assert!(!is_terminal_process_name("notepad.exe"));
+        assert!(!is_terminal_process_name("chrome.exe"));
     }
 }

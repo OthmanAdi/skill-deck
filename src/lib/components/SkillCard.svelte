@@ -46,7 +46,10 @@
     if (isExpanded && fileContent === null) {
       contentLoading = true;
       try {
-        const raw: string = await invoke("read_skill_content", { filePath: skill.filePath });
+        const raw: string = await invoke("read_skill_content", {
+          skillId: skill.id,
+          projectPath: skill.projectPath,
+        });
         fileContent = raw;
       } catch {
         fileContent = "// Could not read file";
@@ -86,11 +89,15 @@
   async function handleDragEnd(e: DragEvent) {
     isDragging = false;
     const wasOverTerminal = store.dragOverTerminal;
+    const terminalPid = store.dragTerminalPid;
     stopDragPoll();
 
     if (wasOverTerminal) {
       // Try to inject into the terminal — clipboard+paste approach
-      await injectSkillToTerminal(skill);
+      const injected = await injectSkillToTerminal(skill, terminalPid ?? undefined);
+      if (!injected) {
+        copySkillReference(skill);
+      }
     } else {
       // Fallback: copy to clipboard so the user can paste manually
       copySkillReference(skill);

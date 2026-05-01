@@ -50,7 +50,11 @@ pub struct UpdateCheckEntry {
     /// Whether an update was available at last check
     pub update_available: bool,
     /// Remote commit SHA or version string at last check
+    #[serde(default)]
     pub remote_ref: Option<String>,
+    /// Repo identity used for cache validity (e.g., github:owner/repo)
+    #[serde(default)]
+    pub repo_ref: Option<String>,
 }
 
 /// Where the overlay appears on screen
