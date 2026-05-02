@@ -14,6 +14,7 @@ use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use walkdir::WalkDir;
 
 use super::registry::get_agent_registry;
 use crate::models::{AgentId, AgentInfo, ScanError, ScanResult, Skill, SkillFormat, SkillScope};
@@ -32,6 +33,10 @@ pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
     let mut all_errors: Vec<ScanError> = Vec::new();
 
     for agent in &registry {
+        if !should_scan_agent(agent, &home, project_path) {
+            continue;
+        }
+
         // Scan global paths
         for pattern in &agent.global_paths {
             let resolved = pattern.replace("$HOME", &home.to_string_lossy());
@@ -254,27 +259,109 @@ fn scan_glob_pattern(
     // Normalize path separators for the current OS
     let normalized = pattern.replace('\\', "/");
 
-    let paths = glob::glob(&normalized)?;
+    let paths = collect_candidate_paths(&normalized)?;
 
-    for entry in paths {
-        match entry {
-            Ok(path) => {
-                match parse_file_for_agent(&path, agent, scope.clone(), project_path.clone()) {
-                    Ok(skill) => skills.push(skill),
-                    Err(e) => errors.push(ScanError {
-                        file_path: path.to_string_lossy().to_string(),
-                        message: e.to_string(),
-                    }),
-                }
-            }
+    for path in paths {
+        match parse_file_for_agent(&path, agent, scope.clone(), project_path.clone()) {
+            Ok(skill) => skills.push(skill),
             Err(e) => errors.push(ScanError {
-                file_path: pattern.to_string(),
+                file_path: path.to_string_lossy().to_string(),
                 message: e.to_string(),
             }),
         }
     }
 
     Ok((skills, errors))
+}
+
+fn collect_candidate_paths(pattern: &str) -> Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+
+    let globbed = glob::glob(pattern)?;
+    for entry in globbed {
+        match entry {
+            Ok(path) => {
+                if seen.insert(path.clone()) {
+                    out.push(path);
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    let fallback = collect_with_walkdir(pattern);
+    for path in fallback {
+        if seen.insert(path.clone()) {
+            out.push(path);
+        }
+    }
+
+    Ok(out)
+}
+
+fn collect_with_walkdir(pattern: &str) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let normalized = pattern.replace('\\', "/");
+    let Some((base, suffix)) = normalized.split_once("/**/") else {
+        return out;
+    };
+
+    let base_path = Path::new(base);
+    if !base_path.exists() {
+        return out;
+    }
+
+    let file_match = suffix.trim_start_matches('/');
+    if file_match.is_empty() {
+        return out;
+    }
+
+    for entry in WalkDir::new(base_path)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let Some(name) = entry.path().file_name().and_then(|n| n.to_str()) else {
+            continue;
+        };
+
+        if wildcard_match(name, file_match) {
+            out.push(entry.path().to_path_buf());
+        }
+    }
+
+    out
+}
+
+fn wildcard_match(input: &str, pattern: &str) -> bool {
+    if !pattern.contains('*') {
+        return input == pattern;
+    }
+
+    let parts: Vec<&str> = pattern.split('*').collect();
+    if parts.len() == 2 {
+        let prefix = parts[0];
+        let suffix = parts[1];
+        return input.starts_with(prefix) && input.ends_with(suffix);
+    }
+
+    let mut cursor = 0usize;
+    for part in parts {
+        if part.is_empty() {
+            continue;
+        }
+        let Some(found) = input[cursor..].find(part) else {
+            return false;
+        };
+        cursor += found + part.len();
+    }
+
+    true
 }
 
 /// Parse a single file using the appropriate parser for the agent's format,
@@ -287,7 +374,19 @@ fn parse_file_for_agent(
 ) -> Result<Skill> {
     let mut skill = match agent.format {
         // SKILL.md: richest format, used by Claude Code and Codex
-        SkillFormat::SkillMd => parse_skill_md(agent.id.clone(), path, scope, project_path),
+        SkillFormat::SkillMd => {
+            let is_skill_md = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.eq_ignore_ascii_case("SKILL.md"))
+                .unwrap_or(false);
+
+            if is_skill_md {
+                parse_skill_md(agent.id.clone(), path, scope, project_path)
+            } else {
+                parse_generic_md(agent.id.clone(), path, scope, project_path)
+            }
+        }
 
         // All other formats: use the frontmatter parser and normalize
         SkillFormat::Mdc
@@ -439,17 +538,7 @@ pub fn detect_installed_agents(project_path: Option<&Path>) -> Vec<AgentInfo> {
     }
 
     for agent in &mut registry {
-        let installed_by_path = agent.global_paths.iter().any(|p| {
-            let resolved = p.replace("$HOME", &home.to_string_lossy());
-            // Check if the parent directory exists (not the glob itself)
-            let parent = resolved
-                .rsplit_once('/')
-                .map(|(dir, _)| dir.to_string())
-                .unwrap_or(resolved.clone());
-            // Remove glob wildcards to get the actual directory
-            let clean_parent = parent.split('*').next().unwrap_or(&parent);
-            Path::new(clean_parent).exists()
-        });
+        let installed_by_path = should_scan_agent(agent, &home, project_path);
 
         let count = *counts.get(&agent.id).unwrap_or(&0);
         agent.skill_count = count;
@@ -457,6 +546,50 @@ pub fn detect_installed_agents(project_path: Option<&Path>) -> Vec<AgentInfo> {
     }
 
     registry
+}
+
+fn should_scan_agent(agent: &AgentInfo, home: &Path, project_path: Option<&Path>) -> bool {
+    if !agent.global_detection_paths.is_empty() {
+        return agent
+            .global_detection_paths
+            .iter()
+            .any(|p| resolved_path_exists(p, home, project_path));
+    }
+
+    let global_exists = agent
+        .global_paths
+        .iter()
+        .any(|p| resolved_path_exists(p, home, project_path));
+
+    if global_exists {
+        return true;
+    }
+
+    agent
+        .project_paths
+        .iter()
+        .any(|p| resolved_path_exists(p, home, project_path))
+}
+
+fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>) -> bool {
+    let mut resolved = pattern.replace("$HOME", &home.to_string_lossy());
+    if let Some(project) = project_path {
+        resolved = resolved.replace("$PROJECT", &project.to_string_lossy());
+    }
+
+    if resolved.contains('*') {
+        let parent = resolved
+            .rsplit_once('/')
+            .map(|(dir, _)| dir.to_string())
+            .unwrap_or(resolved.clone());
+        let clean_parent = parent.split('*').next().unwrap_or(&parent).trim_end_matches('/');
+        if clean_parent.is_empty() {
+            return false;
+        }
+        Path::new(clean_parent).exists()
+    } else {
+        Path::new(&resolved).exists()
+    }
 }
 
 #[cfg(test)]

@@ -60,15 +60,21 @@ pub enum AgentId {
     GithubCopilot,
     Codex,
     Windsurf,
+    #[serde(rename = "gemini-cli")]
     Gemini,
     Cline,
+    #[serde(rename = "roo")]
     RooCode,
+    #[serde(rename = "continue")]
     ContinueDev,
     Aider,
     AmazonQ,
     JetbrainsAi,
+    #[serde(rename = "tabnine-cli")]
     Tabnine,
+    #[serde(rename = "augment")]
     AugmentCode,
+    #[serde(rename = "openhands")]
     OpenHands,
     Devin,
     #[serde(rename = "aider-desk")]
@@ -102,7 +108,9 @@ pub enum AgentId {
     #[serde(rename = "iflow-cli")]
     IFlowCli,
     Kilo,
+    #[serde(rename = "kimi-cli")]
     KimiCli,
+    #[serde(rename = "kiro-cli")]
     KiroCli,
     Kode,
     #[serde(rename = "mcpjam")]
@@ -112,10 +120,13 @@ pub enum AgentId {
     Neovate,
     Pi,
     Qoder,
+    #[serde(rename = "qwen-code")]
     QwenCode,
     Replit,
+    #[serde(rename = "rovodev")]
     RovoDev,
     Trae,
+    #[serde(rename = "trae-cn")]
     TraeCn,
     Warp,
     Zencoder,

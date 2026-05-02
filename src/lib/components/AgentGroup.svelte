@@ -8,7 +8,6 @@
   import { slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import type { Skill } from "$lib/types";
-  import { AGENT_COLORS, AGENT_NAMES } from "$lib/types";
   import { toggleAgentCollapse, store } from "$lib/stores/skills.svelte";
   import SkillRow from "./SkillRow.svelte";
 
@@ -25,8 +24,8 @@
   } = $props();
 
   const isCollapsed = $derived(store.collapsedAgents.has(agentId));
-  const color = $derived(AGENT_COLORS[agentId] ?? "#7a7fad");
-  const name = $derived(AGENT_NAMES[agentId] ?? agentId);
+  const color = $derived(store.getAgentColor(agentId));
+  const name = $derived(store.getAgentDisplayName(agentId));
 
   function hexToRgba(hex: string, alpha: number): string {
     const normalized = hex.replace("#", "").trim();

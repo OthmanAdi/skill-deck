@@ -24,20 +24,60 @@ export interface Skill {
 /** Coding agent identifiers — matches AgentId enum in Rust */
 export type AgentId =
   | "claude-code"
+  | "aider-desk"
+  | "adal"
+  | "amp"
+  | "antigravity"
+  | "augment"
+  | "bob"
+  | "codearts-agent"
+  | "codebuddy"
+  | "codemaker"
+  | "codestudio"
+  | "command-code"
+  | "continue"
+  | "cortex"
+  | "crush"
   | "cursor"
+  | "deepagents"
+  | "dexto"
+  | "droid"
+  | "firebender"
+  | "forgecode"
+  | "gemini-cli"
+  | "goose"
   | "github-copilot"
+  | "iflow-cli"
+  | "junie"
+  | "kilo"
+  | "kimi-cli"
+  | "kiro-cli"
+  | "kode"
+  | "mcpjam"
+  | "mistral-vibe"
+  | "mux"
+  | "neovate"
   | "codex"
+  | "opencode"
+  | "openclaw"
+  | "openhands"
+  | "pi"
+  | "pochi"
+  | "qoder"
+  | "qwen-code"
+  | "replit"
+  | "roo"
+  | "rovodev"
+  | "tabnine-cli"
+  | "trae"
+  | "trae-cn"
+  | "warp"
   | "windsurf"
-  | "gemini"
+  | "zencoder"
   | "cline"
-  | "roo-code"
-  | "continue-dev"
   | "aider"
   | "amazon-q"
   | "jetbrains-ai"
-  | "tabnine"
-  | "augment-code"
-  | "open-hands"
   | "devin"
   | "universal"
   | { custom: string };
@@ -159,40 +199,4 @@ export interface UpdateCheckEntry {
 export type TabView = "all" | "starred" | "project";
 export type ViewMode = "grouped" | "tree" | "graph";
 
-/** Agent display color mapping (CSS oklch values from registry) */
-export const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "#f28c54",
-  "cursor": "#a58cff",
-  "github-copilot": "#57a0ff",
-  "codex": "#4dc8b0",
-  "windsurf": "#49bed9",
-  "gemini": "#d5b347",
-  "cline": "#d082d6",
-  "roo-code": "#cf7ca7",
-  "continue-dev": "#5fb77b",
-  "aider": "#82b36d",
-  "amazon-q": "#d68748",
-  "jetbrains-ai": "#d46d95",
-  "tabnine": "#6f88d9",
-  "augment-code": "#3fa89a",
-  "universal": "#7a7fad",
-};
-
-/** Human-readable agent names */
-export const AGENT_NAMES: Record<string, string> = {
-  "claude-code": "Claude Code",
-  "cursor": "Cursor",
-  "github-copilot": "GitHub Copilot",
-  "codex": "Codex",
-  "windsurf": "Windsurf",
-  "gemini": "Gemini",
-  "cline": "Cline",
-  "roo-code": "Roo Code",
-  "continue-dev": "Continue",
-  "aider": "Aider",
-  "amazon-q": "Amazon Q",
-  "jetbrains-ai": "JetBrains AI",
-  "tabnine": "Tabnine",
-  "augment-code": "Augment",
-  "universal": "AGENTS.md",
-};
+export const DEFAULT_AGENT_COLOR = "#7a7fad";

@@ -4,7 +4,8 @@
 -->
 <script lang="ts">
   import type { Skill } from "$lib/types";
-  import { AGENT_COLORS, AGENT_NAMES } from "$lib/types";
+  import { DEFAULT_AGENT_COLOR } from "$lib/types";
+  import { store } from "$lib/stores/skills.svelte";
 
   type GraphNode = {
     skill: Skill;
@@ -160,7 +161,7 @@
 
       {#each nodes as node (node.skill.id)}
         {@const isSelected = selectedSkillId === node.skill.id}
-        {@const color = AGENT_COLORS[typeof node.skill.agentId === "string" ? node.skill.agentId : "universal"] ?? "#7a7fad"}
+        {@const color = store.getAgentColor(typeof node.skill.agentId === "string" ? node.skill.agentId : "universal") ?? DEFAULT_AGENT_COLOR}
         <g transform={`translate(${node.x} ${node.y})`}>
           <circle
             role="button"
@@ -213,7 +214,7 @@
           <div class="min-w-0">
             <div class="truncate text-[12px] font-semibold text-[var(--color-text-primary)]">{selectedSkill.name}</div>
             <div class="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
-              {AGENT_NAMES[typeof selectedSkill.agentId === "string" ? selectedSkill.agentId : "universal"]}
+              {store.getAgentDisplayName(typeof selectedSkill.agentId === "string" ? selectedSkill.agentId : "universal")}
             </div>
           </div>
           <button

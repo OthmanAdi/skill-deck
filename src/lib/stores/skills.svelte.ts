@@ -25,7 +25,7 @@ import type {
   SkillVersionEntry,
   RestoreSkillVersionResult,
 } from "$lib/types";
-import { AGENT_NAMES } from "$lib/types";
+import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
 // ── Reactive state container ─────────────────────────────────────────────────
 
@@ -148,7 +148,7 @@ class SkillStore {
     const sorted = Array.from(groups.entries())
       .map(([agentId, skills]) => ({
         agentId,
-        agentName: AGENT_NAMES[agentId] ?? agentId,
+        agentName: this.getAgentDisplayName(agentId),
         skills,
         count: skills.length,
         startIndex: 0, // filled below
@@ -163,6 +163,21 @@ class SkillStore {
     }
 
     return sorted;
+  }
+
+  getAgentInfo(agentId: string): AgentInfo | null {
+    return this.agents.find((agent) => {
+      const id = typeof agent.id === "string" ? agent.id : "custom";
+      return id === agentId;
+    }) ?? null;
+  }
+
+  getAgentDisplayName(agentId: string): string {
+    return this.getAgentInfo(agentId)?.displayName ?? agentId;
+  }
+
+  getAgentColor(agentId: string): string {
+    return this.getAgentInfo(agentId)?.color ?? DEFAULT_AGENT_COLOR;
   }
 }
 

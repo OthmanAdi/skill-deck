@@ -3,14 +3,18 @@
   Used inside SkillCard expanded view.
 -->
 <script lang="ts">
-  import { AGENT_COLORS, AGENT_NAMES } from "$lib/types";
   import type { AgentId } from "$lib/types";
+  import { DEFAULT_AGENT_COLOR } from "$lib/types";
+  import { store } from "$lib/stores/skills.svelte";
 
   let { agentId }: { agentId: AgentId } = $props();
 
-  const id    = $derived(typeof agentId === "string" ? agentId : "custom");
-  const color = $derived(AGENT_COLORS[id] ?? "#7a7fad");
-  const name  = $derived(AGENT_NAMES[id] ?? (typeof agentId === "object" ? agentId.custom : id));
+  const id = $derived(typeof agentId === "string" ? agentId : "custom");
+  const color = $derived(store.getAgentInfo(id)?.color ?? DEFAULT_AGENT_COLOR);
+  const name = $derived(
+    store.getAgentInfo(id)?.displayName ??
+      (typeof agentId === "object" ? agentId.custom : id)
+  );
 
   function hexToRgba(hex: string, alpha: number): string {
     const normalized = hex.replace("#", "").trim();
