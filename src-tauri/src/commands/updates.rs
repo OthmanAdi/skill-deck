@@ -182,7 +182,7 @@ pub fn set_skill_repo(
     if repo_url.trim().is_empty() {
         config.skill_repo_overrides.remove(&skill_id);
         crate::commands::preferences::save_config(&config)?;
-        return Ok(None);
+        Ok(None)
     } else {
         let canonical =
             update_checker::canonicalize_github_repo_url(&repo_url).ok_or_else(|| {
@@ -192,7 +192,7 @@ pub fn set_skill_repo(
             .skill_repo_overrides
             .insert(skill_id, canonical.clone());
         crate::commands::preferences::save_config(&config)?;
-        return Ok(Some(canonical));
+        Ok(Some(canonical))
     }
 }
 

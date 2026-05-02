@@ -5,15 +5,26 @@
 -->
 <script lang="ts">
   import { themeStore, setTheme, THEMES, type ThemeId } from "$lib/stores/theme.svelte";
-  import { store, setOverlayMode, type OverlayMode } from "$lib/stores/skills.svelte";
+  import { store, setHotkey, setOverlayMode, type OverlayMode } from "$lib/stores/skills.svelte";
 
   let isOpen = $state(false);
   let menuEl: HTMLDivElement | undefined = $state();
   let triggerEl: HTMLButtonElement | undefined = $state();
+  let hotkeyInput = $state("");
+  let hotkeyHint = $state("Use 2 or 3 keys, for example Ctrl+Shift+K");
+
+  function openMenu() {
+    hotkeyInput = store.hotkey || "CommandOrControl+Shift+K";
+    isOpen = true;
+  }
 
   function toggle(e: MouseEvent) {
     e.stopPropagation();
-    isOpen = !isOpen;
+    if (isOpen) {
+      isOpen = false;
+      return;
+    }
+    openMenu();
   }
 
   function selectTheme(themeId: ThemeId) {
@@ -23,6 +34,18 @@
 
   function selectOverlayMode(mode: OverlayMode) {
     void setOverlayMode(mode);
+  }
+
+  async function saveHotkey() {
+    hotkeyHint = "Saving...";
+    await setHotkey(hotkeyInput);
+    hotkeyInput = store.hotkey;
+    hotkeyHint = "Use 2 or 3 keys, for example Ctrl+Shift+K";
+  }
+
+  function resetHotkey() {
+    hotkeyInput = "CommandOrControl+Shift+K";
+    void saveHotkey();
   }
 
   function handleWindowClick(e: MouseEvent) {
@@ -168,6 +191,37 @@
 
       <div class="px-3 pb-2 text-[10px] text-[var(--color-text-muted)] leading-snug">
         {store.hotkey || "CommandOrControl+Shift+K"}
+      </div>
+
+      <div class="px-3 pb-2">
+        <input
+          type="text"
+          bind:value={hotkeyInput}
+          class="w-full rounded-md border px-2 py-1.5 text-[10px]
+            border-[var(--color-border)] bg-[var(--color-surface-2)]
+            text-[var(--color-text-secondary)]
+            focus:outline-none focus:border-[var(--color-border-active)]"
+          placeholder="CommandOrControl+Shift+K"
+        />
+        <p class="mt-1 text-[9px] text-[var(--color-text-muted)]">{hotkeyHint}</p>
+        <div class="mt-1.5 flex items-center gap-1.5">
+          <button
+            class="rounded-md border px-2 py-1 text-[10px]
+              border-[var(--color-border)] text-[var(--color-text-secondary)]
+              hover:bg-[var(--color-surface-2)]"
+            onclick={() => void saveHotkey()}
+          >
+            Save
+          </button>
+          <button
+            class="rounded-md border px-2 py-1 text-[10px]
+              border-[var(--color-border)] text-[var(--color-text-muted)]
+              hover:bg-[var(--color-surface-2)]"
+            onclick={resetHotkey}
+          >
+            Reset
+          </button>
+        </div>
       </div>
     </div>
   {/if}

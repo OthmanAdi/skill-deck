@@ -368,8 +368,8 @@ body {
   content: attr(data-tooltip);
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(2px);
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-2px);
   opacity: 0;
   pointer-events: none;
   white-space: nowrap;
@@ -390,14 +390,14 @@ body {
   content: "";
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 2px);
+  top: calc(100% + 2px);
   transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
   z-index: 69;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
-  border-top: 6px solid var(--color-surface-2);
+  border-bottom: 6px solid var(--color-surface-2);
   transition: opacity 60ms linear;
 }
 
@@ -415,6 +415,17 @@ body {
 
 .skill-content-preview .skill-line {
   padding: 0;
+}
+
+.emoji-avatar {
+  font-size: 1.18rem;
+  line-height: 1;
+  transform: translateY(0.5px);
+}
+
+.letter-avatar {
+  font-size: 0.95rem;
+  line-height: 1;
 }
 
 .skill-content-preview .skill-empty {

@@ -3,7 +3,6 @@
 -->
 <script lang="ts">
   import { onMount } from "svelte";
-  import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { listen } from "@tauri-apps/api/event";
   import { invoke } from "@tauri-apps/api/core";
@@ -13,22 +12,19 @@
     toggleOverlay,
     detectContext,
     setOverlayMode,
-    showToast,
     type OverlayMode,
   } from "$lib/stores/skills.svelte";
   import { initTheme } from "$lib/stores/theme.svelte";
   import type { AppConfig } from "$lib/types";
 
   const appWindow = getCurrentWindow();
+  let unlistenHotkeyPressed: (() => void) | undefined;
   let unlistenFocusChanged: (() => void) | undefined;
   let unlistenOverlayModeChanged: (() => void) | undefined;
   let removeWindowBlurListener: (() => void) | undefined;
   let autoHideFocusGuardTimer: ReturnType<typeof setInterval> | null = null;
-
-  $effect(() => {
-    const mode = store.overlayMode;
-    void appWindow.setAlwaysOnTop(mode !== "auto-hide").catch(() => {});
-  });
+  let hideInFlight = false;
+  let showInFlight = false;
 
   onMount(() => {
     let unlistenResized: (() => void) | undefined;
@@ -48,7 +44,7 @@
 
     const init = async () => {
       await initTheme();
-      await setupHotkey();
+      await setupHotkeyBridge();
       setupEscapeKey();
 
       unlistenResized = await appWindow.onResized(() => {
@@ -61,22 +57,16 @@
       // Always show on launch
       await showOverlay();
 
-      await appWindow
-        .setAlwaysOnTop(store.overlayMode !== "auto-hide")
-        .catch(() => {});
-
       const onWindowBlur = () => {
-        if (store.overlayMode === "auto-hide") {
-          void hideOverlay();
-        }
+        void maybeAutoHide();
       };
       window.addEventListener("blur", onWindowBlur);
       removeWindowBlurListener = () => window.removeEventListener("blur", onWindowBlur);
 
       unlistenFocusChanged = await appWindow
         .onFocusChanged(async ({ payload: focused }) => {
-          if (!focused && store.overlayMode === "auto-hide") {
-            await hideOverlay();
+          if (!focused) {
+            await maybeAutoHide();
           }
         })
         .catch(() => undefined);
@@ -91,8 +81,10 @@
 
       unlistenOverlayModeChanged = await listen<OverlayMode>("overlay-mode-changed", ({ payload }) => {
         if (payload === "auto-hide" || payload === "pinned") {
-          void setOverlayMode(payload);
-          void appWindow.setAlwaysOnTop(payload !== "auto-hide").catch(() => {});
+          store.overlayMode = payload;
+          if (payload === "auto-hide") {
+            void maybeAutoHide();
+          }
         }
       });
     };
@@ -101,6 +93,7 @@
 
     return () => {
       if (persistResizeTimer) clearTimeout(persistResizeTimer);
+      unlistenHotkeyPressed?.();
       unlistenFocusChanged?.();
       unlistenOverlayModeChanged?.();
       removeWindowBlurListener?.();
@@ -110,72 +103,77 @@
   });
 
   async function showOverlay() {
+    if (showInFlight) return;
+    showInFlight = true;
     const visible = await appWindow.isVisible().catch(() => store.isVisible);
-    if (!visible) {
-      toggleOverlay();
+    try {
+      if (!visible) {
+        // Capture terminal context before Skill Deck takes foreground focus.
+        await detectContext();
+        toggleOverlay(true);
+      }
+      await appWindow.show();
+      await appWindow.setFocus();
+    } finally {
+      showInFlight = false;
     }
-    await appWindow.show();
-    await appWindow.setFocus();
   }
 
   async function hideOverlay() {
+    if (hideInFlight) return;
+    hideInFlight = true;
     const visible = await appWindow.isVisible().catch(() => store.isVisible);
-    if (!visible) {
+    try {
+      if (!visible) {
+        if (store.isVisible) {
+          toggleOverlay();
+        }
+        return;
+      }
       if (store.isVisible) {
         toggleOverlay();
       }
-      return;
+      await appWindow.hide();
+    } finally {
+      hideInFlight = false;
     }
-    if (store.isVisible) {
-      toggleOverlay();
-    }
-    await appWindow.hide();
   }
 
-  async function setupHotkey() {
-    const defaultHotkey = "CommandOrControl+Shift+K";
-    const config: AppConfig = await invoke("get_config");
-    const preferredHotkey = (config.hotkey || "").trim() || defaultHotkey;
-    const candidates = Array.from(
-      new Set([
-        preferredHotkey,
-        defaultHotkey,
-        "Ctrl+Shift+K",
-        "Control+Shift+K",
-        "CmdOrControl+Shift+K",
-      ])
-    );
+  async function maybeAutoHide() {
+    if (store.overlayMode !== "auto-hide") return;
+    if (!store.isVisible) return;
 
-    for (const hotkey of candidates) {
-      try {
-        await unregister(hotkey).catch(() => {});
+    const visible = await appWindow.isVisible().catch(() => store.isVisible);
+    if (!visible) return;
 
-        await register(hotkey, async (event) => {
-          if (event.state !== "Pressed") return;
-          const visible = await appWindow.isVisible().catch(() => store.isVisible);
-          if (!visible) {
-            // CRITICAL: detect terminal context NOW — before showing the overlay.
-            // Once our window gains focus, GetForegroundWindow() returns us, not the terminal.
-            await detectContext();
-            if (!store.isVisible) {
-              toggleOverlay(true); // skip duplicate context detection inside toggleOverlay
-            }
-            await appWindow.show();
-            await appWindow.setFocus();
-          } else {
-            await hideOverlay();
-          }
-        });
-
-        store.hotkey = hotkey;
-        return;
-      } catch {
-        // try next candidate
-      }
+    const focused = await appWindow.isFocused().catch(() => document.hasFocus());
+    if (!focused) {
+      await hideOverlay();
     }
+  }
 
-    showToast("Hotkey failed, use tray Show or Hide");
-    console.warn("Hotkey registration failed for all candidates");
+  async function handleGlobalHotkeyPressed() {
+    const visible = await appWindow.isVisible().catch(() => store.isVisible);
+    if (!visible) {
+      // Detect terminal context before overlay takes focus.
+      await detectContext();
+      if (!store.isVisible) {
+        toggleOverlay(true);
+      }
+      await appWindow.show();
+      await appWindow.setFocus();
+      return;
+    }
+    await hideOverlay();
+  }
+
+  async function setupHotkeyBridge() {
+    const config: AppConfig = await invoke("get_config");
+    store.hotkey = (config.hotkey || "").trim() || "CommandOrControl+Shift+K";
+
+    unlistenHotkeyPressed = await listen("overlay-hotkey-pressed", async () => {
+      await handleGlobalHotkeyPressed();
+    });
   }
 
   function setupEscapeKey() {

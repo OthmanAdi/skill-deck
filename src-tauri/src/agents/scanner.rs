@@ -279,14 +279,9 @@ fn collect_candidate_paths(pattern: &str) -> Result<Vec<PathBuf>> {
     let mut seen = HashSet::new();
 
     let globbed = glob::glob(pattern)?;
-    for entry in globbed {
-        match entry {
-            Ok(path) => {
-                if seen.insert(path.clone()) {
-                    out.push(path);
-                }
-            }
-            Err(_) => {}
+    for path in globbed.flatten() {
+        if seen.insert(path.clone()) {
+            out.push(path);
         }
     }
 
@@ -549,11 +544,13 @@ pub fn detect_installed_agents(project_path: Option<&Path>) -> Vec<AgentInfo> {
 }
 
 fn should_scan_agent(agent: &AgentInfo, home: &Path, project_path: Option<&Path>) -> bool {
-    if !agent.global_detection_paths.is_empty() {
-        return agent
-            .global_detection_paths
-            .iter()
-            .any(|p| resolved_path_exists(p, home, project_path));
+    let installed_by_detection_path = agent
+        .global_detection_paths
+        .iter()
+        .any(|p| resolved_path_exists(p, home, project_path));
+
+    if installed_by_detection_path {
+        return true;
     }
 
     let global_exists = agent
@@ -565,10 +562,11 @@ fn should_scan_agent(agent: &AgentInfo, home: &Path, project_path: Option<&Path>
         return true;
     }
 
-    agent
-        .project_paths
-        .iter()
-        .any(|p| resolved_path_exists(p, home, project_path))
+    project_path.is_some()
+        && agent
+            .project_paths
+            .iter()
+            .any(|p| resolved_path_exists(p, home, project_path))
 }
 
 fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>) -> bool {
@@ -582,7 +580,11 @@ fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>)
             .rsplit_once('/')
             .map(|(dir, _)| dir.to_string())
             .unwrap_or(resolved.clone());
-        let clean_parent = parent.split('*').next().unwrap_or(&parent).trim_end_matches('/');
+        let clean_parent = parent
+            .split('*')
+            .next()
+            .unwrap_or(&parent)
+            .trim_end_matches('/');
         if clean_parent.is_empty() {
             return false;
         }
@@ -595,7 +597,7 @@ fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{AgentId, SkillMetadata, SkillScope};
+    use crate::models::{AgentId, AgentInfo, SkillFormat, SkillMetadata, SkillScope};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -699,5 +701,27 @@ mod tests {
         let (skills, errors) = scan_custom_paths(&["C:/definitely/not/here/skill.md".to_string()]);
         assert_eq!(skills.len(), 0);
         assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn should_scan_project_paths_even_without_global_install() {
+        let home = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".claude").join("skills")).unwrap();
+
+        let agent = AgentInfo {
+            id: AgentId::ClaudeCode,
+            display_name: "Claude Code".to_string(),
+            description: String::new(),
+            color: "#000".to_string(),
+            installed: false,
+            skill_count: 0,
+            global_paths: vec!["$HOME/.claude/skills/**/SKILL.md".to_string()],
+            global_detection_paths: vec!["$HOME/.claude".to_string()],
+            project_paths: vec!["$PROJECT/.claude/skills/**/SKILL.md".to_string()],
+            format: SkillFormat::SkillMd,
+        };
+
+        assert!(should_scan_agent(&agent, home.path(), Some(project.path())));
     }
 }

@@ -31,7 +31,7 @@ mod detection;
 mod models;
 mod parsers;
 
-use commands::preferences::{load_config, ConfigState};
+use commands::preferences::{load_config, register_overlay_hotkey, ConfigState, HotkeyState};
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
@@ -43,12 +43,14 @@ pub fn run() {
     let startup_overlay_width = config.overlay_width.clamp(380, 700) as f64;
     let startup_overlay_height = config.overlay_height.clamp(560, 820) as f64;
     let startup_overlay_mode = config.overlay_mode.clone();
+    let startup_hotkey = config.hotkey.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .manage(ConfigState(Mutex::new(config)))
+        .manage(HotkeyState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             // Skill scanning
             commands::scan_skills,
@@ -77,6 +79,8 @@ pub fn run() {
             // Drag & drop injection
             commands::get_window_at_cursor,
             commands::inject_to_terminal,
+            commands::resolve_skill_reference,
+            commands::inject_skill_to_terminal,
         ])
         .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click
@@ -99,6 +103,27 @@ pub fn run() {
             }
 
             let _ = window.set_always_on_top(startup_overlay_mode != "auto-hide");
+
+            {
+                if let Ok(active) =
+                    register_overlay_hotkey(app.handle(), &startup_hotkey, None, true)
+                {
+                    let state = app.state::<ConfigState>();
+                    if let Ok(mut cfg) = state.0.lock() {
+                        if cfg.hotkey != active {
+                            cfg.hotkey = active.clone();
+                            let _ = commands::preferences::save_config(&cfg);
+                        }
+                    }
+
+                    let hotkey_state = app.state::<HotkeyState>();
+                    if let Ok(mut current) = hotkey_state.0.lock() {
+                        *current = Some(active);
+                    };
+                } else {
+                    eprintln!("skill-deck: no global hotkey could be registered");
+                }
+            }
 
             // @agent-context: Tray icon with left-click toggle and right-click context menu.
             let show_item = MenuItemBuilder::with_id("show", "Show / Hide").build(app)?;

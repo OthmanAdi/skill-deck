@@ -178,7 +178,6 @@ fn is_terminal_process(exe_name: &str) -> bool {
         "terminus",
         "fluent-terminal",
         "rio",
-        "code", // VS Code integrated terminal
     ];
     TERMINALS.iter().any(|t| exe_name.contains(t))
 }
@@ -202,10 +201,10 @@ mod tests {
         assert!(is_terminal_process("cmd.exe"));
         assert!(is_terminal_process("pwsh.exe"));
         assert!(is_terminal_process("alacritty.exe"));
-        assert!(is_terminal_process("code.exe"));
         assert!(!is_terminal_process("chrome.exe"));
         assert!(!is_terminal_process("notepad.exe"));
         assert!(!is_terminal_process("explorer.exe"));
+        assert!(!is_terminal_process("code.exe"));
         assert!(!is_terminal_process("skill-deck.exe"));
     }
 }

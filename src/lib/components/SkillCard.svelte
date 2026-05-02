@@ -99,9 +99,11 @@
   // ── Drag handlers ──
   function handleDragStart(e: DragEvent) {
     isDragging = true;
+    const preview = buildLocalReferencePreview();
+    store.dragReferencePreview = preview;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = "copy";
-      e.dataTransfer.setData("text/plain", skill.filePath);
+      e.dataTransfer.setData("text/plain", preview);
       e.dataTransfer.setData("text/uri-list", `file://${skill.filePath}`);
       e.dataTransfer.setData("application/x-skill-deck", JSON.stringify({
         id: skill.id,
@@ -109,6 +111,11 @@
         filePath: skill.filePath,
         agentId: skill.agentId,
       }));
+
+      const dragImage = createDragImage(preview);
+      document.body.appendChild(dragImage);
+      e.dataTransfer.setDragImage(dragImage, 18, 18);
+      setTimeout(() => dragImage.remove(), 0);
     }
     startDragPoll();
   }
@@ -129,6 +136,48 @@
       // Fallback: copy to clipboard so the user can paste manually
       copySkillReference(skill);
     }
+  }
+
+  function buildLocalReferencePreview(): string {
+    const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
+    const normalizedPath = skill.filePath.replace(/\\/g, "/").toLowerCase();
+
+    if (agentId === "claude-code" && normalizedPath.includes("/.claude/commands/")) {
+      const filename = skill.filePath.split(/[\\/]/).pop()?.replace(/\.md$/i, "");
+      if (filename) return `/${filename}`;
+    }
+
+    if (agentId === "claude-code" && skill.metadata.userInvocable) {
+      const slug = skill.name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+      if (slug) return `/${slug}`;
+    }
+
+    return `"${skill.filePath.replace(/"/g, '\\"')}"`;
+  }
+
+  function createDragImage(preview: string): HTMLDivElement {
+    const el = document.createElement("div");
+    el.textContent = preview;
+    Object.assign(el.style, {
+      position: "fixed",
+      top: "-1000px",
+      left: "-1000px",
+      maxWidth: "320px",
+      padding: "10px 12px",
+      borderRadius: "12px",
+      border: "1px solid rgba(126, 139, 255, 0.55)",
+      background: "linear-gradient(135deg, rgba(26, 29, 40, 0.96), rgba(54, 57, 82, 0.94))",
+      color: "#f7f8f8",
+      boxShadow: "0 18px 42px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255,255,255,0.05) inset",
+      fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
+      fontSize: "12px",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      pointerEvents: "none",
+      zIndex: "99999",
+    });
+    return el;
   }
 
   // ── Repo UI state ──
@@ -247,7 +296,7 @@
     title="Change icon"
     aria-label="Change icon"
   >
-    {displayIcon}
+    <span class={isEmoji ? "emoji-avatar" : "letter-avatar"}>{displayIcon}</span>
   </button>
 
   <EmojiPickerPopover

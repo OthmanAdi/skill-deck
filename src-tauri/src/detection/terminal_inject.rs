@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 pub struct InjectionResult {
     pub success: bool,
     pub error: Option<String>,
+    pub reference: Option<String>,
+    pub reference_kind: Option<String>,
 }
 
 /// Inject text content into a terminal window identified by PID.
@@ -34,6 +36,8 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
                     "Refusing to inject into non-terminal PID {}",
                     target_pid
                 )),
+                reference: None,
+                reference_kind: None,
             };
         }
     }
@@ -48,6 +52,8 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
         InjectionResult {
             success: false,
             error: Some("macOS injection not yet implemented".to_string()),
+            reference: None,
+            reference_kind: None,
         }
     }
     #[cfg(target_os = "linux")]
@@ -56,6 +62,8 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
         InjectionResult {
             success: false,
             error: Some("Linux injection not yet implemented".to_string()),
+            reference: None,
+            reference_kind: None,
         }
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
@@ -64,6 +72,8 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
         InjectionResult {
             success: false,
             error: Some("Platform not supported".to_string()),
+            reference: None,
+            reference_kind: None,
         }
     }
 }
@@ -104,7 +114,6 @@ fn is_terminal_process_name(exe_name: &str) -> bool {
         "terminus",
         "fluent-terminal",
         "rio",
-        "code",
     ];
     TERMINALS.iter().any(|t| exe_name.contains(t))
 }
@@ -122,7 +131,7 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
     };
-    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, SetForegroundWindow};
 
     // Step 1: Find the window belonging to target_pid
     let hwnd = find_window_for_pid_impl(target_pid);
@@ -132,6 +141,8 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
             return InjectionResult {
                 success: false,
                 error: Some(format!("No visible window found for PID {}", target_pid)),
+                reference: None,
+                reference_kind: None,
             }
         }
     };
@@ -142,10 +153,20 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
 
     unsafe {
         // Open clipboard
-        if OpenClipboard(None).is_err() {
+        let mut opened = false;
+        for _ in 0..8 {
+            if OpenClipboard(None).is_ok() {
+                opened = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(35));
+        }
+        if !opened {
             return InjectionResult {
                 success: false,
                 error: Some("Failed to open clipboard".to_string()),
+                reference: None,
+                reference_kind: None,
             };
         }
 
@@ -159,6 +180,8 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
                 return InjectionResult {
                     success: false,
                     error: Some(format!("GlobalAlloc failed: {}", e)),
+                    reference: None,
+                    reference_kind: None,
                 };
             }
         };
@@ -169,6 +192,8 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
             return InjectionResult {
                 success: false,
                 error: Some("GlobalLock failed".to_string()),
+                reference: None,
+                reference_kind: None,
             };
         }
 
@@ -176,7 +201,15 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
         let _ = GlobalUnlock(hmem);
 
         // CF_UNICODETEXT = 13
-        let _ = SetClipboardData(13, Some(HANDLE(hmem.0)));
+        if let Err(e) = SetClipboardData(13, Some(HANDLE(hmem.0))) {
+            let _ = CloseClipboard();
+            return InjectionResult {
+                success: false,
+                error: Some(format!("SetClipboardData failed: {}", e)),
+                reference: None,
+                reference_kind: None,
+            };
+        }
         let _ = CloseClipboard();
     }
 
@@ -187,6 +220,17 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
 
     // Small delay to let the window come to focus
     std::thread::sleep(std::time::Duration::from_millis(100));
+
+    unsafe {
+        if GetForegroundWindow() != hwnd {
+            return InjectionResult {
+                success: false,
+                error: Some("Target terminal could not be focused safely".to_string()),
+                reference: None,
+                reference_kind: None,
+            };
+        }
+    }
 
     // Step 4: Send Ctrl+V keystroke
     unsafe {
@@ -220,6 +264,8 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
             return InjectionResult {
                 success: false,
                 error: Some(format!("SendInput only sent {} of 4 inputs", sent)),
+                reference: None,
+                reference_kind: None,
             };
         }
     }
@@ -227,6 +273,8 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
     InjectionResult {
         success: true,
         error: None,
+        reference: None,
+        reference_kind: None,
     }
 }
 
@@ -276,6 +324,8 @@ mod tests {
         let result = InjectionResult {
             success: true,
             error: None,
+            reference: None,
+            reference_kind: None,
         };
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("\"success\":true"));
@@ -286,6 +336,8 @@ mod tests {
         let result = InjectionResult {
             success: false,
             error: Some("test error".to_string()),
+            reference: None,
+            reference_kind: None,
         };
         assert!(!result.success);
         assert_eq!(result.error.as_deref(), Some("test error"));
@@ -296,8 +348,8 @@ mod tests {
     fn test_is_terminal_process_name() {
         assert!(is_terminal_process_name("windowsterminal.exe"));
         assert!(is_terminal_process_name("pwsh.exe"));
-        assert!(is_terminal_process_name("code.exe"));
         assert!(!is_terminal_process_name("notepad.exe"));
         assert!(!is_terminal_process_name("chrome.exe"));
+        assert!(!is_terminal_process_name("code.exe"));
     }
 }

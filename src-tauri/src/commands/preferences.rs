@@ -5,10 +5,142 @@ use crate::models::AppConfig;
 use log::warn;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+
+fn normalize_hotkey(input: &str) -> String {
+    let raw = input.trim().replace(' ', "");
+    if raw.is_empty() {
+        return "CommandOrControl+Shift+K".to_string();
+    }
+
+    raw.split('+')
+        .filter_map(|token| {
+            if token.is_empty() {
+                return None;
+            }
+            let upper = token.to_uppercase();
+            let normalized = match upper.as_str() {
+                "CTRL" | "CONTROL" => "Control".to_string(),
+                "SHIFT" => "Shift".to_string(),
+                "ALT" | "OPTION" => "Alt".to_string(),
+                "CMD" | "COMMAND" | "SUPER" | "META" => "Command".to_string(),
+                "CMDORCTRL" | "CMDORCONTROL" | "COMMANDORCTRL" | "COMMANDORCONTROL" => {
+                    "CommandOrControl".to_string()
+                }
+                _ => {
+                    if upper.len() == 1 {
+                        upper
+                    } else if let Some(rest) = upper.strip_prefix("KEY") {
+                        rest.to_string()
+                    } else {
+                        token.to_string()
+                    }
+                }
+            };
+            Some(normalized)
+        })
+        .collect::<Vec<String>>()
+        .join("+")
+}
+
+fn is_modifier_token(token: &str) -> bool {
+    matches!(
+        token.to_uppercase().as_str(),
+        "COMMAND" | "CONTROL" | "ALT" | "SHIFT" | "COMMANDORCONTROL"
+    )
+}
+
+fn is_hotkey_shape_valid(hotkey: &str) -> bool {
+    let parts = hotkey
+        .split('+')
+        .filter(|p| !p.trim().is_empty())
+        .collect::<Vec<_>>();
+
+    if !(2..=3).contains(&parts.len()) {
+        return false;
+    }
+
+    let has_modifier = parts.iter().any(|p| is_modifier_token(p));
+    let has_non_modifier = parts.iter().any(|p| !is_modifier_token(p));
+    has_modifier && has_non_modifier
+}
+
+fn hotkey_candidates(preferred: &str, include_fallbacks: bool) -> Vec<String> {
+    let preferred = normalize_hotkey(preferred);
+    let mut candidates = vec![preferred];
+
+    if !include_fallbacks {
+        return candidates;
+    }
+
+    for fallback in [
+        "CommandOrControl+Shift+K",
+        "Ctrl+Shift+K",
+        "Control+Shift+K",
+        "CmdOrControl+Shift+K",
+        "CommandOrControl+Alt+K",
+    ] {
+        let normalized = normalize_hotkey(fallback);
+        if !candidates
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(&normalized))
+        {
+            candidates.push(normalized);
+        }
+    }
+
+    candidates
+}
+
+pub fn register_overlay_hotkey<R: Runtime>(
+    app: &AppHandle<R>,
+    preferred: &str,
+    previous: Option<&str>,
+    include_fallbacks: bool,
+) -> Result<String, String> {
+    let candidates = hotkey_candidates(preferred, include_fallbacks);
+
+    let mut unregister_list = candidates.clone();
+    if let Some(prev) = previous {
+        let normalized_prev = normalize_hotkey(prev);
+        if !unregister_list
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(&normalized_prev))
+        {
+            unregister_list.push(normalized_prev);
+        }
+    }
+
+    for shortcut in &unregister_list {
+        let _ = app.global_shortcut().unregister(shortcut.as_str());
+    }
+
+    for shortcut in candidates {
+        let register_result = app.global_shortcut().on_shortcut(
+            shortcut.as_str(),
+            move |app_handle, _shortcut, event| {
+                if event.state == ShortcutState::Pressed {
+                    if let Some(window) = app_handle.get_webview_window("overlay") {
+                        let _ = window.emit("overlay-hotkey-pressed", ());
+                    }
+                }
+            },
+        );
+
+        if register_result.is_ok() {
+            return Ok(shortcut);
+        }
+    }
+
+    Err("Failed to register any global hotkey candidate".to_string())
+}
 
 /// Thread-safe wrapper for the app config
 pub struct ConfigState(pub Mutex<AppConfig>);
+
+/// Tracks the currently active registered global hotkey.
+pub struct HotkeyState(pub Mutex<Option<String>>);
 
 /// Get the config file path (OS-specific app data directory)
 fn config_path() -> PathBuf {
@@ -39,6 +171,12 @@ pub fn load_config() -> AppConfig {
             "obsidian" => "dark".to_string(),
             "obsidian-light" => "light".to_string(),
             _ => "system".to_string(),
+        };
+
+        config.hotkey = normalize_hotkey(&config.hotkey);
+        config.overlay_mode = match config.overlay_mode.as_str() {
+            "auto-hide" => "auto-hide".to_string(),
+            _ => "pinned".to_string(),
         };
 
         config
@@ -89,9 +227,7 @@ pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String)
     if normalized.is_empty() {
         config.skill_icons.remove(&skill_id);
     } else {
-        config
-            .skill_icons
-            .insert(skill_id, normalized.to_string());
+        config.skill_icons.insert(skill_id, normalized.to_string());
     }
     if let Err(e) = save_config(&config) {
         warn!("Failed to persist skill icon: {}", e);
@@ -106,12 +242,50 @@ pub fn get_config(state: State<ConfigState>) -> AppConfig {
 
 /// Update the global hotkey
 #[tauri::command]
-pub fn set_hotkey(state: State<ConfigState>, hotkey: String) {
-    let mut config = state.0.lock().unwrap();
-    config.hotkey = hotkey;
-    if let Err(e) = save_config(&config) {
-        warn!("Failed to persist hotkey: {}", e);
+pub fn set_hotkey<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<ConfigState>,
+    hotkey_state: State<HotkeyState>,
+    hotkey: String,
+) -> Result<String, String> {
+    let requested = normalize_hotkey(&hotkey);
+
+    if !is_hotkey_shape_valid(&requested) {
+        return Err("Shortcut must use 2 or 3 keys with at least one modifier".to_string());
     }
+
+    let previous = hotkey_state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock hotkey state".to_string())?
+        .clone();
+
+    let active = match register_overlay_hotkey(&app, &requested, previous.as_deref(), false) {
+        Ok(active) => active,
+        Err(err) => {
+            if let Some(prev) = previous.as_deref() {
+                let _ = register_overlay_hotkey(&app, prev, None, false);
+            }
+            return Err(err);
+        }
+    };
+
+    {
+        let mut current = hotkey_state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock hotkey state".to_string())?;
+        *current = Some(active.clone());
+    }
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+    config.hotkey = active.clone();
+    save_config(&config)?;
+
+    Ok(active)
 }
 
 /// Get all starred skill IDs
@@ -138,16 +312,32 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
 
 /// Set overlay interaction mode ("pinned" or "auto-hide")
 #[tauri::command]
-pub fn set_overlay_mode(state: State<ConfigState>, mode: String) {
-    let mut config = state.0.lock().unwrap();
-    config.overlay_mode = match mode.as_str() {
+pub fn set_overlay_mode<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<ConfigState>,
+    mode: String,
+) -> Result<String, String> {
+    let normalized = match mode.as_str() {
         "pinned" => "pinned".to_string(),
         "auto-hide" => "auto-hide".to_string(),
         _ => "pinned".to_string(),
     };
-    if let Err(e) = save_config(&config) {
-        warn!("Failed to persist overlay mode: {}", e);
+
+    {
+        let mut config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
+        config.overlay_mode = normalized.clone();
+        save_config(&config)?;
     }
+
+    if let Some(window) = app.get_webview_window("overlay") {
+        let _ = window.set_always_on_top(normalized != "auto-hide");
+        let _ = window.emit("overlay-mode-changed", normalized.clone());
+    }
+
+    Ok(normalized)
 }
 
 /// Persist overlay size.

@@ -53,6 +53,29 @@ pub fn detect_terminal_context() -> TerminalContext {
     }
 }
 
+/// Detect terminal context for a known terminal host PID.
+/// Used during drag/drop so injection decisions are based on the drop target, not stale UI state.
+pub(crate) fn detect_terminal_context_for_pid(pid: u32) -> TerminalContext {
+    #[cfg(target_os = "windows")]
+    {
+        detect_windows_for_pid(pid)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = pid;
+        empty_context()
+    }
+}
+
+fn empty_context() -> TerminalContext {
+    TerminalContext {
+        is_terminal_focused: false,
+        terminal_name: None,
+        cwd: None,
+        shell_pid: None,
+    }
+}
+
 // ── Windows implementation ───────────────────────────────────────────────────
 
 // @agent-context: Windows CWD detection fallback chain.
@@ -68,20 +91,18 @@ pub fn detect_terminal_context() -> TerminalContext {
 
 #[cfg(target_os = "windows")]
 fn detect_windows() -> TerminalContext {
-    use sysinfo::System;
-
     // Get foreground window PID using Windows API
     let fg_pid = match get_foreground_pid_windows() {
         Some(pid) => pid,
-        None => {
-            return TerminalContext {
-                is_terminal_focused: false,
-                terminal_name: None,
-                cwd: None,
-                shell_pid: None,
-            };
-        }
+        None => return empty_context(),
     };
+
+    detect_windows_for_pid(fg_pid)
+}
+
+#[cfg(target_os = "windows")]
+fn detect_windows_for_pid(pid: u32) -> TerminalContext {
+    use sysinfo::System;
 
     // @agent-context: We do a targeted refresh here. Refreshing ALL processes is expensive
     // (~50ms) and unnecessary. We only need the foreground process and its children.
@@ -90,32 +111,27 @@ fn detect_windows() -> TerminalContext {
     let mut sys = System::new();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
-    let process = sys.process(sysinfo::Pid::from_u32(fg_pid));
+    let process = sys.process(sysinfo::Pid::from_u32(pid));
     match process {
         Some(proc) => {
             let exe_name = proc.name().to_string_lossy().to_lowercase();
             let is_terminal = is_known_terminal_windows(&exe_name);
 
             if !is_terminal {
-                return TerminalContext {
-                    is_terminal_focused: false,
-                    terminal_name: None,
-                    cwd: None,
-                    shell_pid: None,
-                };
+                return empty_context();
             }
 
             // @agent-context: Walk the process tree to find the shell child.
             // Windows Terminal's tree: WindowsTerminal.exe → OpenConsoleProxy.exe → shell
             // VS Code's tree: Code.exe → ... → shell
             // Plain cmd: cmd.exe is both terminal and shell
-            let shell_pid = find_shell_child(&sys, sysinfo::Pid::from_u32(fg_pid));
+            let shell_pid = find_shell_child(&sys, sysinfo::Pid::from_u32(pid));
 
             // If the foreground process itself is a shell (e.g., standalone cmd.exe/pwsh.exe),
             // use it directly
             let effective_shell_pid = shell_pid.or_else(|| {
                 if is_shell_process(&exe_name) {
-                    Some(sysinfo::Pid::from_u32(fg_pid))
+                    Some(sysinfo::Pid::from_u32(pid))
                 } else {
                     None
                 }
@@ -132,12 +148,7 @@ fn detect_windows() -> TerminalContext {
                 shell_pid: effective_shell_pid.map(|p| p.as_u32()),
             }
         }
-        None => TerminalContext {
-            is_terminal_focused: false,
-            terminal_name: None,
-            cwd: None,
-            shell_pid: None,
-        },
+        None => empty_context(),
     }
 }
 
@@ -181,7 +192,6 @@ fn is_known_terminal_windows(exe_name: &str) -> bool {
         "terminus.exe",
         "fluent-terminal.exe",
         "rio.exe",
-        "code.exe", // VS Code integrated terminal
     ];
     TERMINALS.iter().any(|t| exe_name.contains(t))
 }
@@ -230,10 +240,8 @@ fn read_cwd_windows(sys: &sysinfo::System, pid: u32) -> Option<String> {
         return Some(cwd);
     }
 
-    // Strategy 4: Last resort — return our own process's CWD
-    std::env::current_dir()
-        .ok()
-        .map(|p| p.to_string_lossy().to_string())
+    // Do not return Skill Deck's own process CWD. A missing terminal CWD is safer than a wrong project.
+    None
 }
 
 /// Try reading CWD via sysinfo's .cwd() method

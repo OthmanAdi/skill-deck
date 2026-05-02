@@ -29,6 +29,36 @@ import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
 export type OverlayMode = "pinned" | "auto-hide";
 
+function normalizeHotkey(value: string | null | undefined): string {
+  const raw = (value ?? "").trim().replace(/\s+/g, "");
+  if (!raw) return "CommandOrControl+Shift+K";
+
+  return raw
+    .split("+")
+    .filter(Boolean)
+    .map((token) => {
+      const upper = token.toUpperCase();
+      if (upper === "CTRL" || upper === "CONTROL") return "Control";
+      if (upper === "SHIFT") return "Shift";
+      if (upper === "ALT" || upper === "OPTION") return "Alt";
+      if (upper === "CMD" || upper === "COMMAND" || upper === "SUPER" || upper === "META") {
+        return "Command";
+      }
+      if (
+        upper === "CMDORCTRL" ||
+        upper === "CMDORCONTROL" ||
+        upper === "COMMANDORCTRL" ||
+        upper === "COMMANDORCONTROL"
+      ) {
+        return "CommandOrControl";
+      }
+      if (upper.length === 1) return upper;
+      if (upper.startsWith("KEY") && upper.length > 3) return upper.slice(3);
+      return token;
+    })
+    .join("+");
+}
+
 // ── Reactive state container ─────────────────────────────────────────────────
 
 class SkillStore {
@@ -78,6 +108,10 @@ class SkillStore {
   dragOverTerminal = $state(false);
   /** PID of the terminal under cursor during a drag */
   dragTerminalPid = $state<number | null>(null);
+  /** Human readable terminal target while dragging */
+  dragTargetLabel = $state<string | null>(null);
+  /** Reference preview shown in the drag affordance */
+  dragReferencePreview = $state<string | null>(null);
 
   /** Last update check status details per skill ID */
   updateStatus = $state<Record<string, UpdateCheckResponse>>({});
@@ -315,7 +349,7 @@ export async function scanSkills(silent = false) {
       collapsedTreeNodes?: string[];
       overlayMode?: OverlayMode;
     }>("get_config");
-    store.hotkey = config.hotkey?.trim() || "CommandOrControl+Shift+K";
+    store.hotkey = normalizeHotkey(config.hotkey);
     store.collapsedAgents = new Set(config.collapsedAgents ?? []);
     store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
     store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
@@ -366,8 +400,20 @@ export async function setSkillIcon(skillId: string, icon: string | null) {
 
 /** Detect the current terminal context */
 export async function detectContext() {
+  const preservePrevious = store.isVisible && !!store.terminalContext.cwd;
   try {
-    store.terminalContext = await invoke("detect_terminal_context");
+    const next: TerminalContext = await invoke("detect_terminal_context");
+    if (!next.cwd && preservePrevious) {
+      store.terminalContext = {
+        ...next,
+        cwd: store.terminalContext.cwd,
+        shellPid: store.terminalContext.shellPid,
+        terminalName: store.terminalContext.terminalName,
+        isTerminalFocused: store.terminalContext.isTerminalFocused,
+      };
+      return;
+    }
+    store.terminalContext = next;
   } catch (e) {
     console.error("Context detection failed:", e);
   }
@@ -405,21 +451,8 @@ export function showToast(message: string) {
 
 /** Copy skill reference to clipboard with fallback chain */
 export async function copySkillReference(skill: Skill) {
-  // Build the best reference string based on the agent
-  const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
-  let reference: string;
-
-  // Agent-specific reference formats
-  if (agentId === "claude-code" && skill.metadata.userInvocable) {
-    // Claude Code slash commands: /skill-name
-    const slug = skill.name.toLowerCase().replace(/\s+/g, "-");
-    reference = `/${slug}`;
-  } else {
-    // Universal fallback: file path
-    reference = skill.filePath;
-  }
-
   try {
+    const reference = await resolveSkillReference(skill);
     await navigator.clipboard.writeText(reference);
     showToast(`Copied: ${reference.length > 50 ? reference.slice(0, 47) + "..." : reference}`);
   } catch {
@@ -437,16 +470,27 @@ export function startDragPoll() {
   if (dragPollInterval) return;
   store.dragOverTerminal = false;
   store.dragTerminalPid = null;
+  store.dragTargetLabel = null;
 
   dragPollInterval = setInterval(async () => {
     try {
-      const win: { found: boolean; isTerminal: boolean; pid?: number } =
+      const win: {
+        found: boolean;
+        isTerminal: boolean;
+        pid?: number;
+        processName?: string | null;
+        windowTitle?: string | null;
+      } =
         await invoke("get_window_at_cursor");
       store.dragOverTerminal = win.found && win.isTerminal;
       store.dragTerminalPid = win.isTerminal && win.pid != null ? win.pid : null;
+      store.dragTargetLabel = win.isTerminal
+        ? (win.windowTitle || win.processName || "terminal")
+        : null;
     } catch {
       store.dragOverTerminal = false;
       store.dragTerminalPid = null;
+      store.dragTargetLabel = null;
     }
   }, 80); // poll every 80ms — fast enough to feel responsive
 }
@@ -459,6 +503,8 @@ export function stopDragPoll() {
   }
   store.dragOverTerminal = false;
   store.dragTerminalPid = null;
+  store.dragTargetLabel = null;
+  store.dragReferencePreview = null;
 }
 
 /** Inject a skill's content into the terminal under the cursor */
@@ -466,24 +512,14 @@ export async function injectSkillToTerminal(skill: Skill, targetPid?: number): P
   const pid = targetPid ?? store.dragTerminalPid;
   if (!pid) return false;
 
-  // Use the file path as the content to inject — terminals can open it or reference it
-  // For Claude Code skills, inject the slash command form if user-invocable
-  const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
-  let content: string;
-  if (agentId === "claude-code" && skill.metadata.userInvocable) {
-    const slug = skill.name.toLowerCase().replace(/\s+/g, "-");
-    content = `/${slug}`;
-  } else {
-    content = skill.filePath;
-  }
-
   try {
-    const result: { success: boolean; error?: string } = await invoke("inject_to_terminal", {
-      content,
+    const result: { success: boolean; error?: string; reference?: string; referenceKind?: string } = await invoke("inject_skill_to_terminal", {
+      skillId: skill.id,
+      projectPath: store.terminalContext.cwd,
       targetPid: pid,
     });
     if (result.success) {
-      showToast(`Injected: ${skill.name}`);
+      showToast(`Injected: ${result.reference ?? skill.name}`);
     } else {
       showToast(`Inject failed: ${result.error ?? "unknown error"}`);
     }
@@ -555,6 +591,22 @@ export async function setOverlayMode(mode: OverlayMode) {
   } catch (e) {
     console.warn("Failed to persist overlay mode:", e);
     showToast("Could not save window behavior setting");
+  }
+}
+
+export async function setHotkey(hotkey: string) {
+  const normalized = normalizeHotkey(hotkey);
+  const previous = store.hotkey;
+  store.hotkey = normalized;
+  try {
+    const active = await invoke<string>("set_hotkey", { hotkey: normalized });
+    store.hotkey = normalizeHotkey(active);
+    showToast(`Shortcut set: ${store.hotkey}`);
+  } catch (e) {
+    store.hotkey = previous;
+    console.warn("Failed to persist hotkey:", e);
+    const message = e instanceof Error ? e.message : String(e);
+    showToast(`Shortcut not saved: ${message}`);
   }
 }
 
@@ -651,4 +703,12 @@ export async function setSkillInstallCommand(skillId: string, cmd: string): Prom
   } catch (e) {
     showToast(`Failed to save install command: ${e}`);
   }
+}
+
+export async function resolveSkillReference(skill: Skill): Promise<string> {
+  const response: { text: string; kind: string; availableInTarget: boolean } = await invoke("resolve_skill_reference", {
+    skillId: skill.id,
+    projectPath: store.terminalContext.cwd,
+  });
+  return response.text;
 }
