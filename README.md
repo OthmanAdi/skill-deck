@@ -27,9 +27,6 @@ No switching between editors. No hunting through dotfiles. One overlay, everythi
   <img src="media/overlay.png" alt="Skill Deck overlay list view" width="340">
 </p>
 
-<p align="center">
-  <img src="media/screenshot.png" alt="Skill Deck running on desktop" width="920">
-</p>
 
 ## Supported Agents
 
