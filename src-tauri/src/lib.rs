@@ -33,9 +33,9 @@ mod parsers;
 
 use commands::preferences::{load_config, ConfigState};
 use std::sync::Mutex;
-use tauri::Manager;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -67,6 +67,9 @@ pub fn run() {
             commands::check_skill_update,
             commands::set_skill_repo,
             commands::set_skill_install_command,
+            commands::snapshot_skill_before_update,
+            commands::list_skill_versions,
+            commands::restore_skill_version,
             // Drag & drop injection
             commands::get_window_at_cursor,
             commands::inject_to_terminal,
@@ -92,12 +95,9 @@ pub fn run() {
             }
 
             // @agent-context: Tray icon with left-click toggle and right-click context menu.
-            let show_item = MenuItemBuilder::with_id("show", "Show / Hide")
-                .build(app)?;
-            let rescan_item = MenuItemBuilder::with_id("rescan", "Rescan Skills")
-                .build(app)?;
-            let quit_item = MenuItemBuilder::with_id("quit", "Quit Skill Deck")
-                .build(app)?;
+            let show_item = MenuItemBuilder::with_id("show", "Show / Hide").build(app)?;
+            let rescan_item = MenuItemBuilder::with_id("rescan", "Rescan Skills").build(app)?;
+            let quit_item = MenuItemBuilder::with_id("quit", "Quit Skill Deck").build(app)?;
 
             let tray_menu = MenuBuilder::new(app)
                 .item(&show_item)
@@ -123,7 +123,8 @@ pub fn run() {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
                         ..
-                    } = event {
+                    } = event
+                    {
                         if window_for_tray.is_visible().unwrap_or(false) {
                             let _ = window_for_tray.hide();
                         } else {
@@ -132,26 +133,24 @@ pub fn run() {
                         }
                     }
                 })
-                .on_menu_event(move |app_handle, event| {
-                    match event.id().as_ref() {
-                        "show" => {
-                            if window_for_menu.is_visible().unwrap_or(false) {
-                                let _ = window_for_menu.hide();
-                            } else {
-                                let _ = window_for_menu.show();
-                                let _ = window_for_menu.set_focus();
-                            }
-                        }
-                        "rescan" => {
+                .on_menu_event(move |app_handle, event| match event.id().as_ref() {
+                    "show" => {
+                        if window_for_menu.is_visible().unwrap_or(false) {
+                            let _ = window_for_menu.hide();
+                        } else {
                             let _ = window_for_menu.show();
                             let _ = window_for_menu.set_focus();
-                            let _ = window_for_menu.eval("window.location.reload()");
                         }
-                        "quit" => {
-                            app_handle.exit(0);
-                        }
-                        _ => {}
                     }
+                    "rescan" => {
+                        let _ = window_for_menu.show();
+                        let _ = window_for_menu.set_focus();
+                        let _ = window_for_menu.eval("window.location.reload()");
+                    }
+                    "quit" => {
+                        app_handle.exit(0);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
 

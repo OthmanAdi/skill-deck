@@ -7,6 +7,7 @@
 // - terminal_inject: Inject content into terminal windows via clipboard+paste
 
 pub mod repo_detector;
+pub mod skill_history;
+pub mod terminal_inject;
 pub mod update_checker;
 pub mod window_at_point;
-pub mod terminal_inject;

@@ -9,7 +9,15 @@
   import { cubicOut } from "svelte/easing";
   import { invoke } from "@tauri-apps/api/core";
   import type { Skill } from "$lib/types";
-  import { toggleStar, copySkillReference } from "$lib/stores/skills.svelte";
+  import {
+    toggleStar,
+    copySkillReference,
+    checkSkillUpdate,
+    snapshotSkillBeforeUpdate,
+    loadSkillVersionHistory,
+    restoreSkillVersion,
+    store,
+  } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
 
   let {
@@ -23,6 +31,10 @@
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
   let starAnimating = $state(false);
+  let repoCheckLoading = $state(false);
+  let snapshotLoading = $state(false);
+  let historyLoading = $state(false);
+  let restoringVersionId = $state<string | null>(null);
 
   async function handleClick() {
     isExpanded = !isExpanded;
@@ -53,6 +65,34 @@
     copySkillReference(skill);
   }
 
+  async function handleCheckUpdate(e: MouseEvent) {
+    e.stopPropagation();
+    repoCheckLoading = true;
+    await checkSkillUpdate(skill);
+    repoCheckLoading = false;
+  }
+
+  async function handleSnapshot(e: MouseEvent) {
+    e.stopPropagation();
+    snapshotLoading = true;
+    await snapshotSkillBeforeUpdate(skill, updateStatus?.remoteRef ?? undefined, "before-update");
+    snapshotLoading = false;
+  }
+
+  async function handleLoadHistory(e: MouseEvent) {
+    e.stopPropagation();
+    historyLoading = true;
+    await loadSkillVersionHistory(skill.id);
+    historyLoading = false;
+  }
+
+  async function handleRestore(e: MouseEvent, versionId: string) {
+    e.stopPropagation();
+    restoringVersionId = versionId;
+    await restoreSkillVersion(skill, versionId);
+    restoringVersionId = null;
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -72,6 +112,21 @@
   const contentPreview = $derived.by(() => {
     if (!fileContent) return null;
     return renderSkillContent(fileContent, 220);
+  });
+
+  const updateStatus = $derived(store.updateStatus[skill.id] ?? null);
+  const historyEntries = $derived(store.versionHistory[skill.id] ?? []);
+
+  const repoUrlDisplay = $derived.by(() => {
+    const value = skill.metadata.repositoryUrl?.trim() ?? "";
+    if (!value) return null;
+    try {
+      const parsed = new URL(value.startsWith("github.com/") ? `https://${value}` : value);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      return parsed.toString();
+    } catch {
+      return null;
+    }
   });
 
   const entryDelayMs = $derived(Math.min(delayIndex, 8) * 16);
@@ -119,7 +174,11 @@
     {/if}
 
     {#if skill.metadata.version}
-      <span class="text-[9px] tabular-nums text-[var(--color-text-muted)] opacity-50">
+      <span
+        class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums
+          text-[var(--color-text-secondary)]"
+        style="border-color: var(--color-border); background: var(--color-surface-3);"
+      >
         v{skill.metadata.version}
       </span>
     {/if}
@@ -138,11 +197,11 @@
 
     <!-- Star -->
     <button
-      class="rounded p-0.5 text-[11px] leading-none
+      class="flex h-6 w-6 items-center justify-center rounded-md text-[14px] leading-none
         transition-all duration-[120ms] ease-out
         {skill.starred
-          ? 'text-[var(--color-starred)]'
-          : 'text-[var(--color-text-muted)] opacity-0 group-hover:opacity-40 hover:!opacity-100 hover:text-[var(--color-starred)]'}
+          ? 'text-[var(--color-starred)] bg-[var(--color-surface-3)]'
+          : 'text-[var(--color-text-secondary)] opacity-80 hover:bg-[var(--color-surface-3)] hover:text-[var(--color-starred)] hover:opacity-100'}
         {starAnimating ? 'star-pop' : ''}"
       onclick={handleStarClick}
       aria-label={skill.starred ? "Unstar" : "Star"}
@@ -150,14 +209,14 @@
 
     <!-- Copy -->
     <button
-      class="rounded p-0.5 text-[var(--color-text-muted)]
-        opacity-0 group-hover:opacity-40 hover:!opacity-100
-        hover:text-[var(--color-accent)]
+      class="flex h-6 w-6 items-center justify-center rounded-md
+        text-[var(--color-text-secondary)] opacity-80
+        hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)] hover:opacity-100
         transition-all duration-[120ms] ease-out"
       onclick={handleCopyClick}
       aria-label="Copy reference"
     >
-      <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round"
           d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
       </svg>
@@ -225,6 +284,75 @@
       <p class="truncate font-mono text-[9px] text-[var(--color-text-secondary)] opacity-95">
         {skill.filePath}
       </p>
+
+      {#if skill.metadata.repositoryUrl}
+        <div class="flex items-center gap-1.5">
+          {#if repoUrlDisplay}
+            <a
+              href={repoUrlDisplay}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="truncate text-[9px] text-[var(--color-accent)] hover:underline"
+              onclick={(e) => e.stopPropagation()}
+            >
+              {repoUrlDisplay.replace(/^https?:\/\//, "")}
+            </a>
+          {:else}
+            <span class="truncate text-[9px] text-[var(--color-error)]">Invalid repo URL</span>
+          {/if}
+
+          <button
+            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            onclick={handleCheckUpdate}
+            disabled={repoCheckLoading || !repoUrlDisplay}
+            title="Check live update status"
+          >
+            {repoCheckLoading ? "..." : "check"}
+          </button>
+
+          <button
+            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            onclick={handleSnapshot}
+            disabled={snapshotLoading}
+            title="Archive local snapshot before updating"
+          >
+            {snapshotLoading ? "..." : "archive"}
+          </button>
+
+          <button
+            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            onclick={handleLoadHistory}
+            disabled={historyLoading}
+            title="Load archived versions"
+          >
+            {historyLoading ? "..." : "history"}
+          </button>
+        </div>
+
+        {#if updateStatus?.error}
+          <p class="truncate text-[9px] text-[var(--color-error)]">{updateStatus.error}</p>
+        {/if}
+
+        {#if historyEntries.length > 0}
+          <div class="max-h-[88px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5 text-[9px]">
+            {#each historyEntries as entry (entry.versionId)}
+              <div class="mb-1 flex items-center justify-between gap-1 last:mb-0">
+                <span class="truncate text-[var(--color-text-muted)]">
+                  {entry.reason} {new Date(entry.createdAt * 1000).toLocaleString()}
+                </span>
+                <button
+                  class="rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                  onclick={(e) => handleRestore(e, entry.versionId)}
+                  disabled={restoringVersionId === entry.versionId}
+                >
+                  {restoringVersionId === entry.versionId ? "..." : "restore"}
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      {/if}
+
       {#if skill.metadata.installCommand}
         <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
           {skill.metadata.installCommand}

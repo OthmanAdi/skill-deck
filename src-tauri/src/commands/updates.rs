@@ -1,83 +1,170 @@
-// @agent-context: Update checking and repo management commands.
-// These commands let the frontend:
-// 1. Check a single skill for updates (async, calls GitHub API)
-// 2. Set/override a skill's repository URL
-// 3. Set/override a skill's install command
+// @agent-context: Update checking, repository management, and local version history.
+
+use std::path::Path;
 
 use tauri::State;
 
 use crate::commands::preferences::ConfigState;
-use crate::detection::update_checker;
+use crate::detection::{skill_history, update_checker};
+use crate::models::{SkillVersionEntry, UpdateErrorKind};
 
-fn is_supported_update_repo(repo_url: &str) -> bool {
-    repo_url.contains("github.com")
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResponse {
+    pub checked: bool,
+    pub update_available: bool,
+    pub canonical_repo_url: Option<String>,
+    pub remote_ref: Option<String>,
+    pub source: String,
+    pub error: Option<String>,
+    pub error_kind: Option<UpdateErrorKind>,
 }
 
-fn parse_repo_ref(repo_url: &str) -> Option<String> {
-    update_checker::parse_github_owner_repo(repo_url)
-        .map(|(owner, repo)| format!("github:{}/{}", owner, repo))
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillHistoryResponse {
+    pub skill_id: String,
+    pub entries: Vec<SkillVersionEntry>,
 }
 
-/// Check a single skill for updates.
-/// Returns whether an update is available.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreSkillVersionResult {
+    pub restored: bool,
+    pub version_id: String,
+}
+
+fn scan_skill_file_path(project_path: Option<&str>, skill_id: &str) -> Result<String, String> {
+    let path = project_path.map(Path::new);
+    let scan = crate::agents::scan_all_skills(path);
+    let skill = scan
+        .skills
+        .into_iter()
+        .find(|s| s.id == skill_id)
+        .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
+    Ok(skill.file_path)
+}
+
+fn read_repo_and_remote_ref_for_skill(
+    project_path: Option<&str>,
+    skill_id: &str,
+) -> Result<(Option<String>, Option<String>), String> {
+    let path = project_path.map(Path::new);
+    let scan = crate::agents::scan_all_skills(path);
+    let skill = scan
+        .skills
+        .into_iter()
+        .find(|s| s.id == skill_id)
+        .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
+
+    let version = skill.metadata.version.clone();
+    let remote_ref = if version.is_some() {
+        version
+    } else {
+        skill
+            .metadata
+            .extra
+            .as_ref()
+            .and_then(|value| value.get("sha"))
+            .and_then(|value| value.as_str())
+            .map(|s| s.to_string())
+    };
+    Ok((skill.metadata.repository_url, remote_ref))
+}
+
+fn write_skill_file(path: &str, content: &str) -> Result<(), String> {
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("Failed to resolve skill path {}: {}", path, e))?;
+    std::fs::write(&canonical, content)
+        .map_err(|e| format!("Failed to write {}: {}", canonical.to_string_lossy(), e))
+}
+
 #[tauri::command]
 pub async fn check_skill_update(
     state: State<'_, ConfigState>,
     skill_id: String,
     repo_url: String,
-) -> Result<bool, String> {
+    force: Option<bool>,
+) -> Result<UpdateCheckResponse, String> {
     {
-        let config = state.0.lock().unwrap();
+        let config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
         if !config.check_updates {
             return Err("Update checks are disabled in configuration".to_string());
         }
     }
 
-    if !is_supported_update_repo(&repo_url) {
-        return Err("Only GitHub repositories are supported for update checks currently".to_string());
+    let parsed_repo_ref = update_checker::repo_ref_from_repo_url(&repo_url);
+    let canonical_repo_url = update_checker::canonicalize_github_repo_url(&repo_url);
+    if parsed_repo_ref.is_none() {
+        return Ok(UpdateCheckResponse {
+            checked: false,
+            update_available: false,
+            canonical_repo_url: None,
+            remote_ref: None,
+            source: "error".to_string(),
+            error: Some(
+                "Only HTTPS github.com repositories are supported for update checks currently"
+                    .to_string(),
+            ),
+            error_kind: Some(UpdateErrorKind::InvalidRepoUrl),
+        });
     }
 
-    // Check cooldown
-    let local_ref: Option<String>;
-    {
-        let config = state.0.lock().unwrap();
+    let local_ref: Option<String> = {
+        let config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
         let cache_entry = config.update_check_cache.get(&skill_id);
-        let repo_ref = parse_repo_ref(&repo_url);
-        if !update_checker::should_check(cache_entry) {
-            // Return cached result
-            return Ok(cache_entry.map(|e| e.update_available).unwrap_or(false));
+        if !force.unwrap_or(false) && !update_checker::should_check(cache_entry) {
+            if let Some(entry) = cache_entry {
+                return Ok(UpdateCheckResponse {
+                    checked: false,
+                    update_available: entry.update_available,
+                    canonical_repo_url: canonical_repo_url.clone(),
+                    remote_ref: entry.remote_ref.clone(),
+                    source: "cache".to_string(),
+                    error: entry.last_error.clone(),
+                    error_kind: entry.last_error_kind.clone(),
+                });
+            }
         }
 
-        local_ref = config
-            .update_check_cache
-            .get(&skill_id)
-            .and_then(|e| {
-                if repo_ref.is_some() && e.repo_ref.as_ref() == repo_ref.as_ref() {
-                    e.remote_ref.clone()
-                } else {
-                    None
-                }
-            });
-    }
+        config.update_check_cache.get(&skill_id).and_then(|e| {
+            if parsed_repo_ref.is_some() && e.repo_ref.as_ref() == parsed_repo_ref.as_ref() {
+                e.remote_ref.clone()
+            } else {
+                None
+            }
+        })
+    };
 
-    // Check GitHub for updates
     let result = update_checker::check_github_update(&repo_url, local_ref.as_deref()).await;
 
-    if let Some(err) = &result.error {
-        return Err(err.clone());
-    }
-
-    // Cache the result
     {
-        let mut config = state.0.lock().unwrap();
+        let mut config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
         let mut entry = update_checker::make_cache_entry(&result);
-        entry.repo_ref = parse_repo_ref(&repo_url);
+        entry.repo_ref = parsed_repo_ref;
         config.update_check_cache.insert(skill_id, entry);
-        // Persist to disk
         crate::commands::preferences::save_config(&config)?;
     }
 
-    Ok(result.update_available)
+    let checked_ok = result.error.is_none();
+    Ok(UpdateCheckResponse {
+        checked: checked_ok,
+        update_available: result.update_available,
+        canonical_repo_url: result.canonical_repo_url,
+        remote_ref: result.remote_ref,
+        source: "remote".to_string(),
+        error: result.error,
+        error_kind: result.error_kind,
+    })
 }
 
 /// Set or override a skill's repository URL.
@@ -86,15 +173,27 @@ pub fn set_skill_repo(
     state: State<ConfigState>,
     skill_id: String,
     repo_url: String,
-) -> Result<(), String> {
-    let mut config = state.0.lock().unwrap();
-    if repo_url.is_empty() {
+) -> Result<Option<String>, String> {
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    if repo_url.trim().is_empty() {
         config.skill_repo_overrides.remove(&skill_id);
+        crate::commands::preferences::save_config(&config)?;
+        return Ok(None);
     } else {
-        config.skill_repo_overrides.insert(skill_id, repo_url);
+        let canonical =
+            update_checker::canonicalize_github_repo_url(&repo_url).ok_or_else(|| {
+                "Repository URL must be owner/repo or https://github.com/owner/repo".to_string()
+            })?;
+        config
+            .skill_repo_overrides
+            .insert(skill_id, canonical.clone());
+        crate::commands::preferences::save_config(&config)?;
+        return Ok(Some(canonical));
     }
-    crate::commands::preferences::save_config(&config)?;
-    Ok(())
 }
 
 /// Set or override a skill's install command.
@@ -104,12 +203,116 @@ pub fn set_skill_install_command(
     skill_id: String,
     install_command: String,
 ) -> Result<(), String> {
-    let mut config = state.0.lock().unwrap();
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
     if install_command.is_empty() {
         config.skill_install_overrides.remove(&skill_id);
     } else {
-        config.skill_install_overrides.insert(skill_id, install_command);
+        config
+            .skill_install_overrides
+            .insert(skill_id, install_command);
     }
     crate::commands::preferences::save_config(&config)?;
     Ok(())
+}
+
+/// Snapshot the current content of a skill file before applying an external update.
+#[tauri::command]
+pub fn snapshot_skill_before_update(
+    state: State<ConfigState>,
+    skill_id: String,
+    project_path: Option<String>,
+    source_repo_url: Option<String>,
+    remote_ref: Option<String>,
+    reason: Option<String>,
+) -> Result<SkillVersionEntry, String> {
+    let file_path = scan_skill_file_path(project_path.as_deref(), &skill_id)?;
+    let current = std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+    let (detected_repo, detected_remote_ref) =
+        read_repo_and_remote_ref_for_skill(project_path.as_deref(), &skill_id)?;
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    let reason_text = reason.unwrap_or_else(|| "before-update".to_string());
+    let repo_ref = source_repo_url.or(detected_repo);
+    let remote_ref = remote_ref.or(detected_remote_ref);
+    let entry = skill_history::create_snapshot(
+        &mut config,
+        &skill_id,
+        &current,
+        &reason_text,
+        repo_ref.as_deref(),
+        remote_ref.as_deref(),
+    )?;
+
+    crate::commands::preferences::save_config(&config)?;
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn list_skill_versions(
+    state: State<ConfigState>,
+    skill_id: String,
+) -> Result<SkillHistoryResponse, String> {
+    let config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+    Ok(SkillHistoryResponse {
+        skill_id: skill_id.clone(),
+        entries: skill_history::get_history(&config, &skill_id),
+    })
+}
+
+#[tauri::command]
+pub fn restore_skill_version(
+    state: State<ConfigState>,
+    skill_id: String,
+    version_id: String,
+    project_path: Option<String>,
+) -> Result<RestoreSkillVersionResult, String> {
+    let file_path = scan_skill_file_path(project_path.as_deref(), &skill_id)?;
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    let entries = config
+        .skill_version_history
+        .get(&skill_id)
+        .cloned()
+        .unwrap_or_default();
+    let target = entries
+        .iter()
+        .find(|e| e.version_id == version_id)
+        .cloned()
+        .ok_or_else(|| "Requested version not found".to_string())?;
+
+    let current = std::fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+
+    let _ = skill_history::create_snapshot(
+        &mut config,
+        &skill_id,
+        &current,
+        "before-restore",
+        None,
+        None,
+    )?;
+
+    let snapshot = skill_history::load_snapshot(&target)?;
+    write_skill_file(&file_path, &snapshot.content)?;
+
+    crate::commands::preferences::save_config(&config)?;
+    Ok(RestoreSkillVersionResult {
+        restored: true,
+        version_id,
+    })
 }

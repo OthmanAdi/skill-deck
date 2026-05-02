@@ -13,7 +13,18 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import type { Skill, ScanResult, AgentInfo, TabView, TerminalContext } from "$lib/types";
+import type {
+  Skill,
+  ScanResult,
+  AgentInfo,
+  TabView,
+  ViewMode,
+  TerminalContext,
+  UpdateCheckResponse,
+  SkillHistoryResponse,
+  SkillVersionEntry,
+  RestoreSkillVersionResult,
+} from "$lib/types";
 import { AGENT_NAMES } from "$lib/types";
 
 // ── Reactive state container ─────────────────────────────────────────────────
@@ -42,13 +53,28 @@ class SkillStore {
   /** Tracks which agent group sections are collapsed in the UI */
   collapsedAgents = $state<Set<string>>(new Set());
 
-  /** Tree view mode toggle — renders SkillTree instead of flat list */
-  treeMode = $state(false);
+  /** Active renderer mode for the main list area */
+  viewMode = $state<ViewMode>("grouped");
+
+  /** Backward-compatible boolean toggle used by existing components */
+  get treeMode(): boolean {
+    return this.viewMode === "tree";
+  }
+
+  set treeMode(enabled: boolean) {
+    this.viewMode = enabled ? "tree" : "grouped";
+  }
 
   /** Whether the cursor is currently over a terminal during a drag */
   dragOverTerminal = $state(false);
   /** PID of the terminal under cursor during a drag */
   dragTerminalPid = $state<number | null>(null);
+
+  /** Last update check status details per skill ID */
+  updateStatus = $state<Record<string, UpdateCheckResponse>>({});
+
+  /** Version history entries per skill ID */
+  versionHistory = $state<Record<string, SkillVersionEntry[]>>({});
 
   /** Skills filtered by current tab, search query, and agent filter */
   get filteredSkills(): Skill[] {
@@ -359,14 +385,43 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
     return;
   }
   try {
-    const updateAvailable: boolean = await invoke("check_skill_update", {
+    const response: UpdateCheckResponse = await invoke("check_skill_update", {
       skillId: skill.id,
       repoUrl,
+      force: true,
     });
+    store.updateStatus = {
+      ...store.updateStatus,
+      [skill.id]: response,
+    };
+
+    if (response.canonicalRepoUrl && response.canonicalRepoUrl !== repoUrl) {
+      await setSkillRepo(skill.id, response.canonicalRepoUrl);
+    }
+
+    const updateAvailable = response.updateAvailable;
     store.skills = store.skills.map((s) =>
       s.id === skill.id ? { ...s, updateAvailable } : s
     );
-    showToast(updateAvailable ? "Update available!" : "Already up to date");
+
+    if (response.error) {
+      if (response.errorKind === "repoNotFound") {
+        showToast("Repo not found, check URL or permissions");
+      } else if (response.errorKind === "rateLimited") {
+        showToast("Update check rate limited by GitHub");
+      } else if (response.errorKind === "invalidRepoUrl") {
+        showToast("Invalid repo URL, use github.com/owner/repo");
+      } else {
+        showToast(`Update check failed: ${response.error}`);
+      }
+      return;
+    }
+
+    if (updateAvailable) {
+      showToast(response.source === "cache" ? "Cached: update available" : "Update available");
+    } else {
+      showToast(response.source === "cache" ? "Cached: up to date" : "Already up to date");
+    }
   } catch (e) {
     showToast(`Update check failed: ${e}`);
   }
@@ -375,16 +430,80 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
 /** Set or override a skill's repository URL */
 export async function setSkillRepo(skillId: string, repoUrl: string): Promise<void> {
   try {
-    await invoke("set_skill_repo", { skillId, repoUrl });
+    const canonicalRepoUrl: string | null = await invoke("set_skill_repo", { skillId, repoUrl });
+    const resolvedRepo = canonicalRepoUrl ?? null;
     // Update local state — inject the new repo URL into metadata
     store.skills = store.skills.map((s) =>
       s.id === skillId
-        ? { ...s, metadata: { ...s.metadata, repositoryUrl: repoUrl || null } }
+        ? { ...s, metadata: { ...s.metadata, repositoryUrl: resolvedRepo } }
         : s
     );
-    showToast(repoUrl ? "Repo URL saved" : "Repo URL cleared");
+    showToast(resolvedRepo ? "Repo URL saved" : "Repo URL cleared");
   } catch (e) {
     showToast(`Failed to save repo URL: ${e}`);
+  }
+}
+
+/** Snapshot skill content before external update actions */
+export async function snapshotSkillBeforeUpdate(
+  skill: Skill,
+  remoteRef?: string,
+  reason = "before-update",
+): Promise<SkillVersionEntry | null> {
+  try {
+    const entry: SkillVersionEntry = await invoke("snapshot_skill_before_update", {
+      skillId: skill.id,
+      projectPath: skill.projectPath,
+      sourceRepoUrl: skill.metadata.repositoryUrl,
+      remoteRef: remoteRef ?? null,
+      reason,
+    });
+    const prev = store.versionHistory[skill.id] ?? [];
+    store.versionHistory = {
+      ...store.versionHistory,
+      [skill.id]: [entry, ...prev.filter((v) => v.versionId !== entry.versionId)],
+    };
+    showToast("Snapshot saved before update");
+    return entry;
+  } catch (e) {
+    showToast(`Snapshot failed: ${e}`);
+    return null;
+  }
+}
+
+/** Load local version history entries for a skill */
+export async function loadSkillVersionHistory(skillId: string): Promise<SkillVersionEntry[]> {
+  try {
+    const response: SkillHistoryResponse = await invoke("list_skill_versions", { skillId });
+    store.versionHistory = {
+      ...store.versionHistory,
+      [skillId]: response.entries,
+    };
+    return response.entries;
+  } catch {
+    return store.versionHistory[skillId] ?? [];
+  }
+}
+
+/** Restore a specific version snapshot for a skill */
+export async function restoreSkillVersion(skill: Skill, versionId: string): Promise<boolean> {
+  try {
+    const result: RestoreSkillVersionResult = await invoke("restore_skill_version", {
+      skillId: skill.id,
+      versionId,
+      projectPath: skill.projectPath,
+    });
+    if (result.restored) {
+      await scanSkills(true);
+      await loadSkillVersionHistory(skill.id);
+      showToast("Skill restored from snapshot");
+      return true;
+    }
+    showToast("Restore failed");
+    return false;
+  } catch (e) {
+    showToast(`Restore failed: ${e}`);
+    return false;
   }
 }
 

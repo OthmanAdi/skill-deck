@@ -45,9 +45,13 @@ env_logger = "0.11"
 # --- Path utilities ---
 dirs = "6"
 glob = "0.3"
+walkdir = "2"
 
 # --- Pattern matching ---
 regex = "1"
+
+# --- Hashing (snapshot integrity) ---
+sha2 = "0.10"
 
 # --- HTTP client (for update checking via GitHub API) ---
 reqwest = { version = "0.12", features = ["json"] }

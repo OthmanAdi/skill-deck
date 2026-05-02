@@ -17,6 +17,9 @@
     injectSkillToTerminal,
     checkSkillUpdate,
     setSkillRepo,
+    snapshotSkillBeforeUpdate,
+    loadSkillVersionHistory,
+    restoreSkillVersion,
     store,
   } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
@@ -109,11 +112,47 @@
   let repoInputVisible = $state(false);
   let repoInputValue = $state("");
   let repoCheckLoading = $state(false);
+  let historyLoading = $state(false);
+  let snapshotLoading = $state(false);
+  let restoringVersionId = $state<string | null>(null);
+
+  const repoUrlDisplay = $derived.by(() => {
+    const value = skill.metadata.repositoryUrl?.trim() ?? "";
+    if (!value) return null;
+    try {
+      const parsed = new URL(value.startsWith("github.com/") ? `https://${value}` : value);
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  });
+
+  const updateStatus = $derived(store.updateStatus[skill.id] ?? null);
+  const historyEntries = $derived(store.versionHistory[skill.id] ?? []);
 
   async function handleCheckUpdate() {
     repoCheckLoading = true;
     await checkSkillUpdate(skill);
     repoCheckLoading = false;
+  }
+
+  async function handleSnapshot() {
+    snapshotLoading = true;
+    await snapshotSkillBeforeUpdate(skill, updateStatus?.remoteRef ?? undefined, "before-update");
+    snapshotLoading = false;
+  }
+
+  async function handleLoadHistory() {
+    historyLoading = true;
+    await loadSkillVersionHistory(skill.id);
+    historyLoading = false;
+  }
+
+  async function handleRestore(versionId: string) {
+    restoringVersionId = versionId;
+    await restoreSkillVersion(skill, versionId);
+    restoringVersionId = null;
   }
 
   async function handleSaveRepo() {
@@ -135,6 +174,15 @@
     if (!fileContent) return null;
     return renderSkillContent(fileContent, 240);
   });
+
+  const parentSkill = $derived.by(() => {
+    if (!skill.parentId) return null;
+    return store.skills.find((s) => s.id === skill.parentId) ?? null;
+  });
+
+  const childSkills = $derived.by(() =>
+    store.skills.filter((s) => s.parentId === skill.id)
+  );
 
   const entryDelayMs = $derived(Math.min(index, 8) * 16);
 </script>
@@ -188,18 +236,17 @@
       </div>
 
       <!-- Action buttons -->
-      <div class="flex shrink-0 items-center gap-0.5">
+      <div class="flex shrink-0 items-center gap-1">
         <!-- Copy button -->
         <button
-          class="rounded-md p-1 text-[var(--color-text-muted)]
-            opacity-0 transition-all duration-150
-            group-hover:opacity-70
-            hover:!opacity-100 hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
+          class="flex h-6 w-6 items-center justify-center rounded-md
+            text-[var(--color-text-secondary)] opacity-85 transition-all duration-150
+            hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)] hover:opacity-100"
           onclick={handleCopyClick}
           title="Copy skill reference (Ctrl+C)"
           aria-label="Copy skill reference"
         >
-          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
               d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
           </svg>
@@ -207,10 +254,10 @@
 
         <!-- Star button -->
         <button
-          class="shrink-0 rounded-md p-1 text-sm transition-all duration-150
+          class="shrink-0 flex h-6 w-6 items-center justify-center rounded-md text-[15px] leading-none transition-all duration-150
             {skill.starred
-              ? 'text-[var(--color-starred)]'
-              : 'text-[var(--color-text-muted)] opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:text-[var(--color-starred)]'}
+              ? 'text-[var(--color-starred)] bg-[var(--color-surface-3)]'
+              : 'text-[var(--color-text-secondary)] opacity-85 hover:bg-[var(--color-surface-3)] hover:text-[var(--color-starred)] hover:opacity-100'}
             {starAnimating ? 'star-pop' : ''}"
           onclick={handleStarClick}
           aria-label={skill.starred ? "Unstar skill" : "Star skill"}
@@ -242,7 +289,10 @@
       {/if}
 
       {#if skill.metadata.version}
-        <span class="text-[9px] tabular-nums text-[var(--color-text-muted)] opacity-60">
+        <span
+          class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--color-text-secondary)]"
+          style="border-color: var(--color-border); background: var(--color-surface-3);"
+        >
           v{skill.metadata.version}
         </span>
       {/if}
@@ -275,6 +325,60 @@
           {/if}
         </div>
 
+        {#if parentSkill || childSkills.length > 0}
+          <div
+            class="rounded-lg px-2.5 py-2 text-[10px]"
+            style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
+          >
+            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              hierarchy
+            </div>
+
+            {#if parentSkill}
+              <div class="flex items-center gap-1.5">
+                <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold text-[var(--color-text-primary)]"
+                  style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
+                  parent
+                </span>
+                <span class="truncate text-[var(--color-text-secondary)]" title={parentSkill.name}>
+                  {parentSkill.name}
+                </span>
+              </div>
+            {/if}
+
+            {#if childSkills.length > 0}
+              <div class="mt-1.5 space-y-1">
+                <div class="flex items-center gap-1.5">
+                  <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold text-[var(--color-text-primary)]"
+                    style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
+                    children
+                  </span>
+                  <span class="text-[var(--color-text-secondary)] opacity-85">{childSkills.length}</span>
+                </div>
+
+                <div class="flex flex-wrap gap-1">
+                  {#each childSkills.slice(0, 5) as child}
+                    <span
+                      class="max-w-[180px] truncate rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+                      style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
+                      title={child.name}
+                    >
+                      {child.name}
+                    </span>
+                  {/each}
+
+                  {#if childSkills.length > 5}
+                    <span class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]"
+                      style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
+                      +{childSkills.length - 5} more
+                    </span>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         <!-- File content preview -->
         <div class="rounded-lg overflow-hidden"
           style="background: var(--color-code-bg); border: 1px solid var(--color-code-border);">
@@ -301,34 +405,91 @@
           {#if skill.metadata.repositoryUrl}
             <!-- Has a repo URL -->
             <div class="flex items-center justify-between gap-2">
-              <a
-                href={skill.metadata.repositoryUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex min-w-0 items-center gap-1.5 text-[var(--color-accent)] hover:underline"
-                onclick={(e) => e.stopPropagation()}
-              >
-                <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-                <span class="truncate">{skill.metadata.repositoryUrl.replace(/^https?:\/\//, '')}</span>
-              </a>
+              {#if repoUrlDisplay}
+                <a
+                  href={repoUrlDisplay}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex min-w-0 items-center gap-1.5 text-[var(--color-accent)] hover:underline"
+                  onclick={(e) => e.stopPropagation()}
+                >
+                  <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  <span class="truncate">{repoUrlDisplay.replace(/^https?:\/\//, '')}</span>
+                </a>
+              {:else}
+                <span class="truncate text-[var(--color-text-muted)]">Invalid repo URL</span>
+              {/if}
               <button
                 class="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleCheckUpdate(); }}
-                disabled={repoCheckLoading}
-                title="Check for updates"
+                disabled={repoCheckLoading || !repoUrlDisplay}
+                title="Check live update status"
               >
                 {#if repoCheckLoading}
                   <span class="spin inline-block h-2.5 w-2.5 rounded-full border border-[var(--color-accent)] border-t-transparent"></span>
                 {:else if skill.updateAvailable}
                   ↑ update
                 {:else}
-                  check
+                  check live
                 {/if}
               </button>
             </div>
+
+            <div class="mt-1.5 flex flex-wrap items-center gap-1">
+              <button
+                class="rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                  text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                onclick={(e) => { e.stopPropagation(); handleSnapshot(); }}
+                disabled={snapshotLoading}
+                title="Archive local snapshot before updating"
+              >
+                {snapshotLoading ? "saving..." : "archive"}
+              </button>
+              <button
+                class="rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                  text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                onclick={(e) => { e.stopPropagation(); handleLoadHistory(); }}
+                disabled={historyLoading}
+                title="Load archived versions"
+              >
+                {historyLoading ? "loading..." : "history"}
+              </button>
+            </div>
+
+            {#if updateStatus}
+              <div class="mt-1 text-[9px] text-[var(--color-text-muted)]">
+                {#if updateStatus.error}
+                  <span class="text-[var(--color-error)]">{updateStatus.error}</span>
+                {:else if updateStatus.source === "cache"}
+                  Using cached status
+                {:else}
+                  Live check succeeded
+                {/if}
+              </div>
+            {/if}
+
+            {#if historyEntries.length > 0}
+              <div class="mt-1.5 max-h-[100px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5">
+                {#each historyEntries as entry (entry.versionId)}
+                  <div class="mb-1 flex items-center justify-between gap-1 text-[9px] last:mb-0">
+                    <span class="truncate text-[var(--color-text-muted)]" title={entry.versionId}>
+                      {entry.reason} {new Date(entry.createdAt * 1000).toLocaleString()}
+                    </span>
+                    <button
+                      class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                      onclick={(e) => { e.stopPropagation(); handleRestore(entry.versionId); }}
+                      disabled={restoringVersionId === entry.versionId}
+                      title="Restore this archived version"
+                    >
+                      {restoringVersionId === entry.versionId ? "..." : "restore"}
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
           {:else}
             <!-- No repo URL — show input or prompt -->
             {#if repoInputVisible}

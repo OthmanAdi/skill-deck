@@ -1,23 +1,36 @@
 // @agent-context: Update checker for skills with detected GitHub repository URLs.
 //
 // STRATEGY:
-// 1. Parse the repo URL to extract owner/repo
-// 2. Call GitHub API: GET /repos/{owner}/{repo}/commits?per_page=1&sha=HEAD
+// 1. Strictly parse and canonicalize user provided repo URLs
+// 2. Call GitHub API: GET /repos/{owner}/{repo}/commits?per_page=1
 // 3. Compare the remote SHA against a cached previous remote reference
 // 4. Cache results to avoid hammering the API (max 1 check per skill per hour)
-//
-// RATE LIMITS:
-// - GitHub unauthenticated: 60 requests/hour per IP
-// - We limit to 1 check per skill per hour via UpdateCheckEntry cache
 
 use regex::Regex;
+use reqwest::{StatusCode, Url};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::models::UpdateCheckEntry;
+use crate::models::{UpdateCheckEntry, UpdateErrorKind};
 
 /// Minimum seconds between update checks for the same skill
 const CHECK_COOLDOWN_SECS: u64 = 3600; // 1 hour
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GithubRepoRef {
+    owner: String,
+    repo: String,
+}
+
+impl GithubRepoRef {
+    fn canonical_url(&self) -> String {
+        format!("https://github.com/{}/{}", self.owner, self.repo)
+    }
+
+    fn repo_ref(&self) -> String {
+        format!("github:{}/{}", self.owner, self.repo)
+    }
+}
 
 /// Result of an update check
 #[derive(Debug, Clone)]
@@ -25,6 +38,8 @@ pub struct UpdateCheckResult {
     pub update_available: bool,
     pub remote_ref: Option<String>,
     pub error: Option<String>,
+    pub error_kind: Option<UpdateErrorKind>,
+    pub canonical_repo_url: Option<String>,
 }
 
 pub enum UpdateComparison {
@@ -36,18 +51,99 @@ pub enum UpdateComparison {
 fn github_owner_repo_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"github\.com/([\w.\-]+)/([\w.\-]+?)(?:\.git)?(?:[/#]|$)")
-            .expect("github owner/repo regex")
+        Regex::new(r"^([\w.\-]+)/([\w.\-]+)$").expect("github owner/repo shorthand regex")
     })
 }
 
+fn is_valid_repo_segment(segment: &str) -> bool {
+    !segment.is_empty()
+        && segment
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+}
+
+fn parse_github_repo_ref(input: &str) -> Result<GithubRepoRef, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("Repository URL is empty".to_string());
+    }
+
+    if let Some(caps) = github_owner_repo_re().captures(trimmed) {
+        let owner = caps
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .ok_or_else(|| "Missing GitHub owner".to_string())?;
+        let repo = caps
+            .get(2)
+            .map(|m| m.as_str().trim_end_matches(".git").to_string())
+            .ok_or_else(|| "Missing GitHub repository".to_string())?;
+
+        if !is_valid_repo_segment(&owner) || !is_valid_repo_segment(&repo) {
+            return Err("GitHub owner/repo contains unsupported characters".to_string());
+        }
+
+        return Ok(GithubRepoRef { owner, repo });
+    }
+
+    let normalized = if trimmed.starts_with("github.com/") {
+        format!("https://{}", trimmed)
+    } else {
+        trimmed.to_string()
+    };
+
+    let parsed =
+        Url::parse(&normalized).map_err(|_| "Repository URL is not a valid URL".to_string())?;
+
+    if parsed.scheme() != "https" {
+        return Err("Only https GitHub URLs are allowed".to_string());
+    }
+
+    let host = parsed
+        .host_str()
+        .map(|h| h.to_ascii_lowercase())
+        .ok_or_else(|| "Repository URL is missing host".to_string())?;
+
+    if host != "github.com" && host != "www.github.com" {
+        return Err("Only github.com repositories are supported for update checks".to_string());
+    }
+
+    let segments: Vec<&str> = parsed
+        .path_segments()
+        .map(|s| s.filter(|seg| !seg.is_empty()).collect())
+        .unwrap_or_default();
+
+    if segments.len() < 2 {
+        return Err("Repository URL must include owner and repository name".to_string());
+    }
+
+    let owner = segments[0].to_string();
+    let repo = segments[1].trim_end_matches(".git").to_string();
+
+    if !is_valid_repo_segment(&owner) || !is_valid_repo_segment(&repo) {
+        return Err("GitHub owner/repo contains unsupported characters".to_string());
+    }
+
+    Ok(GithubRepoRef { owner, repo })
+}
+
+pub fn canonicalize_github_repo_url(input: &str) -> Option<String> {
+    parse_github_repo_ref(input)
+        .ok()
+        .map(|repo| repo.canonical_url())
+}
+
+pub fn repo_ref_from_repo_url(input: &str) -> Option<String> {
+    parse_github_repo_ref(input)
+        .ok()
+        .map(|repo| repo.repo_ref())
+}
+
 /// Extract owner/repo from a GitHub URL
+#[cfg(test)]
 pub fn parse_github_owner_repo(url: &str) -> Option<(String, String)> {
-    github_owner_repo_re().captures(url).and_then(|caps| {
-        let owner = caps.get(1)?.as_str().to_string();
-        let repo = caps.get(2)?.as_str().to_string();
-        Some((owner, repo))
-    })
+    parse_github_repo_ref(url)
+        .ok()
+        .map(|repo| (repo.owner, repo.repo))
 }
 
 /// Check if enough time has passed since the last check
@@ -59,32 +155,30 @@ pub fn should_check(cache_entry: Option<&UpdateCheckEntry>) -> bool {
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs();
-            now - entry.last_checked > CHECK_COOLDOWN_SECS
+            now.saturating_sub(entry.last_checked) > CHECK_COOLDOWN_SECS
         }
     }
 }
 
 /// Check a single skill for updates by querying the GitHub API.
-///
-/// This is async because it makes HTTP requests.
-/// Returns UpdateCheckResult with the check outcome.
-pub async fn check_github_update(
-    repo_url: &str,
-    local_ref: Option<&str>,
-) -> UpdateCheckResult {
-    let (owner, repo) = match parse_github_owner_repo(repo_url) {
-        Some(pair) => pair,
-        None => return UpdateCheckResult {
-            update_available: false,
-            remote_ref: None,
-            error: Some(format!("Cannot parse GitHub URL: {}", repo_url)),
-        },
+pub async fn check_github_update(repo_url: &str, local_ref: Option<&str>) -> UpdateCheckResult {
+    let repo = match parse_github_repo_ref(repo_url) {
+        Ok(parsed) => parsed,
+        Err(message) => {
+            return UpdateCheckResult {
+                update_available: false,
+                remote_ref: None,
+                error: Some(message),
+                error_kind: Some(UpdateErrorKind::InvalidRepoUrl),
+                canonical_repo_url: None,
+            }
+        }
     };
 
-    // GitHub API: get latest commit on default branch
+    // GitHub API: latest commit on default branch
     let api_url = format!(
         "https://api.github.com/repos/{}/{}/commits?per_page=1",
-        owner, repo
+        repo.owner, repo.repo
     );
 
     let client = match reqwest::Client::builder()
@@ -98,9 +192,12 @@ pub async fn check_github_update(
                 update_available: false,
                 remote_ref: None,
                 error: Some(format!("Failed to build HTTP client: {}", e)),
-            };
+                error_kind: Some(UpdateErrorKind::ProviderError),
+                canonical_repo_url: Some(repo.canonical_url()),
+            }
         }
     };
+
     let response = match client
         .get(&api_url)
         .header("User-Agent", "SkillDeck/0.1")
@@ -109,37 +206,77 @@ pub async fn check_github_update(
         .await
     {
         Ok(resp) => resp,
-        Err(e) => return UpdateCheckResult {
-            update_available: false,
-            remote_ref: None,
-            error: Some(format!("HTTP request failed: {}", e)),
-        },
+        Err(e) => {
+            return UpdateCheckResult {
+                update_available: false,
+                remote_ref: None,
+                error: Some(format!("HTTP request failed: {}", e)),
+                error_kind: Some(UpdateErrorKind::Network),
+                canonical_repo_url: Some(repo.canonical_url()),
+            }
+        }
     };
 
     if !response.status().is_success() {
+        let status = response.status();
+        let error_kind = match status {
+            StatusCode::NOT_FOUND | StatusCode::GONE => UpdateErrorKind::RepoNotFound,
+            StatusCode::TOO_MANY_REQUESTS => UpdateErrorKind::RateLimited,
+            StatusCode::FORBIDDEN => {
+                let is_rate_limited = response
+                    .headers()
+                    .get("x-ratelimit-remaining")
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v == "0")
+                    .unwrap_or(false);
+                if is_rate_limited {
+                    UpdateErrorKind::RateLimited
+                } else {
+                    UpdateErrorKind::AccessDenied
+                }
+            }
+            StatusCode::UNAUTHORIZED => UpdateErrorKind::AccessDenied,
+            _ => UpdateErrorKind::ProviderError,
+        };
+
         return UpdateCheckResult {
             update_available: false,
             remote_ref: None,
-            error: Some(format!("GitHub API returned {}", response.status())),
+            error: Some(format!("GitHub API returned {}", status)),
+            error_kind: Some(error_kind),
+            canonical_repo_url: Some(repo.canonical_url()),
         };
     }
 
     let body: serde_json::Value = match response.json().await {
         Ok(json) => json,
-        Err(e) => return UpdateCheckResult {
-            update_available: false,
-            remote_ref: None,
-            error: Some(format!("Failed to parse GitHub response: {}", e)),
-        },
+        Err(e) => {
+            return UpdateCheckResult {
+                update_available: false,
+                remote_ref: None,
+                error: Some(format!("Failed to parse GitHub response: {}", e)),
+                error_kind: Some(UpdateErrorKind::InvalidResponse),
+                canonical_repo_url: Some(repo.canonical_url()),
+            }
+        }
     };
 
-    // Extract the latest commit SHA
     let remote_sha = body
         .as_array()
         .and_then(|arr| arr.first())
         .and_then(|commit| commit.get("sha"))
         .and_then(|sha| sha.as_str())
         .map(|s| s.to_string());
+
+    if remote_sha.is_none() {
+        return UpdateCheckResult {
+            update_available: false,
+            remote_ref: None,
+            error: Some("GitHub API response did not contain a commit SHA".to_string()),
+            error_kind: Some(UpdateErrorKind::InvalidResponse),
+            canonical_repo_url: Some(repo.canonical_url()),
+        };
+    }
 
     let update_available = match compare_refs(remote_sha.as_deref(), local_ref) {
         UpdateComparison::Different => true,
@@ -150,6 +287,8 @@ pub async fn check_github_update(
         update_available,
         remote_ref: remote_sha,
         error: None,
+        error_kind: None,
+        canonical_repo_url: Some(repo.canonical_url()),
     }
 }
 
@@ -171,6 +310,8 @@ pub fn make_cache_entry(result: &UpdateCheckResult) -> UpdateCheckEntry {
         update_available: result.update_available,
         remote_ref: result.remote_ref.clone(),
         repo_ref: None,
+        last_error: result.error.clone(),
+        last_error_kind: result.error_kind.clone(),
     }
 }
 
@@ -181,7 +322,10 @@ mod tests {
     #[test]
     fn test_parse_github_owner_repo_https() {
         let result = parse_github_owner_repo("https://github.com/OthmanAdi/vibe-skills");
-        assert_eq!(result, Some(("OthmanAdi".to_string(), "vibe-skills".to_string())));
+        assert_eq!(
+            result,
+            Some(("OthmanAdi".to_string(), "vibe-skills".to_string()))
+        );
     }
 
     #[test]
@@ -197,9 +341,51 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_github_owner_repo_shorthand() {
+        let result = parse_github_owner_repo("owner/repo");
+        assert_eq!(result, Some(("owner".to_string(), "repo".to_string())));
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_without_scheme() {
+        let result = parse_github_owner_repo("github.com/owner/repo");
+        assert_eq!(result, Some(("owner".to_string(), "repo".to_string())));
+    }
+
+    #[test]
     fn test_parse_github_owner_repo_invalid() {
         let result = parse_github_owner_repo("https://example.com/not-github");
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_non_https_scheme() {
+        let result = parse_github_owner_repo("http://github.com/owner/repo");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_javascript_scheme() {
+        let result = parse_github_owner_repo("javascript:alert('xss')");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_lookalike_host() {
+        let result = parse_github_owner_repo("https://evilgithub.com/owner/repo");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_canonicalize_github_repo_url() {
+        let result = canonicalize_github_repo_url("https://www.github.com/owner/repo/tree/main");
+        assert_eq!(result.as_deref(), Some("https://github.com/owner/repo"));
+    }
+
+    #[test]
+    fn test_repo_ref_from_repo_url() {
+        let result = repo_ref_from_repo_url("owner/repo");
+        assert_eq!(result.as_deref(), Some("github:owner/repo"));
     }
 
     #[test]
@@ -218,6 +404,8 @@ mod tests {
             update_available: false,
             remote_ref: None,
             repo_ref: None,
+            last_error: None,
+            last_error_kind: None,
         };
         assert!(!should_check(Some(&entry)));
     }
@@ -227,12 +415,16 @@ mod tests {
         let old = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() - CHECK_COOLDOWN_SECS - 1;
+            .as_secs()
+            - CHECK_COOLDOWN_SECS
+            - 1;
         let entry = UpdateCheckEntry {
             last_checked: old,
             update_available: false,
             remote_ref: None,
             repo_ref: None,
+            last_error: None,
+            last_error_kind: None,
         };
         assert!(should_check(Some(&entry)));
     }

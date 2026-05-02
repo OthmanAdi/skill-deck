@@ -22,8 +22,29 @@ function escapeHtml(input: string): string {
 
 function sanitizeHref(rawHref: string): string {
   const href = rawHref.trim();
-  if (/^(https?:|mailto:|file:|\/|#)/i.test(href)) {
+  if (href.startsWith("#")) {
+    return href;
+  }
+
+  if (href.startsWith("/")) {
     return href.replace(/"/g, "%22");
+  }
+
+  if (/^(?:\.|\.\.)\//.test(href)) {
+    return href.replace(/"/g, "%22");
+  }
+
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) {
+    return href.replace(/"/g, "%22");
+  }
+
+  try {
+    const parsed = new URL(href);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "mailto:") {
+      return parsed.toString().replace(/"/g, "%22");
+    }
+  } catch {
+    // fall through to "#"
   }
   return "#";
 }

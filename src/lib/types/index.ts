@@ -57,6 +57,46 @@ export interface SkillMetadata {
   installCommand: string | null;
 }
 
+export type UpdateErrorKind =
+  | "invalidRepoUrl"
+  | "repoNotFound"
+  | "rateLimited"
+  | "accessDenied"
+  | "network"
+  | "invalidResponse"
+  | "providerError";
+
+export interface UpdateCheckResponse {
+  checked: boolean;
+  updateAvailable: boolean;
+  canonicalRepoUrl: string | null;
+  remoteRef: string | null;
+  source: "cache" | "remote" | "error";
+  error: string | null;
+  errorKind: UpdateErrorKind | null;
+}
+
+export interface SkillVersionEntry {
+  versionId: string;
+  createdAt: number;
+  reason: string;
+  sourceRepoUrl: string | null;
+  remoteRef: string | null;
+  contentHash: string;
+  contentBytes: number;
+  snapshotPath: string;
+}
+
+export interface SkillHistoryResponse {
+  skillId: string;
+  entries: SkillVersionEntry[];
+}
+
+export interface RestoreSkillVersionResult {
+  restored: boolean;
+  versionId: string;
+}
+
 /** Agent info for the filter tabs */
 export interface AgentInfo {
   id: AgentId;
@@ -101,6 +141,8 @@ export interface AppConfig {
   skillRepoOverrides: Record<string, string>;
   skillInstallOverrides: Record<string, string>;
   updateCheckCache: Record<string, UpdateCheckEntry>;
+  skillVersionHistory?: Record<string, SkillVersionEntry[]>;
+  maxSkillHistoryEntries?: number;
 }
 
 /** Cached update check result */
@@ -108,10 +150,14 @@ export interface UpdateCheckEntry {
   lastChecked: number;
   updateAvailable: boolean;
   remoteRef: string | null;
+  repoRef?: string | null;
+  lastError?: string | null;
+  lastErrorKind?: UpdateErrorKind | null;
 }
 
 /** UI-only types */
 export type TabView = "all" | "starred" | "project";
+export type ViewMode = "grouped" | "tree" | "graph";
 
 /** Agent display color mapping (CSS oklch values from registry) */
 export const AGENT_COLORS: Record<string, string> = {

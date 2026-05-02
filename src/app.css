@@ -36,6 +36,7 @@
 
   --color-update-available: var(--t-update-available);
   --color-starred: var(--t-starred);
+  --color-error: var(--t-error);
 
   --color-overlay-shadow: var(--t-overlay-shadow);
   --color-search-glow: var(--t-search-glow);
@@ -78,6 +79,7 @@
 
   --t-update-available: #27a644;
   --t-starred: #d5b347;
+  --t-error: #d45d5d;
 
   --t-overlay-shadow: rgba(0, 0, 0, 0.56);
   --t-search-glow: rgba(94, 106, 210, 0.22);
@@ -119,6 +121,7 @@
 
   --t-update-available: #25893c;
   --t-starred: #947719;
+  --t-error: #b23b3b;
 
   --t-overlay-shadow: rgba(7, 10, 18, 0.16);
   --t-search-glow: rgba(94, 106, 210, 0.16);

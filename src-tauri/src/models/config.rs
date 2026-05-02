@@ -5,6 +5,19 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+/// Structured update check error categories for frontend UX and caching.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateErrorKind {
+    InvalidRepoUrl,
+    RepoNotFound,
+    RateLimited,
+    AccessDenied,
+    Network,
+    InvalidResponse,
+    ProviderError,
+}
+
 /// Persisted app configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +60,14 @@ pub struct AppConfig {
 
     /// Cache: last update check timestamps per skill ID (unix epoch seconds)
     pub update_check_cache: std::collections::HashMap<String, UpdateCheckEntry>,
+
+    /// Archived local version history entries per skill ID
+    #[serde(default)]
+    pub skill_version_history: std::collections::HashMap<String, Vec<SkillVersionEntry>>,
+
+    /// Maximum number of history entries to retain per skill
+    #[serde(default = "default_max_skill_history_entries")]
+    pub max_skill_history_entries: usize,
 }
 
 /// Cached result of an update check for a single skill
@@ -63,6 +84,45 @@ pub struct UpdateCheckEntry {
     /// Repo identity used for cache validity (e.g., github:owner/repo)
     #[serde(default)]
     pub repo_ref: Option<String>,
+
+    /// Last check error text, if any
+    #[serde(default)]
+    pub last_error: Option<String>,
+
+    /// Last check error category, if any
+    #[serde(default)]
+    pub last_error_kind: Option<UpdateErrorKind>,
+}
+
+/// One archived skill content version stored by the application.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillVersionEntry {
+    /// Unique version identifier for this snapshot
+    pub version_id: String,
+
+    /// Unix timestamp when this snapshot was created
+    pub created_at: u64,
+
+    /// Human readable reason, e.g. before-update, after-update, before-restore
+    pub reason: String,
+
+    /// Optional canonical source repository URL
+    #[serde(default)]
+    pub source_repo_url: Option<String>,
+
+    /// Optional remote commit SHA or ref associated with this snapshot
+    #[serde(default)]
+    pub remote_ref: Option<String>,
+
+    /// SHA-256 hash of the snapshot content
+    pub content_hash: String,
+
+    /// Byte count of the snapshot content
+    pub content_bytes: u64,
+
+    /// Relative path to snapshot JSON under history storage root
+    pub snapshot_path: String,
 }
 
 /// Where the overlay appears on screen
@@ -90,6 +150,8 @@ impl Default for AppConfig {
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
             update_check_cache: std::collections::HashMap::new(),
+            skill_version_history: std::collections::HashMap::new(),
+            max_skill_history_entries: default_max_skill_history_entries(),
         }
     }
 }
@@ -100,4 +162,8 @@ fn default_overlay_width() -> u32 {
 
 fn default_overlay_height() -> u32 {
     640
+}
+
+fn default_max_skill_history_entries() -> usize {
+    40
 }
