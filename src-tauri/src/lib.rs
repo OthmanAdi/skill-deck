@@ -33,15 +33,16 @@ mod parsers;
 
 use commands::preferences::{load_config, ConfigState};
 use std::sync::Mutex;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = load_config();
     let startup_overlay_width = config.overlay_width.clamp(380, 700) as f64;
     let startup_overlay_height = config.overlay_height.clamp(560, 820) as f64;
+    let startup_overlay_mode = config.overlay_mode.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -61,6 +62,7 @@ pub fn run() {
             commands::get_config,
             commands::set_hotkey,
             commands::set_theme,
+            commands::set_overlay_mode,
             commands::set_overlay_size,
             commands::set_collapsed_agents,
             commands::set_collapsed_tree_nodes,
@@ -96,15 +98,27 @@ pub fn run() {
                 window.set_position(tauri::LogicalPosition::new(x, y)).ok();
             }
 
+            let _ = window.set_always_on_top(startup_overlay_mode != "auto-hide");
+
             // @agent-context: Tray icon with left-click toggle and right-click context menu.
             let show_item = MenuItemBuilder::with_id("show", "Show / Hide").build(app)?;
+            let mode_pinned_item = CheckMenuItemBuilder::with_id("mode_pinned", "Pinned mode")
+                .checked(startup_overlay_mode != "auto-hide")
+                .build(app)?;
+            let mode_auto_hide_item =
+                CheckMenuItemBuilder::with_id("mode_auto_hide", "Auto-hide mode")
+                    .checked(startup_overlay_mode == "auto-hide")
+                    .build(app)?;
             let rescan_item = MenuItemBuilder::with_id("rescan", "Rescan Skills").build(app)?;
             let quit_item = MenuItemBuilder::with_id("quit", "Quit Skill Deck").build(app)?;
 
             let tray_menu = MenuBuilder::new(app)
                 .item(&show_item)
-                .item(&rescan_item)
                 .separator()
+                .item(&mode_pinned_item)
+                .item(&mode_auto_hide_item)
+                .separator()
+                .item(&rescan_item)
                 .item(&quit_item)
                 .build()?;
 
@@ -143,6 +157,28 @@ pub fn run() {
                             let _ = window_for_menu.show();
                             let _ = window_for_menu.set_focus();
                         }
+                    }
+                    "mode_pinned" => {
+                        let state = app_handle.state::<ConfigState>();
+                        if let Ok(mut cfg) = state.0.lock() {
+                            cfg.overlay_mode = "pinned".to_string();
+                            let _ = commands::preferences::save_config(&cfg);
+                        }
+                        let _ = window_for_menu.set_always_on_top(true);
+                        let _ = window_for_menu.emit("overlay-mode-changed", "pinned");
+                        let _ = mode_pinned_item.set_checked(true);
+                        let _ = mode_auto_hide_item.set_checked(false);
+                    }
+                    "mode_auto_hide" => {
+                        let state = app_handle.state::<ConfigState>();
+                        if let Ok(mut cfg) = state.0.lock() {
+                            cfg.overlay_mode = "auto-hide".to_string();
+                            let _ = commands::preferences::save_config(&cfg);
+                        }
+                        let _ = window_for_menu.set_always_on_top(false);
+                        let _ = window_for_menu.emit("overlay-mode-changed", "auto-hide");
+                        let _ = mode_auto_hide_item.set_checked(true);
+                        let _ = mode_pinned_item.set_checked(false);
                     }
                     "rescan" => {
                         let _ = window_for_menu.show();

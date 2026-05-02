@@ -26,51 +26,79 @@
   let picker: Picker | null = null;
   let handleWindowClick: ((e: MouseEvent) => void) | null = null;
   let handleEscape: ((e: KeyboardEvent) => void) | null = null;
+  let handleResize: (() => void) | null = null;
+  let viewportWidth = $state(0);
+  let viewportHeight = $state(0);
 
   const POPOVER_W = 336;
   const POPOVER_H = 430;
+  const POPOVER_MIN_W = 260;
+  const POPOVER_MIN_H = 280;
+  const PICKER_CHROME_H = 92;
+  const PICKER_MIN_H = 160;
   const VIEWPORT_MARGIN = 8;
 
-  const popoverStyle = $derived.by(() => {
+  function syncViewport() {
+    viewportWidth = window.innerWidth;
+    viewportHeight = window.innerHeight;
+  }
+
+  const popoverLayout = $derived.by(() => {
+    const viewportW = Math.max(viewportWidth, 1);
+    const viewportH = Math.max(viewportHeight, 1);
+    const width = Math.max(
+      POPOVER_MIN_W,
+      Math.min(POPOVER_W, viewportW - VIEWPORT_MARGIN * 2)
+    );
+    const height = Math.max(
+      POPOVER_MIN_H,
+      Math.min(POPOVER_H, viewportH - VIEWPORT_MARGIN * 2)
+    );
+    const pickerHeight = Math.max(PICKER_MIN_H, height - PICKER_CHROME_H);
+
     const base = [
       "border-color: var(--color-border)",
       "background: var(--color-surface-1)",
       "box-shadow: 0 22px 44px -16px var(--color-overlay-shadow)",
+      `height: ${height}px`,
+      `width: ${width}px`,
     ];
 
     if (!anchorRect) {
-      return [
+      return {
+        pickerHeight,
+        style: [
         ...base,
         `left: ${VIEWPORT_MARGIN}px`,
         `top: ${VIEWPORT_MARGIN}px`,
-        `width: ${POPOVER_W}px`,
-      ].join(";");
+        ].join(";"),
+      };
     }
 
-    const viewportW = window.innerWidth;
-    const viewportH = window.innerHeight;
     const gap = 8;
 
     let left = anchorRect.right + gap;
-    if (left + POPOVER_W > viewportW - VIEWPORT_MARGIN) {
-      left = anchorRect.left - POPOVER_W - gap;
+    if (left + width > viewportW - VIEWPORT_MARGIN) {
+      left = anchorRect.left - width - gap;
     }
-    left = Math.max(VIEWPORT_MARGIN, Math.min(left, viewportW - POPOVER_W - VIEWPORT_MARGIN));
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, viewportW - width - VIEWPORT_MARGIN));
 
-    let top = anchorRect.top + (anchorRect.height / 2) - (POPOVER_H / 2);
-    if (top + POPOVER_H > viewportH - VIEWPORT_MARGIN) {
-      top = viewportH - POPOVER_H - VIEWPORT_MARGIN;
+    let top = anchorRect.top + (anchorRect.height / 2) - (height / 2);
+    if (top + height > viewportH - VIEWPORT_MARGIN) {
+      top = viewportH - height - VIEWPORT_MARGIN;
     }
     if (top < VIEWPORT_MARGIN) {
       top = VIEWPORT_MARGIN;
     }
 
-    return [
-      ...base,
-      `left: ${left}px`,
-      `top: ${top}px`,
-      `width: ${POPOVER_W}px`,
-    ].join(";");
+    return {
+      pickerHeight,
+      style: [
+        ...base,
+        `left: ${left}px`,
+        `top: ${top}px`,
+      ].join(";"),
+    };
   });
 
   function getTheme() {
@@ -113,14 +141,21 @@
   }
 
   $effect(() => {
-    if (open) {
-      queueMicrotask(() => mountPicker());
-    } else {
+    if (!open) {
       destroyPicker();
+      return;
     }
+
+    if (!pickerHost) {
+      return;
+    }
+
+    mountPicker();
   });
 
   onMount(() => {
+    syncViewport();
+
     handleWindowClick = (e: MouseEvent) => {
       if (!open) return;
       const target = e.target as HTMLElement | null;
@@ -138,6 +173,11 @@
       }
     };
     window.addEventListener("keydown", handleEscape);
+
+    handleResize = () => {
+      syncViewport();
+    };
+    window.addEventListener("resize", handleResize);
   });
 
   onDestroy(() => {
@@ -148,6 +188,9 @@
     if (handleEscape) {
       window.removeEventListener("keydown", handleEscape);
     }
+    if (handleResize) {
+      window.removeEventListener("resize", handleResize);
+    }
   });
 </script>
 
@@ -156,7 +199,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="fixed z-[130] overflow-hidden rounded-2xl border p-2"
-    style={popoverStyle}
+    style={popoverLayout.style}
     data-emoji-picker-popover
     onclick={(e) => e.stopPropagation()}
   >
@@ -184,7 +227,7 @@
 
     <div
       class="emoji-picker-shell overflow-hidden rounded-xl border"
-      style="border-color: var(--color-border);"
+      style="border-color: var(--color-border); --emoji-picker-height: {popoverLayout.pickerHeight}px;"
       bind:this={pickerHost}
     ></div>
   </div>
@@ -193,7 +236,7 @@
 <style>
   .emoji-picker-shell :global(em-emoji-picker) {
     width: 100%;
-    height: 336px;
+    height: var(--emoji-picker-height, 336px);
     --background: var(--color-surface-0);
     --border-color: var(--color-border);
     --border-radius: 14px;

@@ -360,6 +360,59 @@ body {
   color: var(--color-text-secondary);
 }
 
+.instant-tooltip {
+  position: relative;
+}
+
+.instant-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(2px);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 70;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-hover);
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+  box-shadow: 0 12px 24px -12px var(--color-overlay-shadow);
+  transition: opacity 60ms linear, transform 80ms var(--motion-ease-standard);
+}
+
+.instant-tooltip::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 69;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--color-surface-2);
+  transition: opacity 60ms linear;
+}
+
+.instant-tooltip:hover::after,
+.instant-tooltip:hover::before,
+.instant-tooltip:focus-visible::after,
+.instant-tooltip:focus-visible::before {
+  opacity: 1;
+}
+
+.instant-tooltip:hover::after,
+.instant-tooltip:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
 .skill-content-preview .skill-line {
   padding: 0;
 }

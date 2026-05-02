@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { themeStore, setTheme, THEMES, type ThemeId } from "$lib/stores/theme.svelte";
+  import { store, setOverlayMode, type OverlayMode } from "$lib/stores/skills.svelte";
 
   let isOpen = $state(false);
   let menuEl: HTMLDivElement | undefined = $state();
@@ -18,6 +19,10 @@
   function selectTheme(themeId: ThemeId) {
     setTheme(themeId);
     isOpen = false;
+  }
+
+  function selectOverlayMode(mode: OverlayMode) {
+    void setOverlayMode(mode);
   }
 
   function handleWindowClick(e: MouseEvent) {
@@ -112,6 +117,58 @@
           ></span>
         </button>
       {/each}
+
+      <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
+
+      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
+        text-[var(--color-text-muted)]">
+        Window behavior
+      </div>
+
+      {#each ([
+        { id: "pinned", label: "Pinned mode", desc: "Stays open until you hide it" },
+        { id: "auto-hide", label: "Auto-hide mode", desc: "Hides when focus leaves window" }
+      ] as const) as mode (mode.id)}
+        {@const active = store.overlayMode === mode.id}
+        <button
+          role="menuitem"
+          class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] mx-1 px-2 py-2
+            text-left
+            transition-[background-color] duration-[120ms] ease-out
+            hover:bg-[var(--color-surface-2)]"
+          style="width: calc(100% - 8px);"
+          onclick={() => selectOverlayMode(mode.id)}
+        >
+          <span class="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+            {#if active}
+              <svg class="h-3.5 w-3.5 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            {/if}
+          </span>
+
+          <div class="min-w-0">
+            <div class="text-[12px] font-medium
+              {active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}">
+              {mode.label}
+            </div>
+            <div class="text-[10px] text-[var(--color-text-muted)] leading-snug">
+              {mode.desc}
+            </div>
+          </div>
+        </button>
+      {/each}
+
+      <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
+
+      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
+        text-[var(--color-text-muted)]">
+        Shortcut
+      </div>
+
+      <div class="px-3 pb-2 text-[10px] text-[var(--color-text-muted)] leading-snug">
+        {store.hotkey || "CommandOrControl+Shift+K"}
+      </div>
     </div>
   {/if}
 </div>

@@ -52,6 +52,10 @@ pub struct AppConfig {
     #[serde(default = "default_overlay_height")]
     pub overlay_height: u32,
 
+    /// Overlay interaction mode: "pinned" or "auto-hide"
+    #[serde(default = "default_overlay_mode")]
+    pub overlay_mode: String,
+
     /// User-overridden repository URLs per skill ID
     pub skill_repo_overrides: std::collections::HashMap<String, String>,
 
@@ -155,6 +159,7 @@ impl Default for AppConfig {
             overlay_position: OverlayPosition::BottomRight,
             overlay_width: default_overlay_width(),
             overlay_height: default_overlay_height(),
+            overlay_mode: default_overlay_mode(),
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
             update_check_cache: std::collections::HashMap::new(),
@@ -172,6 +177,10 @@ fn default_overlay_width() -> u32 {
 
 fn default_overlay_height() -> u32 {
     640
+}
+
+fn default_overlay_mode() -> String {
+    "pinned".to_string()
 }
 
 fn default_max_skill_history_entries() -> usize {

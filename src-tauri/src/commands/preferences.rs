@@ -136,6 +136,20 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
     }
 }
 
+/// Set overlay interaction mode ("pinned" or "auto-hide")
+#[tauri::command]
+pub fn set_overlay_mode(state: State<ConfigState>, mode: String) {
+    let mut config = state.0.lock().unwrap();
+    config.overlay_mode = match mode.as_str() {
+        "pinned" => "pinned".to_string(),
+        "auto-hide" => "auto-hide".to_string(),
+        _ => "pinned".to_string(),
+    };
+    if let Err(e) = save_config(&config) {
+        warn!("Failed to persist overlay mode: {}", e);
+    }
+}
+
 /// Persist overlay size.
 #[tauri::command]
 pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> Result<(), String> {

@@ -27,6 +27,8 @@ import type {
 } from "$lib/types";
 import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
+export type OverlayMode = "pinned" | "auto-hide";
+
 // ── Reactive state container ─────────────────────────────────────────────────
 
 class SkillStore {
@@ -37,6 +39,7 @@ class SkillStore {
   agentFilter = $state<string | null>(null);
   isVisible = $state(false);
   isLoading = $state(false);
+  hotkey = $state("CommandOrControl+Shift+K");
   scanDurationMs = $state(0);
   lastScanTime = $state<number>(0);
   terminalContext = $state<TerminalContext>({
@@ -58,6 +61,9 @@ class SkillStore {
 
   /** Active renderer mode for the main list area */
   viewMode = $state<ViewMode>("grouped");
+
+  /** Overlay behavior mode: pinned (stays open) or auto-hide (hides on focus loss) */
+  overlayMode = $state<OverlayMode>("pinned");
 
   /** Backward-compatible boolean toggle used by existing components */
   get treeMode(): boolean {
@@ -206,6 +212,16 @@ export function setCollapsedAgents(collapsed: Set<string>) {
   persistCollapsedAgents(next);
 }
 
+/** Collapse all visible grouped-agent sections and persist */
+export function collapseAllAgentGroups(agentIds: string[]) {
+  setCollapsedAgents(new Set(agentIds));
+}
+
+/** Expand all grouped-agent sections and persist */
+export function expandAllAgentGroups() {
+  setCollapsedAgents(new Set());
+}
+
 /** Toggle one tree node collapse state and persist */
 export function toggleTreeNodeCollapse(nodeId: string) {
   const next = new Set(store.collapsedTreeNodes);
@@ -293,9 +309,16 @@ export async function scanSkills(silent = false) {
       projectPath: store.terminalContext.cwd,
     });
 
-    const config = await invoke<{ collapsedAgents?: string[]; collapsedTreeNodes?: string[] }>("get_config");
+    const config = await invoke<{
+      hotkey?: string;
+      collapsedAgents?: string[];
+      collapsedTreeNodes?: string[];
+      overlayMode?: OverlayMode;
+    }>("get_config");
+    store.hotkey = config.hotkey?.trim() || "CommandOrControl+Shift+K";
     store.collapsedAgents = new Set(config.collapsedAgents ?? []);
     store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
+    store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
 
     // Apply starred status from config
     const starred: string[] = await invoke("get_starred_skills");
@@ -520,6 +543,18 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
     }
   } catch (e) {
     showToast(`Update check failed: ${e}`);
+  }
+}
+
+/** Persist overlay behavior mode */
+export async function setOverlayMode(mode: OverlayMode) {
+  const normalized: OverlayMode = mode === "auto-hide" ? "auto-hide" : "pinned";
+  store.overlayMode = normalized;
+  try {
+    await invoke("set_overlay_mode", { mode: normalized });
+  } catch (e) {
+    console.warn("Failed to persist overlay mode:", e);
+    showToast("Could not save window behavior setting");
   }
 }
 

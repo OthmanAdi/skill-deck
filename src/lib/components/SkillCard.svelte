@@ -220,7 +220,8 @@
     {isExpanded
       ? 'border-[var(--color-border-active)] bg-[var(--color-surface-2)]'
       : 'border-transparent bg-[var(--color-surface-1)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-2)]'}
-    {isFocused ? 'card-focused border-[var(--color-accent-muted)]' : ''}"
+    {isFocused ? 'card-focused border-[var(--color-accent-muted)]' : ''}
+    {emojiPickerOpen ? 'z-[180]' : 'z-0'}"
   style="animation-delay: {entryDelayMs}ms;
     {isExpanded ? 'box-shadow: 0 4px 20px -4px var(--color-overlay-shadow), inset 0 1px 0 0 rgba(247, 248, 248, 0.05);' : ''}"
   data-index={index}

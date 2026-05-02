@@ -7,7 +7,12 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { collapseAllTreeNodes, expandAllTreeNodes, store, refreshSkills } from "$lib/stores/skills.svelte";
+  import {
+    collapseAllAgentGroups,
+    expandAllAgentGroups,
+    store,
+    refreshSkills,
+  } from "$lib/stores/skills.svelte";
   import SearchBar from "./SearchBar.svelte";
   import TabBar from "./TabBar.svelte";
   import AgentGroup from "./AgentGroup.svelte";
@@ -149,40 +154,42 @@
         <div class="flex items-center rounded-md border p-0.5"
           style="border-color: var(--color-border); background: var(--color-surface-1);">
           <button
-            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+            class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
               {store.viewMode === 'grouped'
                 ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
             onclick={() => (store.viewMode = "grouped")}
-            title="Grouped list view"
+            data-tooltip="Grouped by coding agent"
             aria-label="Grouped list view"
           >
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h12M4 17h9" />
             </svg>
+            <span>Agents</span>
           </button>
 
           <button
-            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+            class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
               {store.viewMode === 'tree'
                 ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
             onclick={() => (store.viewMode = "tree")}
-            title="Parent child tree view"
+            data-tooltip="Parent child relation tree"
             aria-label="Parent child tree view"
           >
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 6h10M7 12h5M7 18h3M4 6h.01M4 12h.01M4 18h.01" />
             </svg>
+            <span>Tree</span>
           </button>
 
           <button
-            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+            class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
               {store.viewMode === 'graph'
                 ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
             onclick={() => (store.viewMode = "graph")}
-            title="Graph view"
+            data-tooltip="Graph relationship view"
             aria-label="Graph view"
           >
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -192,35 +199,38 @@
               <circle cx="9" cy="17" r="2"></circle>
               <path stroke-linecap="round" stroke-linejoin="round" d="M6.8 7l3.4-1M13.8 5.8l2.4 2.6M16.4 11.5l-6 4" />
             </svg>
+            <span>Graph</span>
           </button>
 
-          {#if store.viewMode === 'tree'}
+          {#if store.viewMode === 'grouped' && store.activeTab === 'all'}
             <span class="mx-0.5 h-4 w-px bg-[var(--color-border)] opacity-80"></span>
 
             <button
-              class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
-                text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
-              onclick={() => collapseAllTreeNodes(store.filteredSkills)}
-              title="Collapse all tree sections"
-              aria-label="Collapse all tree sections"
+              class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium
+                text-[var(--color-text-muted)] transition-all duration-150 hover:text-[var(--color-text-secondary)]"
+              onclick={() => collapseAllAgentGroups(store.groupedSkills.map((group) => group.agentId))}
+              data-tooltip="Collapse all coding agent categories"
+              aria-label="Collapse all coding agent categories"
             >
               <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M7 5h10" />
               </svg>
+              <span>Collapse</span>
             </button>
 
             <button
-              class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
-                text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
-              onclick={expandAllTreeNodes}
-              title="Expand all tree sections"
-              aria-label="Expand all tree sections"
+              class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium
+                text-[var(--color-text-muted)] transition-all duration-150 hover:text-[var(--color-text-secondary)]"
+              onclick={expandAllAgentGroups}
+              data-tooltip="Expand all coding agent categories"
+              aria-label="Expand all coding agent categories"
             >
               <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6" />
                 <path stroke-linecap="round" stroke-linejoin="round" d="M7 19h10" />
               </svg>
+              <span>Expand</span>
             </button>
           {/if}
         </div>

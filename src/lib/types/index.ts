@@ -178,6 +178,7 @@ export interface AppConfig {
   overlayPosition: "bottom-right" | "bottom-left" | "top-right" | "top-left";
   overlayWidth: number;
   overlayHeight: number;
+  overlayMode?: "pinned" | "auto-hide";
   skillRepoOverrides: Record<string, string>;
   skillInstallOverrides: Record<string, string>;
   updateCheckCache: Record<string, UpdateCheckEntry>;
