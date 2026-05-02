@@ -62,6 +62,8 @@ pub fn run() {
             commands::set_hotkey,
             commands::set_theme,
             commands::set_overlay_size,
+            commands::set_collapsed_agents,
+            commands::set_collapsed_tree_nodes,
             commands::get_starred_skills,
             // Update checking
             commands::check_skill_update,

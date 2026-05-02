@@ -53,6 +53,9 @@ class SkillStore {
   /** Tracks which agent group sections are collapsed in the UI */
   collapsedAgents = $state<Set<string>>(new Set());
 
+  /** Tracks which tree node sections are collapsed in tree view */
+  collapsedTreeNodes = $state<Set<string>>(new Set());
+
   /** Active renderer mode for the main list area */
   viewMode = $state<ViewMode>("grouped");
 
@@ -193,6 +196,47 @@ export function toggleAgentCollapse(agentId: string) {
     next.add(agentId);
   }
   store.collapsedAgents = next; // reassign to trigger Svelte 5 reactivity
+  persistCollapsedAgents(next);
+}
+
+/** Replace collapsed grouped-agent ids and persist */
+export function setCollapsedAgents(collapsed: Set<string>) {
+  const next = new Set(collapsed);
+  store.collapsedAgents = next;
+  persistCollapsedAgents(next);
+}
+
+/** Toggle one tree node collapse state and persist */
+export function toggleTreeNodeCollapse(nodeId: string) {
+  const next = new Set(store.collapsedTreeNodes);
+  if (next.has(nodeId)) {
+    next.delete(nodeId);
+  } else {
+    next.add(nodeId);
+  }
+  store.collapsedTreeNodes = next;
+  persistCollapsedTreeNodes(next);
+}
+
+/** Replace collapsed tree node ids and persist */
+export function setCollapsedTreeNodes(collapsed: Set<string>) {
+  const next = new Set(collapsed);
+  store.collapsedTreeNodes = next;
+  persistCollapsedTreeNodes(next);
+}
+
+function persistCollapsedAgents(collapsed: Set<string>) {
+  const payload = Array.from(collapsed);
+  void invoke("set_collapsed_agents", { collapsedAgents: payload }).catch((e) => {
+    console.warn("Failed to persist collapsed agents:", e);
+  });
+}
+
+function persistCollapsedTreeNodes(collapsed: Set<string>) {
+  const payload = Array.from(collapsed);
+  void invoke("set_collapsed_tree_nodes", { collapsedTreeNodes: payload }).catch((e) => {
+    console.warn("Failed to persist collapsed tree nodes:", e);
+  });
 }
 
 // ── Background refresh interval ──────────────────────────────────────────────
@@ -232,6 +276,10 @@ export async function scanSkills(silent = false) {
     store.agents = await invoke("list_agents", {
       projectPath: store.terminalContext.cwd,
     });
+
+    const config = await invoke<{ collapsedAgents?: string[]; collapsedTreeNodes?: string[] }>("get_config");
+    store.collapsedAgents = new Set(config.collapsedAgents ?? []);
+    store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
 
     // Apply starred status from config
     const starred: string[] = await invoke("get_starred_skills");

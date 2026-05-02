@@ -68,6 +68,14 @@ pub struct AppConfig {
     /// Maximum number of history entries to retain per skill
     #[serde(default = "default_max_skill_history_entries")]
     pub max_skill_history_entries: usize,
+
+    /// Collapsed agent group ids in grouped list view
+    #[serde(default)]
+    pub collapsed_agents: HashSet<String>,
+
+    /// Collapsed skill node ids in tree view
+    #[serde(default)]
+    pub collapsed_tree_nodes: HashSet<String>,
 }
 
 /// Cached result of an update check for a single skill
@@ -152,6 +160,8 @@ impl Default for AppConfig {
             update_check_cache: std::collections::HashMap::new(),
             skill_version_history: std::collections::HashMap::new(),
             max_skill_history_entries: default_max_skill_history_entries(),
+            collapsed_agents: HashSet::new(),
+            collapsed_tree_nodes: HashSet::new(),
         }
     }
 }

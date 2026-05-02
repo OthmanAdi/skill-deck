@@ -183,6 +183,8 @@ export interface AppConfig {
   updateCheckCache: Record<string, UpdateCheckEntry>;
   skillVersionHistory?: Record<string, SkillVersionEntry[]>;
   maxSkillHistoryEntries?: number;
+  collapsedAgents?: string[];
+  collapsedTreeNodes?: string[];
 }
 
 /** Cached update check result */

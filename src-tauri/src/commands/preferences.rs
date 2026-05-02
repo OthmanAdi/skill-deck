@@ -85,7 +85,14 @@ pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
 #[tauri::command]
 pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String) {
     let mut config = state.0.lock().unwrap();
-    config.skill_icons.insert(skill_id, icon);
+    let normalized = icon.trim();
+    if normalized.is_empty() {
+        config.skill_icons.remove(&skill_id);
+    } else {
+        config
+            .skill_icons
+            .insert(skill_id, normalized.to_string());
+    }
     if let Err(e) = save_config(&config) {
         warn!("Failed to persist skill icon: {}", e);
     }
@@ -149,5 +156,47 @@ pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> R
     config.overlay_height = clamped_h;
     save_config(&config)?;
 
+    Ok(())
+}
+
+/// Persist collapsed agent groups for grouped list view.
+#[tauri::command]
+pub fn set_collapsed_agents(
+    state: State<ConfigState>,
+    collapsed_agents: Vec<String>,
+) -> Result<(), String> {
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.collapsed_agents = collapsed_agents
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+
+    save_config(&config)?;
+    Ok(())
+}
+
+/// Persist collapsed tree node ids for tree view.
+#[tauri::command]
+pub fn set_collapsed_tree_nodes(
+    state: State<ConfigState>,
+    collapsed_tree_nodes: Vec<String>,
+) -> Result<(), String> {
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.collapsed_tree_nodes = collapsed_tree_nodes
+        .into_iter()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .collect();
+
+    save_config(&config)?;
     Ok(())
 }
