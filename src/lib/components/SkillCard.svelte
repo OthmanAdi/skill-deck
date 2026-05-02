@@ -11,6 +11,7 @@
   import type { Skill } from "$lib/types";
   import {
     toggleStar,
+    setSkillIcon,
     copySkillReference,
     startDragPoll,
     stopDragPoll,
@@ -24,6 +25,7 @@
   } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import AgentBadge from "./AgentBadge.svelte";
+  import EmojiPickerPopover from "./EmojiPickerPopover.svelte";
 
   let { skill, index = 0, isFocused = false }: { skill: Skill; index?: number; isFocused?: boolean } = $props();
 
@@ -32,12 +34,33 @@
   let starAnimating = $state(false);
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
+  let emojiPickerOpen = $state(false);
+  let emojiAnchorRect = $state<DOMRect | null>(null);
 
   function handleStarClick(e: MouseEvent) {
     e.stopPropagation();
     starAnimating = true;
     toggleStar(skill.id);
     setTimeout(() => { starAnimating = false; }, 350);
+  }
+
+  async function handleEmojiSelect(emoji: string) {
+    await setSkillIcon(skill.id, emoji || null);
+    emojiPickerOpen = false;
+  }
+
+  function handleIconClick(e: MouseEvent) {
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement | null;
+    if (!target) return;
+
+    if (emojiPickerOpen) {
+      emojiPickerOpen = false;
+      return;
+    }
+
+    emojiAnchorRect = target.getBoundingClientRect();
+    emojiPickerOpen = true;
   }
 
   function handleCopyClick(e: MouseEvent) {
@@ -210,17 +233,29 @@
   aria-selected={isFocused}
   tabindex={isFocused ? 0 : -1}
 >
-  <!-- Icon / Emoji / Letter avatar -->
-  <div
-    class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold
+  <!-- Icon / Emoji / Letter avatar (click to change icon) -->
+  <button
+    class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold
       transition-all duration-200 group-hover:scale-105
       {isEmoji ? '' : 'text-[var(--color-text-secondary)]'}"
     style="{isEmoji
       ? ''
       : `background: var(--color-surface-3); border: 1px solid var(--color-border);`}"
+    onclick={handleIconClick}
+    data-emoji-picker-trigger
+    title="Change icon"
+    aria-label="Change icon"
   >
     {displayIcon}
-  </div>
+  </button>
+
+  <EmojiPickerPopover
+    open={emojiPickerOpen}
+    {skill}
+    anchorRect={emojiAnchorRect}
+    onSelect={handleEmojiSelect}
+    onClose={() => (emojiPickerOpen = false)}
+  />
 
   <!-- Content -->
   <div class="min-w-0 flex-1">

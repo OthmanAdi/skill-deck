@@ -7,7 +7,7 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
-  import { store, refreshSkills } from "$lib/stores/skills.svelte";
+  import { collapseAllTreeNodes, expandAllTreeNodes, store, refreshSkills } from "$lib/stores/skills.svelte";
   import SearchBar from "./SearchBar.svelte";
   import TabBar from "./TabBar.svelte";
   import AgentGroup from "./AgentGroup.svelte";
@@ -193,6 +193,36 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M6.8 7l3.4-1M13.8 5.8l2.4 2.6M16.4 11.5l-6 4" />
             </svg>
           </button>
+
+          {#if store.viewMode === 'tree'}
+            <span class="mx-0.5 h-4 w-px bg-[var(--color-border)] opacity-80"></span>
+
+            <button
+              class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+                text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+              onclick={() => collapseAllTreeNodes(store.filteredSkills)}
+              title="Collapse all tree sections"
+              aria-label="Collapse all tree sections"
+            >
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 5h10" />
+              </svg>
+            </button>
+
+            <button
+              class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+                text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+              onclick={expandAllTreeNodes}
+              title="Expand all tree sections"
+              aria-label="Expand all tree sections"
+            >
+              <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7 19h10" />
+              </svg>
+            </button>
+          {/if}
         </div>
         <ThemeMenu />
       </div>

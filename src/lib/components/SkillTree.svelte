@@ -8,7 +8,7 @@
 -->
 <script lang="ts">
   import type { Skill } from "$lib/types";
-  import { setCollapsedTreeNodes, store, toggleTreeNodeCollapse } from "$lib/stores/skills.svelte";
+  import { store, toggleTreeNodeCollapse } from "$lib/stores/skills.svelte";
   import SkillCard from "./SkillCard.svelte";
 
   let {
@@ -64,24 +64,6 @@
     flattenVisible(roots, collapsed, childrenMap)
   );
 
-  const collapsibleNodeIds = $derived.by(() => {
-    const ids = new Set<string>();
-    for (const skill of skills) {
-      if ((childrenMap.get(skill.id) ?? []).length > 0) {
-        ids.add(skill.id);
-      }
-    }
-    return ids;
-  });
-
-  function collapseAll() {
-    setCollapsedTreeNodes(new Set(collapsibleNodeIds));
-  }
-
-  function expandAll() {
-    setCollapsedTreeNodes(new Set());
-  }
-
   function visibleIndex(skillId: string): number {
     return visibleOrder.findIndex((s) => s.id === skillId);
   }
@@ -110,27 +92,6 @@
     return childrenMap.get(skillId) ?? [];
   }
 </script>
-
-<div class="mb-2 flex items-center justify-end gap-1.5 px-1">
-  <button
-    class="rounded-md border px-2 py-1 text-[10px] font-medium text-[var(--color-text-secondary)]
-      transition-colors hover:bg-[var(--color-surface-2)]"
-    style="border-color: var(--color-border);"
-    onclick={collapseAll}
-    title="Collapse all sections"
-  >
-    Collapse all
-  </button>
-  <button
-    class="rounded-md border px-2 py-1 text-[10px] font-medium text-[var(--color-text-secondary)]
-      transition-colors hover:bg-[var(--color-surface-2)]"
-    style="border-color: var(--color-border);"
-    onclick={expandAll}
-    title="Expand all sections"
-  >
-    Expand all
-  </button>
-</div>
 
 <div class="flex flex-col gap-1">
   {#each visibleOrder as skill (skill.id)}

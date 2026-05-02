@@ -225,6 +225,22 @@ export function setCollapsedTreeNodes(collapsed: Set<string>) {
   persistCollapsedTreeNodes(next);
 }
 
+/** Collapse all currently visible tree parents and persist */
+export function collapseAllTreeNodes(skills: Skill[]) {
+  const parentIds = new Set<string>();
+  for (const skill of skills) {
+    if (skill.parentId) {
+      parentIds.add(skill.parentId);
+    }
+  }
+  setCollapsedTreeNodes(parentIds);
+}
+
+/** Expand all tree nodes and persist */
+export function expandAllTreeNodes() {
+  setCollapsedTreeNodes(new Set());
+}
+
 function persistCollapsedAgents(collapsed: Set<string>) {
   const payload = Array.from(collapsed);
   void invoke("set_collapsed_agents", { collapsedAgents: payload }).catch((e) => {

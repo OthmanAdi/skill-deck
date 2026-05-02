@@ -11,18 +11,67 @@
   let {
     open = false,
     skill,
+    anchorRect = null,
     onSelect,
     onClose,
   }: {
     open?: boolean;
     skill: Skill;
+    anchorRect?: DOMRect | null;
     onSelect: (emoji: string) => void;
     onClose: () => void;
   } = $props();
 
-  let pickerHost: HTMLDivElement | undefined;
+  let pickerHost: HTMLDivElement | undefined = $state();
   let picker: Picker | null = null;
   let handleWindowClick: ((e: MouseEvent) => void) | null = null;
+  let handleEscape: ((e: KeyboardEvent) => void) | null = null;
+
+  const POPOVER_W = 336;
+  const POPOVER_H = 430;
+  const VIEWPORT_MARGIN = 8;
+
+  const popoverStyle = $derived.by(() => {
+    const base = [
+      "border-color: var(--color-border)",
+      "background: var(--color-surface-1)",
+      "box-shadow: 0 22px 44px -16px var(--color-overlay-shadow)",
+    ];
+
+    if (!anchorRect) {
+      return [
+        ...base,
+        `left: ${VIEWPORT_MARGIN}px`,
+        `top: ${VIEWPORT_MARGIN}px`,
+        `width: ${POPOVER_W}px`,
+      ].join(";");
+    }
+
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const gap = 8;
+
+    let left = anchorRect.right + gap;
+    if (left + POPOVER_W > viewportW - VIEWPORT_MARGIN) {
+      left = anchorRect.left - POPOVER_W - gap;
+    }
+    left = Math.max(VIEWPORT_MARGIN, Math.min(left, viewportW - POPOVER_W - VIEWPORT_MARGIN));
+
+    let top = anchorRect.top + (anchorRect.height / 2) - (POPOVER_H / 2);
+    if (top + POPOVER_H > viewportH - VIEWPORT_MARGIN) {
+      top = viewportH - POPOVER_H - VIEWPORT_MARGIN;
+    }
+    if (top < VIEWPORT_MARGIN) {
+      top = VIEWPORT_MARGIN;
+    }
+
+    return [
+      ...base,
+      `left: ${left}px`,
+      `top: ${top}px`,
+      `width: ${POPOVER_W}px`,
+    ].join(";");
+  });
 
   function getTheme() {
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
@@ -40,8 +89,10 @@
       skinTonePosition: "none",
       navPosition: "bottom",
       perLine: 8,
-      emojiButtonSize: 42,
-      emojiSize: 23,
+      emojiButtonSize: 46,
+      emojiButtonRadius: "14px",
+      emojiSize: 24,
+      icons: "outline",
       searchPosition: "sticky",
       maxFrequentRows: 2,
       onEmojiSelect: (emoji: { native?: string }) => {
@@ -80,6 +131,13 @@
       onClose();
     };
     window.addEventListener("click", handleWindowClick);
+
+    handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
   });
 
   onDestroy(() => {
@@ -87,14 +145,20 @@
     if (handleWindowClick) {
       window.removeEventListener("click", handleWindowClick);
     }
+    if (handleEscape) {
+      window.removeEventListener("keydown", handleEscape);
+    }
   });
 </script>
 
 {#if open}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="absolute right-0 top-[2.35rem] z-[70] w-[336px] overflow-hidden rounded-2xl border p-2"
-    style="border-color: var(--color-border); background: color-mix(in srgb, var(--color-surface-1) 94%, transparent); box-shadow: 0 22px 44px -16px var(--color-overlay-shadow);"
+    class="fixed z-[130] overflow-hidden rounded-2xl border p-2"
+    style={popoverStyle}
     data-emoji-picker-popover
+    onclick={(e) => e.stopPropagation()}
   >
     <div class="mb-2 flex items-center justify-between px-1">
       <span class="text-[11px] font-semibold text-[var(--color-text-secondary)]">Choose icon for {skill.name}</span>
@@ -125,3 +189,23 @@
     ></div>
   </div>
 {/if}
+
+<style>
+  .emoji-picker-shell :global(em-emoji-picker) {
+    width: 100%;
+    height: 336px;
+    --background: var(--color-surface-0);
+    --border-color: var(--color-border);
+    --border-radius: 14px;
+    --emoji-size: 1.35rem;
+    --emoji-padding: 0.44rem;
+    --emoji-button-radius: 14px;
+    --button-hover-background: var(--color-surface-3);
+    --button-active-background: var(--color-surface-3);
+    --input-font-color: var(--color-text-primary);
+    --input-placeholder-color: var(--color-text-muted);
+    --indicator-color: var(--color-accent);
+    --category-font-color: var(--color-text-secondary);
+    --outline-color: var(--color-accent-muted);
+  }
+</style>
