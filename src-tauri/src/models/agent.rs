@@ -20,7 +20,7 @@ pub struct AgentInfo {
     /// Short description of the agent
     pub description: String,
 
-    /// Brand color as CSS oklch value (for agent badges in the UI)
+    /// Brand color as CSS color string, recommended hex value (for agent badges in the UI)
     pub color: String,
 
     /// Whether this agent is detected as installed on this system

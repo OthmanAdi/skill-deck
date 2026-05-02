@@ -10,7 +10,7 @@
 {#if store.toastMessage}
   <div
     class="pointer-events-none fixed bottom-12 left-1/2 z-50"
-    transition:fly={{ y: 8, duration: 180, easing: cubicOut }}
+    transition:fly={{ y: 6, duration: 160, easing: cubicOut }}
     style="transform: translateX(-50%);"
   >
     <div

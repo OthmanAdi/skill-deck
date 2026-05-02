@@ -1,46 +1,30 @@
 @import "tailwindcss";
 
 /*
- * @agent-context: Skill Deck theme system.
- *
- * ARCHITECTURE:
- * - @theme maps --color-* token names to var(--t-*) intermediates
- * - Each [data-theme="X"] block defines the actual --t-* values
- * - Components use bg-[var(--color-surface-0)] pattern (arbitrary Tailwind values)
- * - Adding a new theme = 1 CSS block + 1 entry in theme.svelte.ts
- *
- * TOKEN NAMING:
- * --t-surface-*   Background layers (0 = outermost/darkest, 3 = innermost/lightest)
- * --t-text-*      Text hierarchy (primary > secondary > muted)
- * --t-accent-*    Brand accent color variants
- * --t-border-*    Border colors
- * --t-agent-*     Agent brand colors (consistent across themes)
+ * @agent-context: Skill Deck unified theme system.
+ * Theme modes: system, dark, light.
+ * Resolved theme selectors: [data-theme="dark"] and [data-theme="light"].
  */
 
 @theme {
-  /* Surface layers */
   --color-surface-0: var(--t-surface-0);
   --color-surface-1: var(--t-surface-1);
   --color-surface-2: var(--t-surface-2);
   --color-surface-3: var(--t-surface-3);
 
-  /* Text hierarchy */
   --color-text-primary: var(--t-text-primary);
   --color-text-secondary: var(--t-text-secondary);
   --color-text-muted: var(--t-text-muted);
 
-  /* Accent */
   --color-accent: var(--t-accent);
   --color-accent-hover: var(--t-accent-hover);
   --color-accent-muted: var(--t-accent-muted);
   --color-accent-subtle: var(--t-accent-subtle);
 
-  /* Borders */
   --color-border: var(--t-border);
   --color-border-hover: var(--t-border-hover);
   --color-border-active: var(--t-border-active);
 
-  /* Agent brand colors */
   --color-agent-claude: var(--t-agent-claude);
   --color-agent-cursor: var(--t-agent-cursor);
   --color-agent-copilot: var(--t-agent-copilot);
@@ -50,136 +34,141 @@
   --color-agent-cline: var(--t-agent-cline);
   --color-agent-aider: var(--t-agent-aider);
 
-  /* Status */
   --color-update-available: var(--t-update-available);
   --color-starred: var(--t-starred);
 
-  /* Effects */
   --color-overlay-shadow: var(--t-overlay-shadow);
   --color-search-glow: var(--t-search-glow);
 
-  /* Code block */
   --color-code-bg: var(--t-code-bg);
   --color-code-border: var(--t-code-border);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   THEME: OBSIDIAN (dark) — default
-   shadcn/Linear/Notion inspired. Zero-chroma neutrals, cool blue accent.
-   ══════════════════════════════════════════════════════════════ */
-
+/* Dark baseline (Linear-inspired) */
 :root,
-[data-theme="obsidian"] {
+[data-theme="dark"] {
   color-scheme: dark;
 
-  /* Surfaces: zero-chroma neutrals. Near-black base, subtle elevation steps. */
-  --t-surface-0: oklch(0.145 0 0);
-  --t-surface-1: oklch(0.175 0.004 250);
-  --t-surface-2: oklch(0.205 0.004 250);
-  --t-surface-3: oklch(0.245 0.005 250);
+  --t-surface-0: #010102;
+  --t-surface-1: #0f1011;
+  --t-surface-2: #141516;
+  --t-surface-3: #18191a;
 
-  /* Text: warm off-white primary, cool gray secondary/muted */
-  --t-text-primary:   oklch(0.93 0.005 250);
-  --t-text-secondary: oklch(0.65 0.010 250);
-  --t-text-muted:     oklch(0.47 0.010 250);
+  --t-text-primary: #f7f8f8;
+  --t-text-secondary: #d0d6e0;
+  --t-text-muted: #8a8f98;
 
-  /* Accent: Linear-style cool blue */
-  --t-accent:        oklch(0.65 0.15 250);
-  --t-accent-hover:  oklch(0.70 0.17 250);
-  --t-accent-muted:  oklch(0.42 0.09 250);
-  --t-accent-subtle: oklch(0.22 0.04 250);
+  --t-accent: #5e6ad2;
+  --t-accent-hover: #828fff;
+  --t-accent-muted: #7a7fad;
+  --t-accent-subtle: rgba(94, 106, 210, 0.16);
 
-  /* Borders: white-alpha (standard shadcn dark pattern) */
-  --t-border:        oklch(1 0 0 / 0.10);
-  --t-border-hover:  oklch(1 0 0 / 0.16);
-  --t-border-active: oklch(0.65 0.15 250 / 0.35);
+  --t-border: #23252a;
+  --t-border-hover: #34343a;
+  --t-border-active: rgba(94, 105, 209, 0.55);
 
-  /* Agent brand colors — perceptually consistent across themes */
-  --t-agent-claude:   oklch(0.70 0.18 25);
-  --t-agent-cursor:   oklch(0.70 0.15 280);
-  --t-agent-copilot:  oklch(0.70 0.10 220);
-  --t-agent-codex:    oklch(0.70 0.12 160);
-  --t-agent-windsurf: oklch(0.70 0.14 200);
-  --t-agent-gemini:   oklch(0.70 0.16 60);
-  --t-agent-cline:    oklch(0.70 0.12 310);
-  --t-agent-aider:    oklch(0.70 0.10 100);
+  --t-agent-claude: #f28c54;
+  --t-agent-cursor: #a58cff;
+  --t-agent-copilot: #57a0ff;
+  --t-agent-codex: #4dc8b0;
+  --t-agent-windsurf: #49bed9;
+  --t-agent-gemini: #d5b347;
+  --t-agent-cline: #d082d6;
+  --t-agent-aider: #82b36d;
 
-  /* Status */
-  --t-update-available: oklch(0.75 0.18 80);
-  --t-starred:          oklch(0.85 0.18 85);
+  --t-update-available: #27a644;
+  --t-starred: #d5b347;
 
-  /* Effects */
-  --t-overlay-shadow: oklch(0 0 0 / 0.55);
-  --t-search-glow:    oklch(0.65 0.15 250 / 0.10);
+  --t-overlay-shadow: rgba(0, 0, 0, 0.56);
+  --t-search-glow: rgba(94, 106, 210, 0.22);
 
-  /* Code blocks */
-  --t-code-bg:     oklch(0.12 0.004 250);
-  --t-code-border: oklch(1 0 0 / 0.07);
+  --t-code-bg: #0c0d0e;
+  --t-code-border: #23252a;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   THEME: OBSIDIAN LIGHT
-   Same design language, warm paper surfaces.
-   ══════════════════════════════════════════════════════════════ */
-
-[data-theme="obsidian-light"] {
+/* Light inverse theme */
+[data-theme="light"] {
   color-scheme: light;
 
-  --t-surface-0: oklch(0.985 0.002 250);
-  --t-surface-1: oklch(1 0 0);
-  --t-surface-2: oklch(0.968 0.002 250);
-  --t-surface-3: oklch(0.940 0.003 250);
+  --t-surface-0: #ffffff;
+  --t-surface-1: #f5f6f6;
+  --t-surface-2: #f6f7f7;
+  --t-surface-3: #eceef0;
 
-  --t-text-primary:   oklch(0.145 0.005 250);
-  --t-text-secondary: oklch(0.390 0.010 250);
-  --t-text-muted:     oklch(0.545 0.010 250);
+  --t-text-primary: #121316;
+  --t-text-secondary: #33363d;
+  --t-text-muted: #62666d;
 
-  --t-accent:        oklch(0.52 0.15 250);
-  --t-accent-hover:  oklch(0.47 0.17 250);
-  --t-accent-muted:  oklch(0.65 0.09 250);
-  --t-accent-subtle: oklch(0.90 0.03 250);
+  --t-accent: #5e6ad2;
+  --t-accent-hover: #4d58bc;
+  --t-accent-muted: #5e69d1;
+  --t-accent-subtle: rgba(94, 106, 210, 0.12);
 
-  --t-border:        oklch(0.900 0.004 250);
-  --t-border-hover:  oklch(0.855 0.006 250);
-  --t-border-active: oklch(0.52 0.15 250 / 0.25);
+  --t-border: #d6d9df;
+  --t-border-hover: #c6cbd3;
+  --t-border-active: rgba(94, 105, 209, 0.42);
 
-  /* Slightly darker agent colors for light bg contrast */
-  --t-agent-claude:   oklch(0.55 0.18 25);
-  --t-agent-cursor:   oklch(0.55 0.15 280);
-  --t-agent-copilot:  oklch(0.55 0.10 220);
-  --t-agent-codex:    oklch(0.55 0.12 160);
-  --t-agent-windsurf: oklch(0.55 0.14 200);
-  --t-agent-gemini:   oklch(0.55 0.16 60);
-  --t-agent-cline:    oklch(0.55 0.12 310);
-  --t-agent-aider:    oklch(0.55 0.10 100);
+  --t-agent-claude: #bd5c2f;
+  --t-agent-cursor: #7f58d9;
+  --t-agent-copilot: #246dcd;
+  --t-agent-codex: #278f7e;
+  --t-agent-windsurf: #1b8aa5;
+  --t-agent-gemini: #947719;
+  --t-agent-cline: #a046a6;
+  --t-agent-aider: #5e8e49;
 
-  --t-update-available: oklch(0.58 0.18 80);
-  --t-starred:          oklch(0.62 0.20 85);
+  --t-update-available: #25893c;
+  --t-starred: #947719;
 
-  --t-overlay-shadow: oklch(0 0 0 / 0.08);
-  --t-search-glow:    oklch(0.52 0.15 250 / 0.08);
+  --t-overlay-shadow: rgba(7, 10, 18, 0.16);
+  --t-search-glow: rgba(94, 106, 210, 0.16);
 
-  --t-code-bg:     oklch(0.968 0.002 250);
-  --t-code-border: oklch(0.900 0.004 250);
+  --t-code-bg: #eef0f2;
+  --t-code-border: #d6d9df;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   BASE STYLES
-   ══════════════════════════════════════════════════════════════ */
+/* Honor OS preference before JS resolves mode */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --t-surface-0: #ffffff;
+    --t-surface-1: #f5f6f6;
+    --t-surface-2: #f6f7f7;
+    --t-surface-3: #eceef0;
+    --t-text-primary: #121316;
+    --t-text-secondary: #33363d;
+    --t-text-muted: #62666d;
+    --t-accent: #5e6ad2;
+    --t-accent-hover: #4d58bc;
+    --t-accent-muted: #5e69d1;
+    --t-accent-subtle: rgba(94, 106, 210, 0.12);
+    --t-border: #d6d9df;
+    --t-border-hover: #c6cbd3;
+    --t-border-active: rgba(94, 105, 209, 0.42);
+    --t-overlay-shadow: rgba(7, 10, 18, 0.16);
+    --t-search-glow: rgba(94, 106, 210, 0.16);
+    --t-code-bg: #eef0f2;
+    --t-code-border: #d6d9df;
+  }
+}
 
 :root {
-  /* Inter with OpenType features for crisp glyphs */
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 13px;
 
-  /* Border radius scale */
   --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-enter: 220ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
@@ -191,90 +180,130 @@ body {
   -webkit-user-select: none;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   SCROLLBAR
-   ══════════════════════════════════════════════════════════════ */
-
 .skill-list::-webkit-scrollbar {
   width: 4px;
 }
+
 .skill-list::-webkit-scrollbar-track {
   background: transparent;
   margin: 8px 0;
 }
+
 .skill-list::-webkit-scrollbar-thumb {
-  background: oklch(1 0 0 / 0.12);
+  background: rgba(247, 248, 248, 0.18);
   border-radius: 4px;
-  transition: background 0.2s;
+  transition: background var(--motion-duration-base) var(--motion-ease-standard);
 }
+
 .skill-list::-webkit-scrollbar-thumb:hover {
-  background: oklch(1 0 0 / 0.22);
-}
-[data-theme="obsidian-light"] .skill-list::-webkit-scrollbar-thumb {
-  background: oklch(0 0 0 / 0.10);
-}
-[data-theme="obsidian-light"] .skill-list::-webkit-scrollbar-thumb:hover {
-  background: oklch(0 0 0 / 0.18);
+  background: rgba(247, 248, 248, 0.3);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   ANIMATIONS
-   Linear-style: functional, never decorative.
-   Entries slightly longer than exits. Max 250ms. No bounce.
-   ══════════════════════════════════════════════════════════════ */
+[data-theme="light"] .skill-list::-webkit-scrollbar-thumb {
+  background: rgba(24, 25, 26, 0.16);
+}
 
-/* Overlay entrance: slide up + fade. 250ms with forgiving ease. */
+[data-theme="light"] .skill-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(24, 25, 26, 0.28);
+}
+
 @keyframes overlay-enter {
   from {
     opacity: 0;
-    transform: translateY(16px) scale(0.98);
+    transform: translateY(12px) scale(0.985);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
-/* Row entrance: simple fade-in-up. No blur, no overshoot. */
 @keyframes row-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-/* Skeleton shimmer */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes skeleton-shimmer {
-  0%   { opacity: 0.06; }
-  50%  { opacity: 0.14; }
-  100% { opacity: 0.06; }
+  0% {
+    opacity: 0.08;
+  }
+
+  50% {
+    opacity: 0.16;
+  }
+
+  100% {
+    opacity: 0.08;
+  }
 }
 
-/* Refresh spinner */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Star press feedback */
 @keyframes star-pop {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.3); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.22);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
-/* ── Applied classes ── */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.22);
+  }
+}
 
 .overlay-enter {
-  animation: overlay-enter 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: overlay-enter var(--motion-duration-enter) var(--motion-ease-emphasized) both;
 }
 
 .row-enter {
-  animation: row-enter 200ms ease-out both;
+  animation: row-enter var(--motion-duration-base) var(--motion-ease-standard) both;
+}
+
+.card-enter {
+  animation: card-enter var(--motion-duration-base) var(--motion-ease-standard) both;
 }
 
 .skeleton-card {
@@ -284,87 +313,175 @@ body {
 }
 
 .star-pop {
-  animation: star-pop 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: star-pop 220ms var(--motion-ease-emphasized);
 }
 
 .spin {
   animation: spin 0.7s linear infinite;
 }
 
-/* Alias for components using the old animation name */
 @keyframes refresh-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
+  from {
+    transform: rotate(0deg);
+  }
 
-/* Breathing pulse for update indicators */
-@keyframes breathe {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50%       { opacity: 1;   transform: scale(1.3); }
+  to {
+    transform: rotate(360deg);
+  }
 }
-
-/* ══════════════════════════════════════════════════════════════
-   SKILL LIST SCROLL FADE
-   ══════════════════════════════════════════════════════════════ */
 
 .skill-list {
   mask-image: linear-gradient(
     to bottom,
-    transparent 0px,
-    black 10px,
-    black calc(100% - 10px),
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 10px),
     transparent 100%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
-    transparent 0px,
-    black 10px,
-    black calc(100% - 10px),
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 10px),
     transparent 100%
   );
 }
 
-/* ══════════════════════════════════════════════════════════════
-   SKILL CONTENT PREVIEW (monospace syntax-highlighted preview)
-   ══════════════════════════════════════════════════════════════ */
-
 .skill-content-preview {
-  font-family: "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
   font-size: 11px;
   line-height: 1.6;
   tab-size: 2;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
   color: var(--color-text-secondary);
 }
 
-.skill-content-preview .fm-key       { color: oklch(0.72 0.10 200); }
-.skill-content-preview .fm-value     { color: oklch(0.75 0.09 145); }
-.skill-content-preview .fm-delimiter { color: var(--color-text-muted); opacity: 0.45; }
-.skill-content-preview .md-heading   { color: var(--color-accent); font-weight: 600; }
-.skill-content-preview .md-bullet    { color: var(--color-accent-muted); }
+.skill-content-preview .skill-line {
+  padding: 0;
+}
 
-[data-theme="obsidian-light"] .skill-content-preview .fm-key   { color: oklch(0.42 0.10 200); }
-[data-theme="obsidian-light"] .skill-content-preview .fm-value { color: oklch(0.38 0.09 145); }
+.skill-content-preview .skill-empty {
+  min-height: 0.65rem;
+}
 
-/* ══════════════════════════════════════════════════════════════
-   DRAG STATE
-   ══════════════════════════════════════════════════════════════ */
+.skill-content-preview .skill-frontmatter-row {
+  display: flex;
+  gap: 0.3rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.skill-content-preview .skill-fm-key,
+.skill-content-preview .fm-key {
+  color: #7fa4ff;
+  font-weight: 600;
+}
+
+.skill-content-preview .skill-fm-value,
+.skill-content-preview .fm-value {
+  color: #72b88d;
+}
+
+.skill-content-preview .skill-fm-delimiter,
+.skill-content-preview .fm-delimiter {
+  color: var(--color-text-muted);
+  opacity: 0.45;
+}
+
+.skill-content-preview .skill-heading,
+.skill-content-preview .md-heading {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.skill-content-preview .skill-heading-1,
+.skill-content-preview .skill-heading-2 {
+  font-size: 11.5px;
+}
+
+.skill-content-preview .skill-list-item {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.skill-content-preview .skill-bullet-symbol,
+.skill-content-preview .skill-ordered-index,
+.skill-content-preview .md-bullet {
+  color: var(--color-accent-muted);
+  min-width: 0.85rem;
+}
+
+.skill-content-preview .skill-quote {
+  border-left: 2px solid var(--color-border-hover);
+  padding-left: 0.5rem;
+  color: var(--color-text-primary);
+  opacity: 0.92;
+}
+
+.skill-content-preview .skill-rule {
+  border-top: 1px solid var(--color-border-hover);
+  margin: 0.2rem 0;
+}
+
+.skill-content-preview .skill-code-fence {
+  color: var(--color-text-muted);
+  opacity: 0.8;
+  margin-top: 0.2rem;
+}
+
+.skill-content-preview .skill-code-line {
+  color: var(--color-text-primary);
+}
+
+.skill-inline-code {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 0 0.25rem;
+  color: var(--color-text-primary);
+  background: rgba(127, 164, 255, 0.12);
+}
+
+.skill-truncate-note {
+  margin-top: 0.45rem;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  opacity: 0.78;
+}
+
+[data-theme="light"] .skill-content-preview .skill-fm-key,
+[data-theme="light"] .skill-content-preview .fm-key {
+  color: #355bb0;
+}
+
+[data-theme="light"] .skill-content-preview .skill-fm-value,
+[data-theme="light"] .skill-content-preview .fm-value {
+  color: #2a7b52;
+}
 
 [draggable="true"] {
   -webkit-user-drag: element;
   cursor: grab;
 }
+
 [draggable="true"]:active {
   cursor: grabbing;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   KEYBOARD FOCUS (accessibility)
-   ══════════════════════════════════════════════════════════════ */
-
-.row-focused {
+.row-focused,
+.card-focused {
   outline: 2px solid var(--color-accent-muted);
   outline-offset: -1px;
   border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }

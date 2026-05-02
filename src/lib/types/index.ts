@@ -113,21 +113,21 @@ export type TabView = "all" | "starred" | "project";
 
 /** Agent display color mapping (CSS oklch values from registry) */
 export const AGENT_COLORS: Record<string, string> = {
-  "claude-code": "oklch(0.70 0.18 25)",
-  "cursor": "oklch(0.70 0.15 280)",
-  "github-copilot": "oklch(0.70 0.10 220)",
-  "codex": "oklch(0.70 0.12 160)",
-  "windsurf": "oklch(0.70 0.14 200)",
-  "gemini": "oklch(0.70 0.16 60)",
-  "cline": "oklch(0.70 0.12 310)",
-  "roo-code": "oklch(0.70 0.15 340)",
-  "continue-dev": "oklch(0.70 0.10 130)",
-  "aider": "oklch(0.70 0.10 100)",
-  "amazon-q": "oklch(0.70 0.16 35)",
-  "jetbrains-ai": "oklch(0.70 0.18 350)",
-  "tabnine": "oklch(0.70 0.12 250)",
-  "augment-code": "oklch(0.70 0.14 175)",
-  "universal": "oklch(0.70 0.08 260)",
+  "claude-code": "#f28c54",
+  "cursor": "#a58cff",
+  "github-copilot": "#57a0ff",
+  "codex": "#4dc8b0",
+  "windsurf": "#49bed9",
+  "gemini": "#d5b347",
+  "cline": "#d082d6",
+  "roo-code": "#cf7ca7",
+  "continue-dev": "#5fb77b",
+  "aider": "#82b36d",
+  "amazon-q": "#d68748",
+  "jetbrains-ai": "#d46d95",
+  "tabnine": "#6f88d9",
+  "augment-code": "#3fa89a",
+  "universal": "#7a7fad",
 };
 
 /** Human-readable agent names */

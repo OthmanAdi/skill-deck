@@ -4,7 +4,7 @@
   Active theme has a checkmark. Click to switch instantly.
 -->
 <script lang="ts">
-  import { themeStore, setTheme, THEMES } from "$lib/stores/theme.svelte";
+  import { themeStore, setTheme, THEMES, type ThemeId } from "$lib/stores/theme.svelte";
 
   let isOpen = $state(false);
   let menuEl: HTMLDivElement | undefined = $state();
@@ -15,7 +15,7 @@
     isOpen = !isOpen;
   }
 
-  function selectTheme(themeId: string) {
+  function selectTheme(themeId: ThemeId) {
     setTheme(themeId);
     isOpen = false;
   }
@@ -107,7 +107,7 @@
           <!-- Color scheme indicator dot -->
           <span
             class="ml-auto h-2 w-2 shrink-0 rounded-full border border-[var(--color-border)]"
-            style="background: {theme.colorScheme === 'dark' ? 'oklch(0.2 0 0)' : 'oklch(0.95 0 0)'};"
+            style="background: {theme.id === 'system' ? 'linear-gradient(135deg, #18191a 50%, #f5f6f6 50%)' : theme.colorScheme === 'dark' ? '#18191a' : '#f5f6f6'};"
             title={theme.colorScheme}
           ></span>
         </button>

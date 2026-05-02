@@ -19,6 +19,7 @@
     setSkillRepo,
     store,
   } from "$lib/stores/skills.svelte";
+  import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import AgentBadge from "./AgentBadge.svelte";
 
   let { skill, index = 0, isFocused = false }: { skill: Skill; index?: number; isFocused?: boolean } = $props();
@@ -130,20 +131,17 @@
     skill.icon ? /\p{Emoji}/u.test(skill.icon) : false
   );
 
-  // Build a syntax-highlighted preview of the file content
   const contentPreview = $derived.by(() => {
     if (!fileContent) return null;
-    const lines = fileContent.split("\n");
-    // Show up to 20 lines
-    const previewLines = lines.slice(0, 20);
-    const truncated = lines.length > 20;
-    return { lines: previewLines, truncated, totalLines: lines.length };
+    return renderSkillContent(fileContent, 240);
   });
+
+  const entryDelayMs = $derived(Math.min(index, 8) * 16);
 </script>
 
 <div
   class="card-enter group relative flex w-full gap-3 rounded-xl p-3 text-left cursor-pointer
-    transition-[background,border-color,box-shadow,transform] duration-200 ease-out
+    transition-[background,border-color,box-shadow,transform] duration-[180ms] ease-[var(--motion-ease-standard)]
     border
     active:scale-[0.985]
     {isDragging && !store.dragOverTerminal ? 'opacity-40 scale-[0.96]' : ''}
@@ -152,8 +150,8 @@
       ? 'border-[var(--color-border-active)] bg-[var(--color-surface-2)]'
       : 'border-transparent bg-[var(--color-surface-1)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-2)]'}
     {isFocused ? 'card-focused border-[var(--color-accent-muted)]' : ''}"
-  style="animation-delay: {index * 35}ms;
-    {isExpanded ? 'box-shadow: 0 4px 20px -4px var(--color-overlay-shadow), inset 0 1px 0 0 oklch(1 0 0 / 0.03);' : ''}"
+  style="animation-delay: {entryDelayMs}ms;
+    {isExpanded ? 'box-shadow: 0 4px 20px -4px var(--color-overlay-shadow), inset 0 1px 0 0 rgba(247, 248, 248, 0.05);' : ''}"
   data-index={index}
   draggable="true"
   onclick={handleCardClick}
@@ -287,7 +285,12 @@
               Reading file...
             </div>
           {:else if contentPreview}
-            <div class="skill-content-preview px-3 py-2.5 max-h-[200px] overflow-y-auto">{#each contentPreview.lines as line, lineIdx}{@html highlightLine(line, lineIdx, contentPreview.lines)}{"\n"}{/each}{#if contentPreview.truncated}<span class="text-[var(--color-text-muted)] opacity-40">  ... {contentPreview.totalLines - 20} more lines</span>{/if}</div>
+            <div class="skill-content-preview px-3 py-2.5 max-h-[200px] overflow-y-auto">
+              {@html contentPreview.html}
+              {#if contentPreview.truncated}
+                <div class="skill-truncate-note">... {contentPreview.hiddenLineCount} more lines</div>
+              {/if}
+            </div>
           {/if}
         </div>
 
@@ -386,7 +389,7 @@
         </div>
 
         <!-- File path -->
-        <div class="flex items-center gap-1.5 text-[9px] text-[var(--color-text-muted)] opacity-60">
+        <div class="flex items-center gap-1.5 text-[9px] text-[var(--color-text-secondary)] opacity-95">
           <svg class="h-2.5 w-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
@@ -396,48 +399,3 @@
     {/if}
   </div>
 </div>
-
-<script lang="ts" module>
-  // Simple syntax highlighter for skill file content
-  function highlightLine(line: string, idx: number, allLines: string[]): string {
-    const escaped = line
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-    // Frontmatter delimiter
-    if (escaped.trim() === "---") {
-      return `<span class="fm-delimiter">${escaped}</span>`;
-    }
-
-    // Check if we're inside frontmatter (between first and second ---)
-    let inFrontmatter = false;
-    let delimCount = 0;
-    for (let i = 0; i <= idx; i++) {
-      if (allLines[i].trim() === "---") delimCount++;
-    }
-    inFrontmatter = delimCount === 1; // After first ---, before second ---
-
-    if (inFrontmatter && escaped.includes(":")) {
-      const colonIdx = escaped.indexOf(":");
-      const key = escaped.substring(0, colonIdx);
-      const value = escaped.substring(colonIdx + 1);
-      return `<span class="fm-key">${key}</span><span class="fm-delimiter">:</span><span class="fm-value">${value}</span>`;
-    }
-
-    // Markdown headings
-    if (/^#{1,6}\s/.test(escaped)) {
-      return `<span class="md-heading">${escaped}</span>`;
-    }
-
-    // Markdown bullets
-    if (/^\s*[-*]\s/.test(escaped)) {
-      const match = escaped.match(/^(\s*)([-*])(\s.*)$/);
-      if (match) {
-        return `${match[1]}<span class="md-bullet">${match[2]}</span>${match[3]}`;
-      }
-    }
-
-    return escaped;
-  }
-</script>

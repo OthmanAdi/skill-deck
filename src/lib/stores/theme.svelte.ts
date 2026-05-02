@@ -1,44 +1,58 @@
 /**
  * @agent-context: Theme registry and store for Skill Deck.
  *
- * ADDING A NEW THEME:
- * 1. Add a [data-theme="your-id"] block in app.css with all --t-* CSS variables
- * 2. Add an entry to the THEMES array below
- * Done — the menu, persistence, and DOM application all work automatically.
+ * Supported modes:
+ * - system (follows OS setting)
+ * - dark
+ * - light
  */
 
 import { invoke } from "@tauri-apps/api/core";
 
+export type ThemeId = "system" | "dark" | "light";
+type ResolvedThemeId = "dark" | "light";
+
 export interface ThemeDefinition {
-  id: string;
+  id: ThemeId;
   name: string;
   description: string;
-  colorScheme: "dark" | "light";
+  colorScheme: "system" | "dark" | "light";
 }
 
-/**
- * Master theme registry.
- * Other sessions add their theme here (step 2 of 2 for adding a theme).
- */
 export const THEMES: ThemeDefinition[] = [
   {
-    id: "obsidian",
-    name: "Obsidian",
-    description: "Dark. Minimal. shadcn-inspired.",
+    id: "system",
+    name: "System",
+    description: "Follow OS light or dark preference.",
+    colorScheme: "system",
+  },
+  {
+    id: "dark",
+    name: "Dark",
+    description: "Linear-inspired dark canvas.",
     colorScheme: "dark",
   },
   {
-    id: "obsidian-light",
-    name: "Obsidian Light",
-    description: "Light mode variant.",
+    id: "light",
+    name: "Light",
+    description: "Linear-inspired inverse surface.",
     colorScheme: "light",
   },
 ];
 
+const LEGACY_THEME_MAP: Record<string, ThemeId> = {
+  "system": "system",
+  "dark": "dark",
+  "light": "light",
+  "obsidian": "dark",
+  "obsidian-light": "light",
+};
+
 // ── Reactive store ─────────────────────────────────────────────────────────
 
 class ThemeStore {
-  currentThemeId = $state<string>("obsidian");
+  currentThemeId = $state<ThemeId>("system");
+  resolvedThemeId = $state<ResolvedThemeId>("dark");
 
   get currentTheme(): ThemeDefinition {
     return THEMES.find((t) => t.id === this.currentThemeId) ?? THEMES[0];
@@ -51,27 +65,59 @@ class ThemeStore {
 
 export const themeStore = new ThemeStore();
 
+let systemMediaQuery: MediaQueryList | null = null;
+let systemListenerAttached = false;
+
+function normalizeThemeId(value?: string | null): ThemeId {
+  if (!value) return "system";
+  return LEGACY_THEME_MAP[value] ?? "system";
+}
+
+function detectSystemTheme(): ResolvedThemeId {
+  if (typeof window === "undefined") return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function resolveTheme(themeId: ThemeId): ResolvedThemeId {
+  return themeId === "system" ? detectSystemTheme() : themeId;
+}
+
+function ensureSystemListener(): void {
+  if (typeof window === "undefined") return;
+  if (!systemMediaQuery) {
+    systemMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  }
+  if (systemListenerAttached) return;
+
+  const handler = () => {
+    if (themeStore.currentThemeId === "system") {
+      applyTheme("system");
+    }
+  };
+
+  if (typeof systemMediaQuery.addEventListener === "function") {
+    systemMediaQuery.addEventListener("change", handler);
+  } else {
+    systemMediaQuery.addListener(handler);
+  }
+
+  systemListenerAttached = true;
+}
+
 // ── Actions ────────────────────────────────────────────────────────────────
 
 /**
  * Initialize theme on app startup.
- * Reads persisted theme from Rust config, falls back to system preference.
+ * Reads persisted theme from Rust config with legacy migration support.
  */
 export async function initTheme(): Promise<void> {
-  try {
-    const config = await invoke<{ theme: string }>("get_config");
-    const savedId = config.theme;
+  ensureSystemListener();
 
-    if (savedId && THEMES.some((t) => t.id === savedId)) {
-      themeStore.currentThemeId = savedId;
-    } else {
-      // Default: respect OS dark/light preference → map to obsidian variant
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      themeStore.currentThemeId = prefersDark ? "obsidian" : "obsidian-light";
-    }
+  try {
+    const config = await invoke<{ theme?: string }>("get_config");
+    themeStore.currentThemeId = normalizeThemeId(config.theme);
   } catch {
-    // Fallback if IPC fails
-    themeStore.currentThemeId = "obsidian";
+    themeStore.currentThemeId = "system";
   }
 
   applyTheme(themeStore.currentThemeId);
@@ -80,13 +126,14 @@ export async function initTheme(): Promise<void> {
 /**
  * Change the active theme, persist to disk, apply to DOM.
  */
-export async function setTheme(themeId: string): Promise<void> {
-  if (!THEMES.some((t) => t.id === themeId)) return;
-  themeStore.currentThemeId = themeId;
-  applyTheme(themeId);
+export async function setTheme(themeId: ThemeId | string): Promise<void> {
+  const normalized = normalizeThemeId(themeId);
+  ensureSystemListener();
+  themeStore.currentThemeId = normalized;
+  applyTheme(normalized);
 
   try {
-    await invoke("set_theme", { theme: themeId });
+    await invoke("set_theme", { theme: normalized });
   } catch {
     // Non-fatal — theme is still applied to DOM
     console.warn("Failed to persist theme to config");
@@ -94,11 +141,14 @@ export async function setTheme(themeId: string): Promise<void> {
 }
 
 /**
- * Apply a theme ID to the DOM via data-theme attribute.
+ * Apply a theme mode to the DOM via resolved data-theme attribute.
  * This is the single point that touches the DOM.
  */
-function applyTheme(themeId: string): void {
-  document.documentElement.dataset.theme = themeId;
-  const theme = THEMES.find((t) => t.id === themeId);
-  document.documentElement.style.colorScheme = theme?.colorScheme ?? "dark";
+function applyTheme(themeId: ThemeId): void {
+  const resolved = resolveTheme(themeId);
+  themeStore.resolvedThemeId = resolved;
+
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.dataset.themeMode = themeId;
+  document.documentElement.style.colorScheme = resolved;
 }

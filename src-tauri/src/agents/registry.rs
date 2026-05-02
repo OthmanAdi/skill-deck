@@ -23,7 +23,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::ClaudeCode,
             display_name: "Claude Code".to_string(),
             description: "Anthropic's CLI coding agent".to_string(),
-            color: "oklch(0.70 0.18 25)".to_string(), // warm orange
+            color: "#f28c54".to_string(), // warm orange
             installed: false, // resolved at scan time
             skill_count: 0,
             global_paths: vec![
@@ -48,7 +48,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Codex,
             display_name: "Codex".to_string(),
             description: "OpenAI's terminal coding agent".to_string(),
-            color: "oklch(0.70 0.12 160)".to_string(), // teal
+            color: "#4dc8b0".to_string(), // teal
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -67,7 +67,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Cursor,
             display_name: "Cursor".to_string(),
             description: "AI-first code editor".to_string(),
-            color: "oklch(0.70 0.15 280)".to_string(), // purple
+            color: "#a58cff".to_string(), // purple
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -85,7 +85,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::GithubCopilot,
             display_name: "GitHub Copilot".to_string(),
             description: "GitHub's AI pair programmer".to_string(),
-            color: "oklch(0.70 0.10 220)".to_string(), // blue
+            color: "#57a0ff".to_string(), // blue
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -102,7 +102,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Windsurf,
             display_name: "Windsurf".to_string(),
             description: "Codeium's AI IDE".to_string(),
-            color: "oklch(0.70 0.14 200)".to_string(), // cyan
+            color: "#49bed9".to_string(), // cyan
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -120,7 +120,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Gemini,
             display_name: "Gemini CLI".to_string(),
             description: "Google's terminal coding agent".to_string(),
-            color: "oklch(0.70 0.16 60)".to_string(), // yellow
+            color: "#d5b347".to_string(), // yellow
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -138,7 +138,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Cline,
             display_name: "Cline".to_string(),
             description: "VS Code autonomous coding agent".to_string(),
-            color: "oklch(0.70 0.12 310)".to_string(), // magenta
+            color: "#d082d6".to_string(), // magenta
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -154,7 +154,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::RooCode,
             display_name: "Roo Code".to_string(),
             description: "VS Code agent with mode-based rules".to_string(),
-            color: "oklch(0.70 0.15 340)".to_string(), // rose
+            color: "#cf7ca7".to_string(), // rose
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -170,7 +170,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::ContinueDev,
             display_name: "Continue".to_string(),
             description: "Open-source AI coding assistant".to_string(),
-            color: "oklch(0.70 0.10 130)".to_string(), // green
+            color: "#5fb77b".to_string(), // green
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -187,7 +187,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Aider,
             display_name: "Aider".to_string(),
             description: "Terminal pair programming with LLMs".to_string(),
-            color: "oklch(0.70 0.10 100)".to_string(), // lime
+            color: "#82b36d".to_string(), // lime
             installed: false,
             skill_count: 0,
             global_paths: vec![
@@ -205,7 +205,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::AmazonQ,
             display_name: "Amazon Q".to_string(),
             description: "AWS AI developer assistant".to_string(),
-            color: "oklch(0.70 0.16 35)".to_string(), // orange
+            color: "#d68748".to_string(), // orange
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -220,7 +220,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::JetbrainsAi,
             display_name: "JetBrains AI".to_string(),
             description: "JetBrains IDE AI assistant".to_string(),
-            color: "oklch(0.70 0.18 350)".to_string(), // red-pink
+            color: "#d46d95".to_string(), // red-pink
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -235,7 +235,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Tabnine,
             display_name: "Tabnine".to_string(),
             description: "AI code completion assistant".to_string(),
-            color: "oklch(0.70 0.12 250)".to_string(), // indigo
+            color: "#6f88d9".to_string(), // indigo
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -250,7 +250,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::AugmentCode,
             display_name: "Augment Code".to_string(),
             description: "AI coding assistant with deep context".to_string(),
-            color: "oklch(0.70 0.14 175)".to_string(), // sea green
+            color: "#3fa89a".to_string(), // sea green
             installed: false,
             skill_count: 0,
             global_paths: vec![],
@@ -265,7 +265,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             id: AgentId::Universal,
             display_name: "AGENTS.md".to_string(),
             description: "Universal agent instructions (Linux Foundation standard)".to_string(),
-            color: "oklch(0.70 0.08 260)".to_string(), // neutral blue-gray
+            color: "#7a7fad".to_string(), // neutral blue-gray
             installed: false,
             skill_count: 0,
             global_paths: vec![],

@@ -25,8 +25,17 @@
   } = $props();
 
   const isCollapsed = $derived(store.collapsedAgents.has(agentId));
-  const color = $derived(AGENT_COLORS[agentId] ?? "oklch(0.70 0.08 260)");
+  const color = $derived(AGENT_COLORS[agentId] ?? "#7a7fad");
   const name = $derived(AGENT_NAMES[agentId] ?? agentId);
+
+  function hexToRgba(hex: string, alpha: number): string {
+    const normalized = hex.replace("#", "").trim();
+    if (normalized.length !== 6) return `rgba(122, 127, 173, ${alpha})`;
+    const r = Number.parseInt(normalized.slice(0, 2), 16);
+    const g = Number.parseInt(normalized.slice(2, 4), 16);
+    const b = Number.parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
 </script>
 
 <div class="group/agent">
@@ -52,7 +61,7 @@
     <!-- Agent color dot -->
     <span
       class="h-[7px] w-[7px] shrink-0 rounded-full"
-      style="background: {color}; box-shadow: 0 0 5px color-mix(in oklch, {color} 45%, transparent);"
+      style="background: {color}; box-shadow: 0 0 5px {hexToRgba(color, 0.5)};"
     ></span>
 
     <!-- Agent name -->
@@ -77,6 +86,7 @@
         <SkillRow
           {skill}
           index={startIndex + i}
+          delayIndex={i}
           isFocused={focusedIndex === startIndex + i}
         />
       {/each}

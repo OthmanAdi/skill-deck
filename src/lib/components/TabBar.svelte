@@ -1,6 +1,6 @@
 <!--
   @agent-context: Tab bar — All / Starred / Project.
-  Sliding pill indicator with 200ms transition.
+  Sliding pill indicator with smooth 180ms transition.
 -->
 <script lang="ts">
   import { store } from "$lib/stores/skills.svelte";
@@ -40,7 +40,7 @@
       background: var(--color-surface-3);
       border: 1px solid var(--color-border-hover);
       border-radius: calc(var(--radius-md) - 2px);
-      transition-duration: 200ms;
+      transition-duration: 180ms;
     "
   ></div>
 

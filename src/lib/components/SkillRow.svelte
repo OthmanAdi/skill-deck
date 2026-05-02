@@ -10,13 +10,14 @@
   import { invoke } from "@tauri-apps/api/core";
   import type { Skill } from "$lib/types";
   import { toggleStar, copySkillReference } from "$lib/stores/skills.svelte";
-  import { highlightLine } from "$lib/utils/highlight";
+  import { renderSkillContent } from "$lib/utils/renderSkillContent";
 
   let {
     skill,
     index = 0,
+    delayIndex = 0,
     isFocused = false,
-  }: { skill: Skill; index?: number; isFocused?: boolean } = $props();
+  }: { skill: Skill; index?: number; delayIndex?: number; isFocused?: boolean } = $props();
 
   let isExpanded = $state(false);
   let fileContent = $state<string | null>(null);
@@ -70,10 +71,10 @@
 
   const contentPreview = $derived.by(() => {
     if (!fileContent) return null;
-    const lines = fileContent.split("\n");
-    const previewLines = lines.slice(0, 22);
-    return { lines: previewLines, truncated: lines.length > 22, totalLines: lines.length };
+    return renderSkillContent(fileContent, 220);
   });
+
+  const entryDelayMs = $derived(Math.min(delayIndex, 8) * 16);
 </script>
 
 <!-- Row -->
@@ -83,7 +84,7 @@
     hover:bg-[var(--color-surface-2)]
     {isExpanded ? 'bg-[var(--color-surface-2)]' : ''}
     {isFocused ? 'row-focused' : ''}"
-  style="min-height: 34px; animation-delay: {index * 20}ms;"
+  style="min-height: 34px; animation-delay: {entryDelayMs}ms;"
   data-index={index}
   role="option"
   tabindex={isFocused ? 0 : -1}
@@ -210,13 +211,18 @@
           Reading…
         </div>
       {:else if contentPreview}
-        <div class="skill-content-preview px-3 py-2 max-h-[180px] overflow-y-auto">{#each contentPreview.lines as line, lineIdx}{@html highlightLine(line, lineIdx, contentPreview.lines)}{"\n"}{/each}{#if contentPreview.truncated}<span class="text-[var(--color-text-muted)] opacity-35">… {contentPreview.totalLines - 22} more lines</span>{/if}</div>
+        <div class="skill-content-preview px-3 py-2 max-h-[180px] overflow-y-auto">
+          {@html contentPreview.html}
+          {#if contentPreview.truncated}
+            <div class="skill-truncate-note">... {contentPreview.hiddenLineCount} more lines</div>
+          {/if}
+        </div>
       {/if}
     </div>
 
     <!-- File path + install command -->
     <div class="space-y-0.5">
-      <p class="truncate font-mono text-[9px] text-[var(--color-text-muted)] opacity-45">
+      <p class="truncate font-mono text-[9px] text-[var(--color-text-secondary)] opacity-95">
         {skill.filePath}
       </p>
       {#if skill.metadata.installCommand}

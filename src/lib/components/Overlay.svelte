@@ -1,5 +1,5 @@
 <!--
-  @agent-context: Main overlay container — Obsidian theme.
+  @agent-context: Main overlay container for unified dark or light themes.
   Solid surface, clean border, no glassmorphism.
   Layout: title bar → search → tabs → grouped skill list → context bar.
   Keyboard: Arrow keys navigate rows across groups, Enter expands, Escape closes.
@@ -88,6 +88,13 @@
       row?.focus();
     });
   }
+
+  const overlayTransition = {
+    y: 12,
+    duration: 220,
+    opacity: 0,
+    easing: cubicOut,
+  };
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -100,7 +107,7 @@
       border-radius: var(--radius-lg);
       box-shadow: 0 24px 48px -12px var(--color-overlay-shadow);
     "
-    transition:fly={{ y: 20, duration: 250, opacity: 0, easing: cubicOut }}
+    transition:fly={overlayTransition}
     onkeydown={handleKeydown}
   >
     <!-- Title bar / drag region -->
@@ -115,7 +122,7 @@
           style="background: var(--color-accent); border-radius: var(--radius-sm);"
         >
           <svg class="h-3 w-3" viewBox="0 0 16 16" fill="currentColor"
-            style="color: oklch(0.145 0 0);">
+            style="color: var(--color-surface-0);">
             <path d="M2 3a1 1 0 011-1h10a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V3zm0 5a1 1 0 011-1h6a1 1 0 011 1v2a1 1 0 01-1 1H3a1 1 0 01-1-1V8zm0 5a1 1 0 011-1h8a1 1 0 011 1v1a1 1 0 01-1 1H3a1 1 0 01-1-1v-1z"/>
           </svg>
         </div>

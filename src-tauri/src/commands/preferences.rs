@@ -25,10 +25,19 @@ fn config_path() -> PathBuf {
 pub fn load_config() -> AppConfig {
     let path = config_path();
     if path.exists() {
-        std::fs::read_to_string(&path)
+        let mut config: AppConfig = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+            .unwrap_or_default();
+
+        config.theme = match config.theme.as_str() {
+            "system" | "dark" | "light" => config.theme,
+            "obsidian" => "dark".to_string(),
+            "obsidian-light" => "light".to_string(),
+            _ => "system".to_string(),
+        };
+
+        config
     } else {
         let config = AppConfig::default();
         if let Err(e) = save_config(&config) {
@@ -97,11 +106,16 @@ pub fn get_starred_skills(state: State<ConfigState>) -> Vec<String> {
     config.starred_skills.iter().cloned().collect()
 }
 
-/// Set the active theme by name (e.g. "obsidian", "obsidian-light")
+/// Set the active theme mode by name ("system", "dark", or "light")
 #[tauri::command]
 pub fn set_theme(state: State<ConfigState>, theme: String) {
     let mut config = state.0.lock().unwrap();
-    config.theme = theme;
+    config.theme = match theme.as_str() {
+        "system" | "dark" | "light" => theme,
+        "obsidian" => "dark".to_string(),
+        "obsidian-light" => "light".to_string(),
+        _ => "system".to_string(),
+    };
     if let Err(e) = save_config(&config) {
         warn!("Failed to persist theme: {}", e);
     }

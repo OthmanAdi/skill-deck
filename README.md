@@ -52,7 +52,7 @@ No switching between editors. No hunting through dotfiles. One overlay, everythi
 - **Repo detection** — automatically finds the GitHub source and `npx skills add` command for each skill
 - **Tree view** — parent/child skill hierarchies rendered as collapsible groups
 - **Agent groups** — skills organized by agent with brand colors
-- **Theme system** — Dark, Obsidian, and Light themes
+- **Theme system** — System, Dark, and Light modes
 - **Global hotkey** — `Ctrl+Shift+K` (configurable), `Escape` to close
 
 ## Platform Support

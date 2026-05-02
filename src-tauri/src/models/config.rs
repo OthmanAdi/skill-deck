@@ -25,7 +25,7 @@ pub struct AppConfig {
     /// Whether to check for skill updates in the background
     pub check_updates: bool,
 
-    /// Theme: "dark" (default) or "light"
+    /// Theme mode: "system" (default), "dark", or "light"
     pub theme: String,
 
     /// Overlay position preference
@@ -75,7 +75,7 @@ impl Default for AppConfig {
             skill_icons: std::collections::HashMap::new(),
             custom_scan_paths: Vec::new(),
             check_updates: true,
-            theme: "dark".to_string(),
+            theme: "system".to_string(),
             overlay_position: OverlayPosition::BottomRight,
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
