@@ -13,6 +13,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Added repo override application in scan output pipeline.
 - Added update-check provider guard for GitHub-only support path.
 - Added stronger injection validation by checking target PID process class on Windows.
+- Added configurable overlay interaction modes, pinned and auto-hide, persisted in app config.
+- Added tray context controls to switch overlay mode directly from the tray menu.
+- Added window capability permissions required for focus and always-on-top state control.
 
 ### Changed
 - Updated `read_skill_content` IPC command to resolve file content by `skillId` scoped to scanner results instead of direct arbitrary path input.
@@ -22,12 +25,18 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Updated overlay keyboard navigation to avoid global Tab hijack and use visible option indices.
 - Updated tree rendering to support filtered orphan roots and recursive-depth visual output flow via flattened visible order.
 - Updated Tauri security config to enable production CSP and dedicated dev CSP.
+- Updated settings dropdown to expose window behavior mode and active shortcut display.
+- Updated overlay hotkey registration with fallback candidates and explicit failure notification.
+- Updated overlay auto-hide handling with focus-change, window blur, and active focus guard paths.
+- Updated overlay always-on-top state to follow selected interaction mode at startup and runtime.
 
 ### Fixed
 - Fixed drag-drop injection flow where terminal PID was cleared before injection attempt.
 - Fixed tree focus index mismatch caused by multiple index increments per row.
 - Fixed configuration persistence path to return and propagate write/serialize errors instead of silently ignoring failures.
 - Fixed clippy-denied warnings in backend so strict lint passes.
+- Fixed Ctrl+Shift+K activation reliability across shortcut string variants.
+- Fixed auto-hide behavior that previously failed to hide overlay on focus loss in some flows.
 
 ### Security
 - Removed unrestricted path-based file read behavior from skill content command path.
