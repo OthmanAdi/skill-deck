@@ -20,9 +20,34 @@ function escapeHtml(input: string): string {
     .replace(/>/g, "&gt;");
 }
 
+function sanitizeHref(rawHref: string): string {
+  const href = rawHref.trim();
+  if (/^(https?:|mailto:|file:|\/|#)/i.test(href)) {
+    return href.replace(/"/g, "%22");
+  }
+  return "#";
+}
+
 function renderInline(input: string): string {
-  const escaped = escapeHtml(input);
-  return escaped.replace(/`([^`]+)`/g, '<code class="skill-inline-code">$1</code>');
+  const codeTokens: string[] = [];
+  let output = escapeHtml(input).replace(/`([^`]+)`/g, (_match, code: string) => {
+    const token = `@@CODE${codeTokens.length}@@`;
+    codeTokens.push(`<code class="skill-inline-code">${code}</code>`);
+    return token;
+  });
+
+  output = output.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_match, text: string, href: string) => {
+    const safeHref = sanitizeHref(href);
+    return `<a class="skill-md-link" href="${safeHref}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  });
+
+  output = output.replace(/\*\*([^*]+)\*\*/g, '<strong class="skill-strong">$1</strong>');
+  output = output.replace(/__([^_]+)__/g, '<strong class="skill-strong">$1</strong>');
+  output = output.replace(/\*([^*]+)\*/g, '<em class="skill-em">$1</em>');
+  output = output.replace(/_([^_]+)_/g, '<em class="skill-em">$1</em>');
+  output = output.replace(/~~([^~]+)~~/g, '<s class="skill-strike">$1</s>');
+
+  return output.replace(/@@CODE(\d+)@@/g, (_match, i: string) => codeTokens[Number(i)] ?? "");
 }
 
 function indentStyle(line: string): string {
@@ -35,6 +60,7 @@ export function renderSkillContent(content: string, maxLines = DEFAULT_MAX_LINES
   const normalized = content.replace(/\r\n?/g, "\n");
   const allLines = normalized.split("\n");
   const totalLineCount = allLines.length;
+  const hasLeadingFrontmatter = allLines[0]?.trim() === "---";
 
   const visibleLines = allLines.slice(0, maxLines);
   const truncated = totalLineCount > visibleLines.length;
@@ -42,20 +68,26 @@ export function renderSkillContent(content: string, maxLines = DEFAULT_MAX_LINES
 
   const html: string[] = [];
   let inFrontmatter = false;
-  let frontmatterDelimiters = 0;
+  let frontmatterClosed = false;
   let inCodeFence = false;
 
   for (let i = 0; i < visibleLines.length; i++) {
     const line = visibleLines[i];
     const trimmed = line.trim();
 
-    if (!inCodeFence && trimmed === "---") {
-      if (i === 0 || frontmatterDelimiters === 1) {
-        frontmatterDelimiters += 1;
-        inFrontmatter = frontmatterDelimiters === 1;
+    if (!inCodeFence && trimmed === "---" && hasLeadingFrontmatter && !frontmatterClosed) {
+      if (i === 0) {
+        inFrontmatter = true;
+        html.push('<div class="skill-line skill-fm-delimiter">---</div>');
+        continue;
       }
-      html.push('<div class="skill-line skill-fm-delimiter">---</div>');
-      continue;
+
+      if (inFrontmatter) {
+        inFrontmatter = false;
+        frontmatterClosed = true;
+        html.push('<div class="skill-line skill-fm-delimiter">---</div>');
+        continue;
+      }
     }
 
     const codeFenceMatch = trimmed.match(/^```(.*)$/);

@@ -442,6 +442,30 @@ body {
   background: rgba(127, 164, 255, 0.12);
 }
 
+.skill-md-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.skill-md-link:hover {
+  color: var(--color-accent-muted);
+}
+
+.skill-strong {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.skill-em {
+  color: var(--color-text-primary);
+  font-style: italic;
+}
+
+.skill-strike {
+  opacity: 0.8;
+}
+
 .skill-truncate-note {
   margin-top: 0.45rem;
   font-size: 10px;
