@@ -1,8 +1,8 @@
 // @agent-context: Tauri commands for drag-and-drop terminal injection.
 // Exposes window-at-cursor detection and content injection to the frontend.
 
-use crate::detection::window_at_point::{self, WindowAtPoint};
 use crate::detection::terminal_inject::{self, InjectionResult};
+use crate::detection::window_at_point::{self, WindowAtPoint};
 
 /// Get information about the window currently under the mouse cursor.
 /// Called during drag to determine if the user is hovering over a terminal.

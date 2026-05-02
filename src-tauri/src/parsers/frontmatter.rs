@@ -48,13 +48,15 @@ pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
             let yaml_str = &after_opening[..pos];
             let body_start = pos + 4; // skip \n---
             let body = if body_start < after_opening.len() {
-                after_opening[body_start..].trim_start_matches(['\r', '\n']).to_string()
+                after_opening[body_start..]
+                    .trim_start_matches(['\r', '\n'])
+                    .to_string()
             } else {
                 String::new()
             };
 
-            let frontmatter: YamlValue = serde_yaml::from_str(yaml_str)
-                .context("Failed to parse YAML frontmatter")?;
+            let frontmatter: YamlValue =
+                serde_yaml::from_str(yaml_str).context("Failed to parse YAML frontmatter")?;
 
             Ok(ParsedFrontmatter {
                 frontmatter: Some(frontmatter),
@@ -73,7 +75,10 @@ pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
 
 /// Helper: extract a string field from a YAML mapping.
 pub fn yaml_str(value: &YamlValue, key: &str) -> Option<String> {
-    value.get(key).and_then(|v| v.as_str()).map(|s| s.to_string())
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
 }
 
 /// Helper: extract a bool field from a YAML mapping.
@@ -91,7 +96,11 @@ pub fn yaml_string_array(value: &YamlValue, key: &str) -> Option<Vec<String>> {
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
-            if strings.is_empty() { None } else { Some(strings) }
+            if strings.is_empty() {
+                None
+            } else {
+                Some(strings)
+            }
         }
         _ => None,
     }

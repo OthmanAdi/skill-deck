@@ -30,7 +30,10 @@ pub fn inject_to_terminal(content: &str, target_pid: u32) -> InjectionResult {
         if !is_terminal_pid_windows(target_pid) {
             return InjectionResult {
                 success: false,
-                error: Some(format!("Refusing to inject into non-terminal PID {}", target_pid)),
+                error: Some(format!(
+                    "Refusing to inject into non-terminal PID {}",
+                    target_pid
+                )),
             };
         }
     }
@@ -112,26 +115,25 @@ fn is_terminal_process_name(exe_name: &str) -> bool {
 fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
     use std::mem;
     use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
-        VK_CONTROL, VK_V,
-    };
     use windows::Win32::System::DataExchange::{
-        OpenClipboard, CloseClipboard, EmptyClipboard, SetClipboardData,
+        CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
-    use windows::Win32::System::Memory::{
-        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        SendInput, INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
     };
+    use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
 
     // Step 1: Find the window belonging to target_pid
     let hwnd = find_window_for_pid_impl(target_pid);
     let hwnd = match hwnd {
         Some(h) => h,
-        None => return InjectionResult {
-            success: false,
-            error: Some(format!("No visible window found for PID {}", target_pid)),
-        },
+        None => {
+            return InjectionResult {
+                success: false,
+                error: Some(format!("No visible window found for PID {}", target_pid)),
+            }
+        }
     };
 
     // Step 2: Write content to clipboard as CF_UNICODETEXT
@@ -188,24 +190,29 @@ fn inject_windows(content: &str, target_pid: u32) -> InjectionResult {
 
     // Step 4: Send Ctrl+V keystroke
     unsafe {
-        let make_key_input = |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY, up: bool| -> INPUT {
-            let mut input: INPUT = mem::zeroed();
-            input.r#type = INPUT_KEYBOARD;
-            input.Anonymous.ki = KEYBDINPUT {
-                wVk: vk,
-                wScan: 0,
-                dwFlags: if up { KEYEVENTF_KEYUP } else { Default::default() },
-                time: 0,
-                dwExtraInfo: 0,
+        let make_key_input =
+            |vk: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY, up: bool| -> INPUT {
+                let mut input: INPUT = mem::zeroed();
+                input.r#type = INPUT_KEYBOARD;
+                input.Anonymous.ki = KEYBDINPUT {
+                    wVk: vk,
+                    wScan: 0,
+                    dwFlags: if up {
+                        KEYEVENTF_KEYUP
+                    } else {
+                        Default::default()
+                    },
+                    time: 0,
+                    dwExtraInfo: 0,
+                };
+                input
             };
-            input
-        };
 
         let inputs = [
-            make_key_input(VK_CONTROL, false),  // Ctrl down
-            make_key_input(VK_V, false),         // V down
-            make_key_input(VK_V, true),          // V up
-            make_key_input(VK_CONTROL, true),    // Ctrl up
+            make_key_input(VK_CONTROL, false), // Ctrl down
+            make_key_input(VK_V, false),       // V down
+            make_key_input(VK_V, true),        // V up
+            make_key_input(VK_CONTROL, true),  // Ctrl up
         ];
 
         let sent = SendInput(&inputs, mem::size_of::<INPUT>() as i32);
@@ -254,10 +261,7 @@ fn find_window_for_pid_impl(target_pid: u32) -> Option<windows::Win32::Foundatio
     };
 
     unsafe {
-        let _ = EnumWindows(
-            Some(enum_callback),
-            LPARAM(&mut state as *mut _ as isize),
-        );
+        let _ = EnumWindows(Some(enum_callback), LPARAM(&mut state as *mut _ as isize));
     }
 
     state.found_hwnd

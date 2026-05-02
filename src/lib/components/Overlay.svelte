@@ -12,6 +12,7 @@
   import TabBar from "./TabBar.svelte";
   import AgentGroup from "./AgentGroup.svelte";
   import SkillTree from "./SkillTree.svelte";
+  import SkillGraphView from "./SkillGraphView.svelte";
   import ContextBar from "./ContextBar.svelte";
   import Toast from "./Toast.svelte";
   import ThemeMenu from "./ThemeMenu.svelte";
@@ -45,6 +46,10 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (store.viewMode === "graph") {
+      return;
+    }
+
     if (isTextEntryTarget(e.target)) {
       return;
     }
@@ -140,20 +145,55 @@
         <span class="text-[10px] tabular-nums text-[var(--color-text-muted)]">
           {store.skills.length}
         </span>
-        <!-- Tree mode toggle -->
-        <button
-          class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
-            {store.treeMode
-              ? 'text-[var(--color-accent)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
-          onclick={() => (store.treeMode = !store.treeMode)}
-          title="{store.treeMode ? 'Switch to grouped view' : 'Switch to tree view'}"
-        >
-          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-              d="M3 6h18M3 12h12M3 18h6" />
-          </svg>
-        </button>
+        <!-- View mode toggle: grouped / tree / graph -->
+        <div class="flex items-center rounded-md border p-0.5"
+          style="border-color: var(--color-border); background: var(--color-surface-1);">
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+              {store.viewMode === 'grouped'
+                ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
+            onclick={() => (store.viewMode = "grouped")}
+            title="Grouped list view"
+            aria-label="Grouped list view"
+          >
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h12M4 17h9" />
+            </svg>
+          </button>
+
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+              {store.viewMode === 'tree'
+                ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
+            onclick={() => (store.viewMode = "tree")}
+            title="Parent child tree view"
+            aria-label="Parent child tree view"
+          >
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 6h10M7 12h5M7 18h3M4 6h.01M4 12h.01M4 18h.01" />
+            </svg>
+          </button>
+
+          <button
+            class="flex h-5 w-5 items-center justify-center rounded transition-all duration-150
+              {store.viewMode === 'graph'
+                ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
+            onclick={() => (store.viewMode = "graph")}
+            title="Graph view"
+            aria-label="Graph view"
+          >
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <circle cx="5" cy="8" r="2"></circle>
+              <circle cx="12" cy="5" r="2"></circle>
+              <circle cx="18" cy="10" r="2"></circle>
+              <circle cx="9" cy="17" r="2"></circle>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6.8 7l3.4-1M13.8 5.8l2.4 2.6M16.4 11.5l-6 4" />
+            </svg>
+          </button>
+        </div>
         <ThemeMenu />
       </div>
     </div>
@@ -175,6 +215,7 @@
       aria-label="Skills"
       tabindex="-1"
       bind:this={listEl}
+      class:overflow-hidden={store.viewMode === "graph"}
     >
       {#if store.isLoading && store.skills.length === 0}
         <!-- Skeleton loading state -->
@@ -215,10 +256,15 @@
           </p>
         </div>
 
-      {:else if store.treeMode}
+      {:else if store.viewMode === "tree"}
         <!-- Tree view: parent/child hierarchy by file path -->
         <div class="py-1 px-1">
           <SkillTree skills={store.filteredSkills} {focusedIndex} />
+        </div>
+      {:else if store.viewMode === "graph"}
+        <!-- Graph view: relationship network -->
+        <div class="h-full py-1 px-1">
+          <SkillGraphView skills={store.filteredSkills} />
         </div>
       {:else}
         <!-- Grouped view: skills bucketed by agent -->

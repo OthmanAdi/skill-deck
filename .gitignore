@@ -29,6 +29,10 @@ progress.md
 findings.md
 PROJECT_MEMORY.md
 PRODUCTION_READINESS_AUDIT.md
+AGENT_SUPPORT_*.md
+notes.md
+SESSION_MEMORY.md
+llm.txt
 
 # IDE
 .idea/

@@ -245,6 +245,23 @@ export async function toggleStar(skillId: string) {
   );
 }
 
+/** Persist a custom icon or clear it for a skill */
+export async function setSkillIcon(skillId: string, icon: string | null) {
+  const normalized = (icon ?? "").trim();
+  const iconValue = normalized.length > 0 ? normalized : "";
+
+  await invoke("set_skill_icon", {
+    skillId,
+    icon: iconValue,
+  });
+
+  store.skills = store.skills.map((s) =>
+    s.id === skillId
+      ? { ...s, icon: iconValue || null }
+      : s
+  );
+}
+
 /** Detect the current terminal context */
 export async function detectContext() {
   try {

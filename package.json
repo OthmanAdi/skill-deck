@@ -30,8 +30,10 @@
     "desktop-app"
   ],
   "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2"
+    "@tauri-apps/plugin-opener": "^2",
+    "emoji-mart": "^5.6.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",

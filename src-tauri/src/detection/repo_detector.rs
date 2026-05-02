@@ -30,44 +30,48 @@ fn github_url_re() -> &'static Regex {
 fn gitlab_url_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"https?://gitlab\.com/([\w.\-]+(?:/[\w.\-]+)*)/([\w.\-]+?)(?:\.git)?(?:[/#\s\)]|$)")
-            .expect("gitlab URL regex")
+        Regex::new(
+            r"https?://gitlab\.com/([\w.\-]+(?:/[\w.\-]+)*)/([\w.\-]+?)(?:\.git)?(?:[/#\s\)]|$)",
+        )
+        .expect("gitlab URL regex")
     })
 }
 
 fn npx_skills_add_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"npx\s+skills\s+add\s+([\w.\-]+/[\w.\-]+)(?:\s+--skill\s+([\w.\-]+))?(?:\s+-g)?")
-            .expect("npx skills add regex")
+        Regex::new(
+            r"npx\s+skills\s+add\s+([\w.\-]+/[\w.\-]+)(?:\s+--skill\s+([\w.\-]+))?(?:\s+-g)?",
+        )
+        .expect("npx skills add regex")
     })
 }
 
 fn npm_install_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"npm\s+install\s+(?:-g\s+)?([\w.\-@/]+)")
-            .expect("npm install regex")
+        Regex::new(r"npm\s+install\s+(?:-g\s+)?([\w.\-@/]+)").expect("npm install regex")
     })
 }
 
 fn git_remote_url_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r#"url\s*=\s*(.+)"#)
-            .expect("git remote url regex")
-    })
+    RE.get_or_init(|| Regex::new(r#"url\s*=\s*(.+)"#).expect("git remote url regex"))
 }
 
 // ── YAML frontmatter keys that may contain a repo URL ───────────────────────
 
 const REPO_FRONTMATTER_KEYS: &[&str] = &[
-    "repository", "repo", "source", "homepage", "url", "github", "git",
+    "repository",
+    "repo",
+    "source",
+    "homepage",
+    "url",
+    "github",
+    "git",
 ];
 
-const INSTALL_FRONTMATTER_KEYS: &[&str] = &[
-    "install", "install-command", "installCommand",
-];
+const INSTALL_FRONTMATTER_KEYS: &[&str] = &["install", "install-command", "installCommand"];
 
 // ── Public API ──────────────────────────────────────────────────────────────
 
@@ -219,7 +223,9 @@ fn parse_git_remote_url(git_config_content: &str) -> Option<String> {
                 let url = caps.get(1)?.as_str().trim();
                 // Convert SSH URLs to HTTPS
                 if url.starts_with("git@github.com:") {
-                    let path = url.strip_prefix("git@github.com:")?.trim_end_matches(".git");
+                    let path = url
+                        .strip_prefix("git@github.com:")?
+                        .trim_end_matches(".git");
                     return Some(format!("https://github.com/{}", path));
                 }
                 if url.starts_with("http://") || url.starts_with("https://") {
@@ -256,7 +262,10 @@ mod tests {
     fn test_github_url_https() {
         let body = "Check https://github.com/OthmanAdi/vibe-skills for details";
         let result = detect_repo_from_body(body);
-        assert_eq!(result, Some("https://github.com/OthmanAdi/vibe-skills".to_string()));
+        assert_eq!(
+            result,
+            Some("https://github.com/OthmanAdi/vibe-skills".to_string())
+        );
     }
 
     #[test]
@@ -300,7 +309,10 @@ mod tests {
     fn test_npx_skills_add_basic() {
         let body = "Install: `npx skills add OthmanAdi/vibe-skills --skill vibe -g`";
         let result = detect_install_from_body(body);
-        assert_eq!(result, Some("npx skills add OthmanAdi/vibe-skills --skill vibe -g".to_string()));
+        assert_eq!(
+            result,
+            Some("npx skills add OthmanAdi/vibe-skills --skill vibe -g".to_string())
+        );
     }
 
     #[test]
@@ -328,36 +340,37 @@ mod tests {
 
     #[test]
     fn test_frontmatter_repository_url() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "repository: https://github.com/owner/repo"
-        ).unwrap();
+        let fm: serde_yaml::Value =
+            serde_yaml::from_str("repository: https://github.com/owner/repo").unwrap();
         let result = detect_repo_from_frontmatter(&fm);
         assert_eq!(result, Some("https://github.com/owner/repo".to_string()));
     }
 
     #[test]
     fn test_frontmatter_github_shorthand() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "repo: OthmanAdi/vibe-skills"
-        ).unwrap();
+        let fm: serde_yaml::Value = serde_yaml::from_str("repo: OthmanAdi/vibe-skills").unwrap();
         let result = detect_repo_from_frontmatter(&fm);
-        assert_eq!(result, Some("https://github.com/OthmanAdi/vibe-skills".to_string()));
+        assert_eq!(
+            result,
+            Some("https://github.com/OthmanAdi/vibe-skills".to_string())
+        );
     }
 
     #[test]
     fn test_frontmatter_install_command() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "install: npx skills add owner/repo --skill test -g"
-        ).unwrap();
+        let fm: serde_yaml::Value =
+            serde_yaml::from_str("install: npx skills add owner/repo --skill test -g").unwrap();
         let result = detect_install_from_frontmatter(&fm);
-        assert_eq!(result, Some("npx skills add owner/repo --skill test -g".to_string()));
+        assert_eq!(
+            result,
+            Some("npx skills add owner/repo --skill test -g".to_string())
+        );
     }
 
     #[test]
     fn test_frontmatter_no_repo() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "name: test-skill\ndescription: just a test"
-        ).unwrap();
+        let fm: serde_yaml::Value =
+            serde_yaml::from_str("name: test-skill\ndescription: just a test").unwrap();
         let result = detect_repo_from_frontmatter(&fm);
         assert_eq!(result, None);
     }
@@ -375,7 +388,10 @@ mod tests {
     remote = origin
 "#;
         let result = parse_git_remote_url(config);
-        assert_eq!(result, Some("https://github.com/OthmanAdi/skill-deck".to_string()));
+        assert_eq!(
+            result,
+            Some("https://github.com/OthmanAdi/skill-deck".to_string())
+        );
     }
 
     #[test]
@@ -385,7 +401,10 @@ mod tests {
     fetch = +refs/heads/*:refs/remotes/origin/*
 "#;
         let result = parse_git_remote_url(config);
-        assert_eq!(result, Some("https://github.com/OthmanAdi/skill-deck".to_string()));
+        assert_eq!(
+            result,
+            Some("https://github.com/OthmanAdi/skill-deck".to_string())
+        );
     }
 
     #[test]
@@ -401,23 +420,29 @@ mod tests {
 
     #[test]
     fn test_detect_sources_frontmatter_wins() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "repository: https://github.com/owner/from-frontmatter"
-        ).unwrap();
+        let fm: serde_yaml::Value =
+            serde_yaml::from_str("repository: https://github.com/owner/from-frontmatter").unwrap();
         let body = "Also see https://github.com/owner/from-body for reference";
         let result = detect_sources(Some(&fm), body, Path::new("/tmp/fake/SKILL.md"));
-        assert_eq!(result.repository_url, Some("https://github.com/owner/from-frontmatter".to_string()));
+        assert_eq!(
+            result.repository_url,
+            Some("https://github.com/owner/from-frontmatter".to_string())
+        );
     }
 
     #[test]
     fn test_detect_sources_body_fallback() {
-        let fm: serde_yaml::Value = serde_yaml::from_str(
-            "name: no-repo-here"
-        ).unwrap();
+        let fm: serde_yaml::Value = serde_yaml::from_str("name: no-repo-here").unwrap();
         let body = "Install: npx skills add owner/cool-skill --skill test -g\nRepo: https://github.com/owner/cool-skill";
         let result = detect_sources(Some(&fm), body, Path::new("/tmp/fake/SKILL.md"));
-        assert_eq!(result.repository_url, Some("https://github.com/owner/cool-skill".to_string()));
-        assert_eq!(result.install_command, Some("npx skills add owner/cool-skill --skill test -g".to_string()));
+        assert_eq!(
+            result.repository_url,
+            Some("https://github.com/owner/cool-skill".to_string())
+        );
+        assert_eq!(
+            result.install_command,
+            Some("npx skills add owner/cool-skill --skill test -g".to_string())
+        );
     }
 
     // ── GitHub shorthand ────────────────────────────────────────────────
@@ -447,13 +472,30 @@ mod tests {
             install_command: None,
         };
         let mut repo_overrides = std::collections::HashMap::new();
-        repo_overrides.insert("skill-1".to_string(), "https://github.com/user/override".to_string());
+        repo_overrides.insert(
+            "skill-1".to_string(),
+            "https://github.com/user/override".to_string(),
+        );
         let mut install_overrides = std::collections::HashMap::new();
-        install_overrides.insert("skill-1".to_string(), "npx skills add user/override -g".to_string());
+        install_overrides.insert(
+            "skill-1".to_string(),
+            "npx skills add user/override -g".to_string(),
+        );
 
-        apply_overrides(&mut detected, "skill-1", &repo_overrides, &install_overrides);
-        assert_eq!(detected.repository_url, Some("https://github.com/user/override".to_string()));
-        assert_eq!(detected.install_command, Some("npx skills add user/override -g".to_string()));
+        apply_overrides(
+            &mut detected,
+            "skill-1",
+            &repo_overrides,
+            &install_overrides,
+        );
+        assert_eq!(
+            detected.repository_url,
+            Some("https://github.com/user/override".to_string())
+        );
+        assert_eq!(
+            detected.install_command,
+            Some("npx skills add user/override -g".to_string())
+        );
     }
 
     #[test]
@@ -465,8 +507,16 @@ mod tests {
         let repo_overrides = std::collections::HashMap::new();
         let install_overrides = std::collections::HashMap::new();
 
-        apply_overrides(&mut detected, "skill-1", &repo_overrides, &install_overrides);
-        assert_eq!(detected.repository_url, Some("https://github.com/auto/detected".to_string()));
+        apply_overrides(
+            &mut detected,
+            "skill-1",
+            &repo_overrides,
+            &install_overrides,
+        );
+        assert_eq!(
+            detected.repository_url,
+            Some("https://github.com/auto/detected".to_string())
+        );
         assert_eq!(detected.install_command, None);
     }
 }

@@ -15,7 +15,11 @@ fn config_path() -> PathBuf {
     let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("skill-deck");
     if let Err(e) = std::fs::create_dir_all(&path) {
-        warn!("Failed to create config directory {}: {}", path.to_string_lossy(), e);
+        warn!(
+            "Failed to create config directory {}: {}",
+            path.to_string_lossy(),
+            e
+        );
     }
     path.push("config.json");
     path
@@ -41,7 +45,11 @@ pub fn load_config() -> AppConfig {
     } else {
         let config = AppConfig::default();
         if let Err(e) = save_config(&config) {
-            warn!("Failed to save initial config {}: {}", path.to_string_lossy(), e);
+            warn!(
+                "Failed to save initial config {}: {}",
+                path.to_string_lossy(),
+                e
+            );
         }
         config
     }
@@ -123,11 +131,7 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
 
 /// Persist overlay size.
 #[tauri::command]
-pub fn set_overlay_size(
-    state: State<ConfigState>,
-    width: u32,
-    height: u32,
-) -> Result<(), String> {
+pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> Result<(), String> {
     const MIN_W: u32 = 380;
     const MAX_W: u32 = 700;
     const MIN_H: u32 = 560;

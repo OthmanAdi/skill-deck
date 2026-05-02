@@ -71,6 +71,56 @@ pub enum AgentId {
     AugmentCode,
     OpenHands,
     Devin,
+    #[serde(rename = "aider-desk")]
+    AiderDesk,
+    Bob,
+    #[serde(rename = "opencode")]
+    OpenCode,
+    Crush,
+    Amp,
+    Antigravity,
+    #[serde(rename = "openclaw")]
+    OpenClaw,
+    #[serde(rename = "codearts-agent")]
+    CodeArtsAgent,
+    #[serde(rename = "codebuddy")]
+    CodeBuddy,
+    Codemaker,
+    #[serde(rename = "codestudio")]
+    CodeStudio,
+    CommandCode,
+    Cortex,
+    #[serde(rename = "deepagents")]
+    DeepAgents,
+    Dexto,
+    Droid,
+    Firebender,
+    #[serde(rename = "forgecode")]
+    ForgeCode,
+    Goose,
+    Junie,
+    #[serde(rename = "iflow-cli")]
+    IFlowCli,
+    Kilo,
+    KimiCli,
+    KiroCli,
+    Kode,
+    #[serde(rename = "mcpjam")]
+    McpJam,
+    MistralVibe,
+    Mux,
+    Neovate,
+    Pi,
+    Qoder,
+    QwenCode,
+    Replit,
+    RovoDev,
+    Trae,
+    TraeCn,
+    Warp,
+    Zencoder,
+    Pochi,
+    Adal,
     /// For AGENTS.md files (universal, not agent-specific)
     Universal,
     /// User-defined custom source

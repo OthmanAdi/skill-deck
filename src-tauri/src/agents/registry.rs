@@ -24,7 +24,7 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             display_name: "Claude Code".to_string(),
             description: "Anthropic's CLI coding agent".to_string(),
             color: "#f28c54".to_string(), // warm orange
-            installed: false, // resolved at scan time
+            installed: false,             // resolved at scan time
             skill_count: 0,
             global_paths: vec![
                 // @agent-context: ** glob matches sub-skills at any depth.
@@ -42,7 +42,6 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             ],
             format: SkillFormat::SkillMd,
         },
-
         // ── OpenAI Codex ─────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Codex,
@@ -61,7 +60,6 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             ],
             format: SkillFormat::SkillMd,
         },
-
         // ── Cursor ───────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Cursor,
@@ -70,16 +68,13 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             color: "#a58cff".to_string(), // purple
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.cursor/rules/*.mdc".to_string(),
-            ],
+            global_paths: vec!["$HOME/.cursor/rules/*.mdc".to_string()],
             project_paths: vec![
                 "$PROJECT/.cursor/rules/*.mdc".to_string(),
                 "$PROJECT/.cursorrules".to_string(),
             ],
             format: SkillFormat::Mdc,
         },
-
         // ── GitHub Copilot ───────────────────────────────────────────
         AgentInfo {
             id: AgentId::GithubCopilot,
@@ -96,7 +91,6 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             ],
             format: SkillFormat::InstructionsMd,
         },
-
         // ── Windsurf ─────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Windsurf,
@@ -105,16 +99,13 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             color: "#49bed9".to_string(), // cyan
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.windsurf/global_rules.md".to_string(),
-            ],
+            global_paths: vec!["$HOME/.windsurf/global_rules.md".to_string()],
             project_paths: vec![
                 "$PROJECT/.windsurf/rules/*.md".to_string(),
                 "$PROJECT/.windsurfrules".to_string(),
             ],
             format: SkillFormat::RulesDir,
         },
-
         // ── Gemini CLI ───────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Gemini,
@@ -123,16 +114,13 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             color: "#d5b347".to_string(), // yellow
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.gemini/GEMINI.md".to_string(),
-            ],
+            global_paths: vec!["$HOME/.gemini/GEMINI.md".to_string()],
             project_paths: vec![
                 "$PROJECT/GEMINI.md".to_string(),
                 "$PROJECT/.gemini/GEMINI.md".to_string(),
             ],
             format: SkillFormat::PlainMarkdown,
         },
-
         // ── Cline ────────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Cline,
@@ -148,7 +136,6 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             ],
             format: SkillFormat::RulesDir,
         },
-
         // ── Roo Code ─────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::RooCode,
@@ -164,7 +151,6 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             ],
             format: SkillFormat::RulesDir,
         },
-
         // ── Continue.dev ─────────────────────────────────────────────
         AgentInfo {
             id: AgentId::ContinueDev,
@@ -173,15 +159,10 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             color: "#5fb77b".to_string(), // green
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.continue/rules/*.md".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.continue/rules/*.md".to_string(),
-            ],
+            global_paths: vec!["$HOME/.continue/rules/*.md".to_string()],
+            project_paths: vec!["$PROJECT/.continue/rules/*.md".to_string()],
             format: SkillFormat::RulesDir,
         },
-
         // ── Aider ────────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Aider,
@@ -190,16 +171,13 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             color: "#82b36d".to_string(), // lime
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.aider.conf.yml".to_string(),
-            ],
+            global_paths: vec!["$HOME/.aider.conf.yml".to_string()],
             project_paths: vec![
                 "$PROJECT/.aider.conf.yml".to_string(),
                 "$PROJECT/CONVENTIONS.md".to_string(),
             ],
             format: SkillFormat::Yaml,
         },
-
         // ── Amazon Q ─────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::AmazonQ,
@@ -209,12 +187,9 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             installed: false,
             skill_count: 0,
             global_paths: vec![],
-            project_paths: vec![
-                "$PROJECT/.amazonq/rules/*.md".to_string(),
-            ],
+            project_paths: vec!["$PROJECT/.amazonq/rules/*.md".to_string()],
             format: SkillFormat::RulesDir,
         },
-
         // ── JetBrains AI ─────────────────────────────────────────────
         AgentInfo {
             id: AgentId::JetbrainsAi,
@@ -224,12 +199,9 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             installed: false,
             skill_count: 0,
             global_paths: vec![],
-            project_paths: vec![
-                "$PROJECT/.aiassistant/rules/*.md".to_string(),
-            ],
+            project_paths: vec!["$PROJECT/.aiassistant/rules/*.md".to_string()],
             format: SkillFormat::RulesDir,
         },
-
         // ── Tabnine ──────────────────────────────────────────────────
         AgentInfo {
             id: AgentId::Tabnine,
@@ -239,12 +211,9 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             installed: false,
             skill_count: 0,
             global_paths: vec![],
-            project_paths: vec![
-                "$PROJECT/.tabnine/guidelines/*.md".to_string(),
-            ],
+            project_paths: vec!["$PROJECT/.tabnine/guidelines/*.md".to_string()],
             format: SkillFormat::RulesDir,
         },
-
         // ── Augment Code ─────────────────────────────────────────────
         AgentInfo {
             id: AgentId::AugmentCode,
@@ -254,12 +223,9 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             installed: false,
             skill_count: 0,
             global_paths: vec![],
-            project_paths: vec![
-                "$PROJECT/.augment/rules/*.md".to_string(),
-            ],
+            project_paths: vec!["$PROJECT/.augment/rules/*.md".to_string()],
             format: SkillFormat::RulesDir,
         },
-
         // ── Universal (AGENTS.md) ────────────────────────────────────
         AgentInfo {
             id: AgentId::Universal,

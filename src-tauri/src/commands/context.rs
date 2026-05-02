@@ -150,7 +150,11 @@ fn get_foreground_pid_windows() -> Option<u32> {
         let hwnd = GetForegroundWindow();
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        if pid > 0 { Some(pid) } else { None }
+        if pid > 0 {
+            Some(pid)
+        } else {
+            None
+        }
     }
 }
 
@@ -186,8 +190,18 @@ fn is_known_terminal_windows(exe_name: &str) -> bool {
 #[cfg(target_os = "windows")]
 fn is_shell_process(exe_name: &str) -> bool {
     const SHELLS: &[&str] = &[
-        "bash", "zsh", "fish", "sh", "powershell", "pwsh", "cmd",
-        "nu", "elvish", "xonsh", "dash", "nushell",
+        "bash",
+        "zsh",
+        "fish",
+        "sh",
+        "powershell",
+        "pwsh",
+        "cmd",
+        "nu",
+        "elvish",
+        "xonsh",
+        "dash",
+        "nushell",
     ];
     SHELLS.iter().any(|s| exe_name.contains(s))
 }
@@ -278,10 +292,10 @@ fn try_peb_cwd(pid: u32) -> Option<String> {
     //   UNICODE_STRING = { Length: u16, MaximumLength: u16, padding: u32, Buffer: *u16 }
     #[repr(C)]
     struct UnicodeString {
-        length: u16,         // in bytes, not chars
+        length: u16, // in bytes, not chars
         maximum_length: u16,
-        _padding: u32,       // alignment padding on 64-bit
-        buffer: usize,       // pointer to wide char buffer
+        _padding: u32, // alignment padding on 64-bit
+        buffer: usize, // pointer to wide char buffer
     }
 
     // Load NtQueryInformationProcess from ntdll.dll
@@ -302,20 +316,16 @@ fn try_peb_cwd(pid: u32) -> Option<String> {
     };
 
     // Open the target process
-    let process_handle = unsafe {
-        OpenProcess(
-            PROCESS_QUERY_INFORMATION | PROCESS_VM_READ,
-            false,
-            pid,
-        )
-        .ok()?
-    };
+    let process_handle =
+        unsafe { OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid).ok()? };
 
     // Ensure we close the handle when done
     struct HandleGuard(HANDLE);
     impl Drop for HandleGuard {
         fn drop(&mut self) {
-            unsafe { let _ = CloseHandle(self.0); }
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
         }
     }
     let _guard = HandleGuard(process_handle);
@@ -466,15 +476,31 @@ fn detect_linux() -> TerminalContext {
 #[cfg(target_os = "windows")]
 fn find_shell_child(sys: &sysinfo::System, parent_pid: sysinfo::Pid) -> Option<sysinfo::Pid> {
     const SHELLS: &[&str] = &[
-        "bash", "zsh", "fish", "sh", "powershell", "pwsh", "cmd",
-        "nu", "nushell", "elvish", "xonsh", "dash",
+        "bash",
+        "zsh",
+        "fish",
+        "sh",
+        "powershell",
+        "pwsh",
+        "cmd",
+        "nu",
+        "nushell",
+        "elvish",
+        "xonsh",
+        "dash",
     ];
 
     // @agent-context: Intermediate processes that are NOT shells but appear between
     // the terminal and the actual shell. We should look through these, not stop at them.
     const INTERMEDIARIES: &[&str] = &[
-        "conhost", "openconsoleproxy", "conpty", "winpty-agent",
-        "node", "electron", "wslhost", "wsl",
+        "conhost",
+        "openconsoleproxy",
+        "conpty",
+        "winpty-agent",
+        "node",
+        "electron",
+        "wslhost",
+        "wsl",
     ];
 
     // Find all direct children of the parent
@@ -508,7 +534,9 @@ fn find_shell_child(sys: &sysinfo::System, parent_pid: sysinfo::Pid) -> Option<s
     for (pid, proc) in &children {
         let name = proc.name().to_string_lossy().to_lowercase();
         let name_stem = name.trim_end_matches(".exe");
-        let is_intermediary = INTERMEDIARIES.iter().any(|i| name_stem == *i || name.contains(i));
+        let is_intermediary = INTERMEDIARIES
+            .iter()
+            .any(|i| name_stem == *i || name.contains(i));
 
         if is_intermediary {
             if let Some(shell) = find_shell_child(sys, **pid) {

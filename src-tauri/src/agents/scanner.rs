@@ -15,9 +15,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::models::{AgentId, AgentInfo, Skill, SkillScope, ScanError, ScanResult, SkillFormat};
-use crate::parsers::{parse_frontmatter, skill_md::parse_skill_md};
 use super::registry::get_agent_registry;
+use crate::models::{AgentId, AgentInfo, ScanError, ScanResult, Skill, SkillFormat, SkillScope};
+use crate::parsers::{parse_frontmatter, skill_md::parse_skill_md};
 
 /// Scan all known agent directories for skills.
 ///
@@ -165,7 +165,12 @@ pub fn scan_custom_paths(custom_scan_paths: &[String]) -> (Vec<Skill>, Vec<ScanE
 }
 
 fn parse_custom_file(path: &Path) -> Result<Skill> {
-    parse_generic_md(AgentId::Custom("custom-scan".to_string()), path, SkillScope::Global, None)
+    parse_generic_md(
+        AgentId::Custom("custom-scan".to_string()),
+        path,
+        SkillScope::Global,
+        None,
+    )
 }
 
 /// Detect parent/child relationships between skills based on filesystem paths.
@@ -212,7 +217,9 @@ pub fn build_skill_tree(skills: &mut [Skill]) {
                 continue;
             }
             let parent_dir = format!("{}{}", other_dir, std::path::MAIN_SEPARATOR);
-            if skill_dir.starts_with(&parent_dir) || skill_dir.starts_with(other_dir.as_str()) && skill_dir.len() > other_dir.len() {
+            if skill_dir.starts_with(&parent_dir)
+                || skill_dir.starts_with(other_dir.as_str()) && skill_dir.len() > other_dir.len()
+            {
                 // Prefer the longest parent (nearest ancestor)
                 if best_parent
                     .as_ref()
@@ -280,17 +287,13 @@ fn parse_file_for_agent(
 ) -> Result<Skill> {
     let mut skill = match agent.format {
         // SKILL.md: richest format, used by Claude Code and Codex
-        SkillFormat::SkillMd => {
-            parse_skill_md(agent.id.clone(), path, scope, project_path)
-        }
+        SkillFormat::SkillMd => parse_skill_md(agent.id.clone(), path, scope, project_path),
 
         // All other formats: use the frontmatter parser and normalize
         SkillFormat::Mdc
         | SkillFormat::InstructionsMd
         | SkillFormat::PlainMarkdown
-        | SkillFormat::RulesDir => {
-            parse_generic_md(agent.id.clone(), path, scope, project_path)
-        }
+        | SkillFormat::RulesDir => parse_generic_md(agent.id.clone(), path, scope, project_path),
 
         // YAML configs (Aider) — treat the whole file as a "skill" with the filename as name
         SkillFormat::Yaml | SkillFormat::Json => {
@@ -337,18 +340,21 @@ fn parse_generic_md(
     let (name, description) = match &parsed.frontmatter {
         Some(fm) => {
             let name = crate::parsers::frontmatter::yaml_str(fm, "name")
-                .or_else(|| crate::parsers::frontmatter::yaml_str(fm, "description").map(|d| {
-                    // Some formats use description as the identifier
-                    d.chars().take(50).collect::<String>()
-                }))
+                .or_else(|| {
+                    crate::parsers::frontmatter::yaml_str(fm, "description").map(|d| {
+                        // Some formats use description as the identifier
+                        d.chars().take(50).collect::<String>()
+                    })
+                })
                 .unwrap_or_else(|| file_stem.clone());
-            let desc = crate::parsers::frontmatter::yaml_str(fm, "description")
-                .unwrap_or_default();
+            let desc = crate::parsers::frontmatter::yaml_str(fm, "description").unwrap_or_default();
             (name, desc)
         }
         None => {
             // No frontmatter: use first heading or first line
-            let first_line = parsed.body.lines()
+            let first_line = parsed
+                .body
+                .lines()
                 .find(|l| !l.trim().is_empty())
                 .unwrap_or("")
                 .trim_start_matches('#')
@@ -358,7 +364,11 @@ fn parse_generic_md(
         }
     };
 
-    let id = format!("{}:{}", serde_json::to_string(&agent_id)?.trim_matches('"'), file_stem);
+    let id = format!(
+        "{}:{}",
+        serde_json::to_string(&agent_id)?.trim_matches('"'),
+        file_stem
+    );
 
     Ok(Skill {
         id,
@@ -390,12 +400,19 @@ fn parse_config_file(
         .unwrap_or("config")
         .to_string();
 
-    let id = format!("{}:{}", serde_json::to_string(&agent_id)?.trim_matches('"'), file_stem);
+    let id = format!(
+        "{}:{}",
+        serde_json::to_string(&agent_id)?.trim_matches('"'),
+        file_stem
+    );
 
     Ok(Skill {
         id,
         name: file_stem,
-        description: format!("Configuration file: {}", path.file_name().unwrap_or_default().to_string_lossy()),
+        description: format!(
+            "Configuration file: {}",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        ),
         agent_id,
         file_path: path.to_string_lossy().to_string(),
         scope,
@@ -538,7 +555,10 @@ mod tests {
         let (skills, errors) = scan_custom_paths(&[file.path().to_string_lossy().to_string()]);
         assert_eq!(errors.len(), 0);
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].agent_id, AgentId::Custom("custom-scan".to_string()));
+        assert_eq!(
+            skills[0].agent_id,
+            AgentId::Custom("custom-scan".to_string())
+        );
     }
 
     #[test]

@@ -5,14 +5,14 @@
 // NAMING CONVENTION: snake_case in Rust, camelCase in TypeScript (auto-converted by Tauri).
 // Example: `scan_skills` in Rust → `invoke('scan_skills')` in TypeScript.
 
-pub mod skills;
 pub mod context;
-pub mod preferences;
-pub mod updates;
 pub mod injection;
+pub mod preferences;
+pub mod skills;
+pub mod updates;
 
-pub use skills::*;
 pub use context::*;
-pub use preferences::*;
-pub use updates::*;
 pub use injection::*;
+pub use preferences::*;
+pub use skills::*;
+pub use updates::*;

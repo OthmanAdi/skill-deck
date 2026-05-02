@@ -34,6 +34,10 @@ pub struct AgentInfo {
     /// Example: ["$HOME/.claude/skills/*/SKILL.md", "$HOME/.claude/commands/*.md"]
     pub global_paths: Vec<String>,
 
+    /// Concrete directories or files that indicate the agent is installed.
+    /// This is mainly used for agents whose skills live in shared canonical stores.
+    pub global_detection_paths: Vec<String>,
+
     /// Glob patterns for project-level skills/rules.
     /// Uses $PROJECT as a placeholder for the current project root.
     /// Example: ["$PROJECT/.claude/skills/*/SKILL.md"]

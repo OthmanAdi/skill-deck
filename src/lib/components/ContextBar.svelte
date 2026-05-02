@@ -28,7 +28,7 @@
 
 <div
   class="flex shrink-0 items-center justify-between gap-2 px-3 py-1.5 border-t border-[var(--color-border)]"
-  style="background: var(--color-surface-1);"
+  style="background: var(--color-surface-2);"
 >
   <!-- CWD -->
   <div class="flex items-center gap-1.5 truncate">
@@ -39,28 +39,29 @@
         <span class="relative h-[6px] w-[6px] rounded-full bg-[var(--color-accent)]"></span>
       </span>
       <span
-        class="truncate font-mono text-[9.5px] text-[var(--color-text-muted)]"
+        class="truncate font-mono text-[9.5px] text-[var(--color-text-secondary)] opacity-90"
         title={store.terminalContext.cwd}
       >
         {shortenPath(store.terminalContext.cwd)}
       </span>
     {:else}
-      <span class="h-[6px] w-[6px] shrink-0 rounded-full bg-[var(--color-text-muted)] opacity-25"></span>
-      <span class="text-[9.5px] text-[var(--color-text-muted)] opacity-60">No terminal</span>
+      <span class="h-[6px] w-[6px] shrink-0 rounded-full bg-[var(--color-text-muted)] opacity-40"></span>
+      <span class="text-[9.5px] text-[var(--color-text-secondary)] opacity-90">No terminal</span>
     {/if}
   </div>
 
   <!-- Stats + refresh -->
-  <div class="flex shrink-0 items-center gap-1.5 text-[9.5px] tabular-nums text-[var(--color-text-muted)]">
-    <span class="opacity-50">{store.scanDurationMs}ms</span>
+  <div class="flex shrink-0 items-center gap-1.5 text-[9.5px] tabular-nums text-[var(--color-text-secondary)]">
+    <span class="opacity-80">{store.scanDurationMs}ms</span>
     {#if timeSinceScan}
-      <span class="opacity-20">·</span>
-      <span class="opacity-35">{timeSinceScan}</span>
+      <span class="opacity-50">·</span>
+      <span class="opacity-75">{timeSinceScan}</span>
     {/if}
     <button
-      class="flex h-5 w-5 items-center justify-center ml-0.5
+      class="ml-0.5 flex h-5 w-5 items-center justify-center border border-transparent
+        text-[var(--color-text-secondary)] opacity-80
         transition-all duration-[120ms] ease-out
-        hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)]
+        hover:border-[var(--color-border)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)] hover:opacity-100
         active:scale-90"
       style="border-radius: var(--radius-sm);"
       onclick={handleRefresh}

@@ -43,7 +43,7 @@ fn get_window_at_cursor_windows() -> WindowAtPoint {
     use windows::Win32::Foundation::{HWND, LPARAM, POINT, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{
         EnumWindows, GetCursorPos, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
-        IsWindowVisible, IsIconic,
+        IsIconic, IsWindowVisible,
     };
 
     // Step 1: Get cursor position
@@ -107,10 +107,7 @@ fn get_window_at_cursor_windows() -> WindowAtPoint {
     };
 
     unsafe {
-        let _ = EnumWindows(
-            Some(enum_callback),
-            LPARAM(&mut state as *mut _ as isize),
-        );
+        let _ = EnumWindows(Some(enum_callback), LPARAM(&mut state as *mut _ as isize));
     }
 
     let hwnd = match state.found_hwnd {
@@ -120,7 +117,9 @@ fn get_window_at_cursor_windows() -> WindowAtPoint {
 
     // Step 4: Get PID + window title of the found window
     let mut pid: u32 = 0;
-    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)); }
+    unsafe {
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    }
 
     if pid == 0 {
         return WindowAtPoint::default();

@@ -81,7 +81,10 @@ pub fn list_agents(project_path: Option<String>) -> Vec<AgentInfo> {
 /// Read the raw content of a skill file.
 /// Used when the user clicks a card to see the full skill body.
 #[tauri::command]
-pub fn read_skill_content(skill_id: String, project_path: Option<String>) -> Result<String, String> {
+pub fn read_skill_content(
+    skill_id: String,
+    project_path: Option<String>,
+) -> Result<String, String> {
     let path = project_path.as_deref().map(Path::new);
     let scan = scan_all_skills(path);
 

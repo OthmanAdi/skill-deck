@@ -66,13 +66,27 @@ pub fn parse_skill_md(
         }
         None => {
             // No frontmatter: derive name from directory, first line as description
-            let first_line = parsed.body.lines().next().unwrap_or("").trim_start_matches('#').trim();
-            (dir_name.clone(), first_line.to_string(), SkillMetadata::default())
+            let first_line = parsed
+                .body
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim_start_matches('#')
+                .trim();
+            (
+                dir_name.clone(),
+                first_line.to_string(),
+                SkillMetadata::default(),
+            )
         }
     };
 
     // Generate stable ID from agent + path
-    let id = format!("{}:{}", serde_json::to_string(&agent_id)?.trim_matches('"'), dir_name);
+    let id = format!(
+        "{}:{}",
+        serde_json::to_string(&agent_id)?.trim_matches('"'),
+        dir_name
+    );
 
     Ok(Skill {
         id,
@@ -136,12 +150,8 @@ allowed-tools: "Read Grep"
 Do the thing.
 "#;
         let file = write_temp_skill(content);
-        let skill = parse_skill_md(
-            AgentId::ClaudeCode,
-            file.path(),
-            SkillScope::Global,
-            None,
-        ).unwrap();
+        let skill =
+            parse_skill_md(AgentId::ClaudeCode, file.path(), SkillScope::Global, None).unwrap();
 
         assert_eq!(skill.name, "test-skill");
         assert_eq!(skill.description, "A test skill for unit testing");
@@ -158,7 +168,8 @@ Do the thing.
             file.path(),
             SkillScope::Project,
             Some("/project".to_string()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(skill.description, "Simple skill");
         assert_eq!(skill.scope, SkillScope::Project);
