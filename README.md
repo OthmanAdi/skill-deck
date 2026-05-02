@@ -21,6 +21,16 @@ Press `Ctrl+Shift+K`, a skill browser slides in. Search, filter, and browse ever
 
 No switching between editors. No hunting through dotfiles. One overlay, everything visible.
 
+## UI Preview
+
+<p align="center">
+  <img src="media/overlay.png" alt="Skill Deck overlay list view" width="340">
+</p>
+
+<p align="center">
+  <img src="media/screenshot.png" alt="Skill Deck running on desktop" width="920">
+</p>
+
 ## Supported Agents
 
 | Agent | Skills Found At |
