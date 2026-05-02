@@ -31,6 +31,14 @@ pub struct AppConfig {
     /// Overlay position preference
     pub overlay_position: OverlayPosition,
 
+    /// Persisted overlay width in logical pixels
+    #[serde(default = "default_overlay_width")]
+    pub overlay_width: u32,
+
+    /// Persisted overlay height in logical pixels
+    #[serde(default = "default_overlay_height")]
+    pub overlay_height: u32,
+
     /// User-overridden repository URLs per skill ID
     pub skill_repo_overrides: std::collections::HashMap<String, String>,
 
@@ -77,9 +85,19 @@ impl Default for AppConfig {
             check_updates: true,
             theme: "system".to_string(),
             overlay_position: OverlayPosition::BottomRight,
+            overlay_width: default_overlay_width(),
+            overlay_height: default_overlay_height(),
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
             update_check_cache: std::collections::HashMap::new(),
         }
     }
+}
+
+fn default_overlay_width() -> u32 {
+    460
+}
+
+fn default_overlay_height() -> u32 {
+    640
 }

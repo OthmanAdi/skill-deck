@@ -120,3 +120,30 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
         warn!("Failed to persist theme: {}", e);
     }
 }
+
+/// Persist overlay size.
+#[tauri::command]
+pub fn set_overlay_size(
+    state: State<ConfigState>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    const MIN_W: u32 = 380;
+    const MAX_W: u32 = 700;
+    const MIN_H: u32 = 560;
+    const MAX_H: u32 = 820;
+
+    let clamped_w = width.clamp(MIN_W, MAX_W);
+    let clamped_h = height.clamp(MIN_H, MAX_H);
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.overlay_width = clamped_w;
+    config.overlay_height = clamped_h;
+    save_config(&config)?;
+
+    Ok(())
+}

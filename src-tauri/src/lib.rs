@@ -40,6 +40,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = load_config();
+    let startup_overlay_width = config.overlay_width.clamp(380, 700) as f64;
+    let startup_overlay_height = config.overlay_height.clamp(560, 820) as f64;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -59,6 +61,7 @@ pub fn run() {
             commands::get_config,
             commands::set_hotkey,
             commands::set_theme,
+            commands::set_overlay_size,
             commands::get_starred_skills,
             // Update checking
             commands::check_skill_update,
@@ -68,7 +71,7 @@ pub fn run() {
             commands::get_window_at_cursor,
             commands::inject_to_terminal,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click
             let window = match app.get_webview_window("overlay") {
                 Some(window) => window,
@@ -79,8 +82,10 @@ pub fn run() {
             if let Ok(Some(monitor)) = window.primary_monitor() {
                 let monitor_size = monitor.size();
                 let scale = monitor.scale_factor();
-                let w = 420.0;
-                let h = 640.0;
+                let w = startup_overlay_width;
+                let h = startup_overlay_height;
+
+                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
                 let x = (monitor_size.width as f64 / scale) - w - 16.0;
                 let y = (monitor_size.height as f64 / scale) - h - 48.0;
                 window.set_position(tauri::LogicalPosition::new(x, y)).ok();

@@ -96,6 +96,8 @@ export interface AppConfig {
   checkUpdates: boolean;
   theme: string;
   overlayPosition: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+  overlayWidth: number;
+  overlayHeight: number;
   skillRepoOverrides: Record<string, string>;
   skillInstallOverrides: Record<string, string>;
   updateCheckCache: Record<string, UpdateCheckEntry>;

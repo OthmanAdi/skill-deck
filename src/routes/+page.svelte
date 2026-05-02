@@ -13,12 +13,44 @@
 
   const appWindow = getCurrentWindow();
 
-  onMount(async () => {
-    await initTheme();
-    setupHotkey();
-    setupEscapeKey();
-    // Always show on launch
-    await showOverlay();
+  onMount(() => {
+    let unlistenResized: (() => void) | undefined;
+    let persistResizeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const persistOverlaySize = async () => {
+      try {
+        const size = await appWindow.innerSize();
+        const scale = await appWindow.scaleFactor();
+        const width = Math.round(size.width / scale);
+        const height = Math.round(size.height / scale);
+        await invoke("set_overlay_size", { width, height });
+      } catch (e) {
+        console.warn("Failed to persist overlay size:", e);
+      }
+    };
+
+    const init = async () => {
+      await initTheme();
+      setupHotkey();
+      setupEscapeKey();
+
+      unlistenResized = await appWindow.onResized(() => {
+        if (persistResizeTimer) clearTimeout(persistResizeTimer);
+        persistResizeTimer = setTimeout(() => {
+          void persistOverlaySize();
+        }, 180);
+      });
+
+      // Always show on launch
+      await showOverlay();
+    };
+
+    void init();
+
+    return () => {
+      if (persistResizeTimer) clearTimeout(persistResizeTimer);
+      unlistenResized?.();
+    };
   });
 
   async function showOverlay() {
