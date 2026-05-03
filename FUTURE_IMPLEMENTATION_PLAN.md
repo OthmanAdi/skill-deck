@@ -11,7 +11,7 @@ Make Skill Deck the fastest and most reliable multi-agent skill overlay, with tr
 
 1. Security before convenience
 2. Honest platform support claims
-3. Predictable keyboard and drag interactions
+3. Predictable keyboard interactions
 4. Documentation as part of the product
 5. Incremental delivery with measurable quality gates
 
@@ -28,7 +28,7 @@ Feature work:
 - secure read path by skill ID only
 - repo override integration in scan pipeline
 - update checker reliability improvements
-- tree and drag-drop correctness fixes
+- tree and keyboard interaction correctness fixes
 
 Success metrics:
 - 0 P0, 0 P1 open
@@ -37,13 +37,11 @@ Success metrics:
 ## Cycle B: Cross-Platform Maturity
 
 Goals:
-- remove major Windows-only bottlenecks
-- provide clear parity table for context and injection capabilities
+- maintain strong cross-platform consistency for active features
 
 Feature work:
-- macOS terminal context detection implementation
-- Linux terminal context detection implementation
-- platform-gated injection support with graceful UX fallbacks
+- improve scan performance on large global skill catalogs
+- continue hardening update and history flows
 
 Success metrics:
 - documented parity matrix in README
@@ -68,15 +66,14 @@ Success metrics:
 
 ## Security
 - add tests for invalid path attempts on content read command
-- evaluate additional command hardening patterns for injection endpoints
+- evaluate additional command hardening patterns for IPC endpoints
 
 ## UX
 - optimize perceived smoothness of overlay transitions
 - keep keyboard-only flow predictable in grouped and tree modes
 
 ## Platform
-- implement and test macOS and Linux detection modules
-- document unsupported terminal variants explicitly
+- keep behavior parity for active feature set across Windows, macOS, Linux
 
 ## Documentation
 - maintain living changelog and release notes discipline

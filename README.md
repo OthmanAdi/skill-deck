@@ -4,7 +4,7 @@
 
 <h3>Universal coding agent skill browser</h3>
 
-<p>Desktop overlay for browsing, searching, and injecting skills across Claude Code, Cursor, Copilot, Codex, and 15+ AI coding agents.</p>
+<p>Desktop overlay for browsing, searching, and copying skill references across Claude Code, Cursor, Copilot, Codex, and many AI coding agents.</p>
 
 ![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8?style=flat-square&logo=tauri&logoColor=white)
 ![Rust](https://img.shields.io/badge/Rust-1.90-000000?style=flat-square&logo=rust&logoColor=white)
@@ -17,44 +17,21 @@
 
 ## What It Does
 
-Press `Ctrl+Shift+K`, a skill browser slides in. Search, filter, and browse every skill installed across all your coding agents in one place. Drag a skill card onto a terminal window and the install command injects directly. Close it with `Escape`.
+Press `Ctrl+Shift+K`, a skill browser slides in. Search, filter, and browse every skill installed across your coding agents in one place. Open a skill to inspect content, copy its reference, and manage update metadata.
 
 No switching between editors. No hunting through dotfiles. One overlay, everything visible.
 
-## UI Preview
-
-<p align="center">
-  <img src="media/overlay.png" alt="Skill Deck overlay list view" width="340">
-</p>
-
-
 ## Supported Agents
 
-| Agent | Skills Found At |
-|-------|----------------|
-| **Claude Code** | `~/.agents/skills/`, `~/.claude/skills/`, project `.claude/` |
-| **Codex** | `~/.codex/skills/`, project `AGENTS.md` |
-| **Cursor** | `~/.cursor/rules/`, project `.cursor/rules/` |
-| **GitHub Copilot** | `~/.github/`, project `.github/copilot/` |
-| **Windsurf** | `~/.codeium/windsurf/memories/`, project `.windsurfrules` |
-| **Gemini CLI** | `~/.gemini/`, project `GEMINI.md` |
-| **Cline** | `~/.cline/`, project `.clinerules` |
-| **Roo Code** | `~/.roo/`, project `.roo/` |
-| **Continue** | `~/.continue/config/prompts/` |
-| **Aider** | `~/.aider/`, project `.aider.conf.yml` |
-| **Amazon Q** | `~/.aws/amazonq/prompts/` |
-| **JetBrains AI** | `~/.config/JetBrains/prompts/` |
-| **Tabnine** | `~/.tabnine/` |
-| **Augment Code** | project `.augment/` |
-| **AGENTS.md** | project `AGENTS.md` |
+Skill Deck supports 15+ coding agents through a single registry and parser pipeline.
+
+Examples include Claude Code, Codex, Cursor, GitHub Copilot, Windsurf, Gemini CLI, Cline, Roo Code, Continue, Aider, Amazon Q, JetBrains AI, Tabnine, Augment, and universal `AGENTS.md` conventions.
 
 ## Features
 
 - **Universal scan** — discovers skills from all 15+ agents in one pass
 - **Live search** — instant filter across skill names and descriptions
 - **Starred skills** — pin your most-used skills to a dedicated tab
-- **Project context** — detects your focused terminal's CWD and surfaces project-specific skills automatically
-- **Drag to inject** — drag a skill card onto any terminal window to inject the install command via clipboard
 - **Update checker** — detects newer versions of skills from their GitHub repos
 - **Repo detection** — automatically finds the GitHub source and `npx skills add` command for each skill
 - **Tree view** — parent/child skill hierarchies rendered as collapsible groups
@@ -70,11 +47,7 @@ Current status for v0.1:
 
 | Capability | Windows | macOS | Linux |
 |---|---|---|---|
-| Overlay, scan, search, starred, tree view | Yes | Yes | Yes |
-| Terminal context detection | Yes | Not yet | Not yet |
-| Drag to terminal injection | Yes | Not yet | Not yet |
-
-Until parity lands, terminal context and terminal injection should be considered Windows-first capabilities.
+| Overlay, scan, search, starred, grouped/tree views, update checks | Yes | Yes | Yes |
 
 ## Install & Run
 
@@ -130,15 +103,12 @@ src-tauri/src/
 │   └── config.rs         # User preferences: hotkey, starred skills, theme
 ├── commands/             # Tauri IPC commands
 │   ├── skills.rs         # scan_skills, list_agents, read_skill_content
-│   ├── context.rs        # detect_terminal_context (CWD of focused terminal)
 │   ├── preferences.rs    # toggle_star, set_hotkey, get_config
-│   ├── injection.rs      # inject_to_terminal, get_window_at_point
-│   └── updates.rs        # check_skill_updates, set_skill_repo
+│   └── updates.rs        # check_skill_update, set_skill_repo
 └── detection/
     ├── repo_detector.rs  # GitHub URL + npx install command extraction
     ├── update_checker.rs # GitHub API version comparison
-    ├── window_at_point.rs # OS-native window detection
-    └── terminal_inject.rs # Clipboard + keystroke injection
+    └── skill_history.rs  # Local snapshots for restore workflow
 
 src/
 └── lib/
@@ -156,9 +126,7 @@ src/
 | Desktop shell | [Tauri v2](https://tauri.app) |
 | Backend | Rust 1.90, tokio, serde, gray_matter, reqwest |
 | Frontend | Svelte 5 (runes), SvelteKit 2, Tailwind CSS v4, TypeScript |
-| OS APIs (Windows) | `windows` crate — Win32 window/process/clipboard APIs |
-| OS APIs (Linux) | x11rb, procfs |
-| OS APIs (macOS) | cocoa, objc |
+
 
 ## Adding a New Agent
 

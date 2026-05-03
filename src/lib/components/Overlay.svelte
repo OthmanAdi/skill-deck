@@ -16,7 +16,6 @@
   import TabBar from "./TabBar.svelte";
   import AgentGroup from "./AgentGroup.svelte";
   import SkillTree from "./SkillTree.svelte";
-  import SkillGraphView from "./SkillGraphView.svelte";
   import ContextBar from "./ContextBar.svelte";
   import Toast from "./Toast.svelte";
   import ThemeMenu from "./ThemeMenu.svelte";
@@ -45,10 +44,6 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (store.viewMode === "graph") {
-      return;
-    }
-
     if (isTextEntryTarget(e.target)) {
       return;
     }
@@ -144,7 +139,7 @@
         <span class="text-[10px] tabular-nums text-[var(--color-text-muted)]">
           {store.skills.length}
         </span>
-        <!-- View mode toggle: grouped / tree / graph -->
+        <!-- View mode toggle: grouped / tree -->
         <div class="flex items-center rounded-md border p-0.5"
           style="border-color: var(--color-border); background: var(--color-surface-1);">
           <button
@@ -175,25 +170,6 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 6h10M7 12h5M7 18h3M4 6h.01M4 12h.01M4 18h.01" />
             </svg>
             <span>Tree</span>
-          </button>
-
-          <button
-            class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
-              {store.viewMode === 'graph'
-                ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
-            onclick={() => (store.viewMode = "graph")}
-            data-tooltip="Graph relationship view"
-            aria-label="Graph view"
-          >
-            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <circle cx="5" cy="8" r="2"></circle>
-              <circle cx="12" cy="5" r="2"></circle>
-              <circle cx="18" cy="10" r="2"></circle>
-              <circle cx="9" cy="17" r="2"></circle>
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6.8 7l3.4-1M13.8 5.8l2.4 2.6M16.4 11.5l-6 4" />
-            </svg>
-            <span>Graph</span>
           </button>
 
           {#if store.viewMode === 'grouped' && store.activeTab === 'all'}
@@ -245,11 +221,10 @@
     <!-- Skill list — grouped by agent -->
     <div
       class="skill-list flex-1 overflow-y-auto px-2 pb-2"
-      role={store.viewMode === "graph" ? "region" : "listbox"}
-      aria-label={store.viewMode === "graph" ? "Skill relationship graph" : "Skills"}
+      role="listbox"
+      aria-label="Skills"
       tabindex="-1"
       bind:this={listEl}
-      class:overflow-hidden={store.viewMode === "graph"}
     >
       {#if store.isLoading && store.skills.length === 0}
         <!-- Skeleton loading state -->
@@ -294,11 +269,6 @@
         <!-- Tree view: parent/child hierarchy by file path -->
         <div class="py-1 px-1">
           <SkillTree skills={store.filteredSkills} {focusedIndex} />
-        </div>
-      {:else if store.viewMode === "graph"}
-        <!-- Graph view: relationship network -->
-        <div class="h-full py-1 px-1">
-          <SkillGraphView skills={store.filteredSkills} />
         </div>
       {:else}
         <!-- Grouped view: skills bucketed by agent -->

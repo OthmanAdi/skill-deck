@@ -31,7 +31,6 @@ When reporting, include:
 
 Areas with elevated security sensitivity:
 - Tauri IPC commands that access filesystem or window/input APIs
-- terminal injection behavior
 - update-check network logic and provider validation
 
 ## Disclosure

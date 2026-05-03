@@ -37,9 +37,9 @@ src-tauri/src/           # Rust backend
 │   └── scanner.rs       # Filesystem glob → parse → Vec<Skill>
 ├── commands/            # Tauri IPC commands (called from frontend)
 │   ├── skills.rs        # scan_skills, list_agents, read_skill_content
-│   ├── context.rs       # detect_terminal_context (CWD of focused terminal)
-│   └── preferences.rs   # toggle_star, set_hotkey, get_config
-└── detection/           # (reserved) Platform-specific terminal detection
+│   ├── preferences.rs   # toggle_star, set_hotkey, get_config
+│   └── updates.rs       # check_skill_update, set_skill_repo, version history
+└── detection/           # repo detection, update checks, skill history
 
 src/                     # Svelte 5 frontend
 ├── app.css              # Tailwind theme tokens (dark-first overlay design)
@@ -58,7 +58,7 @@ src/                     # Svelte 5 frontend
 2. **One base parser**: `parsers/frontmatter.rs` handles Markdown + YAML frontmatter. 90% of agents use this format with slight variations.
 3. **Universal Skill model**: All agents' formats normalize into `models/skill.rs`. The frontend never sees agent-specific types.
 4. **Overlay window**: Borderless, transparent, always-on-top, positioned at bottom-right. Shown/hidden by global hotkey.
-5. **CWD detection**: Detects the focused terminal's working directory to show project-relevant skills. Platform-specific code in `commands/context.rs`.
+5. **Global-scan consistency**: The scanner uses global agent paths and normalizes all outputs into one universal skill contract.
 
 ## Adding a New Agent
 

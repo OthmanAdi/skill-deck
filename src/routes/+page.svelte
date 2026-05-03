@@ -20,6 +20,7 @@
   let unlistenHotkeyPressed: (() => void) | undefined;
   let unlistenFocusChanged: (() => void) | undefined;
   let unlistenOverlayModeChanged: (() => void) | undefined;
+  let unlistenOverlayVisibilityChanged: (() => void) | undefined;
   let removeWindowBlurListener: (() => void) | undefined;
   let autoHideFocusGuardTimer: ReturnType<typeof setInterval> | null = null;
   let hideInFlight = false;
@@ -86,6 +87,25 @@
           }
         }
       });
+
+      unlistenOverlayVisibilityChanged = await listen<boolean>(
+        "overlay-visibility-changed",
+        async ({ payload }) => {
+          const visible = !!payload;
+
+          if (visible === store.isVisible) {
+            return;
+          }
+
+          if (visible) {
+            toggleOverlay();
+            await appWindow.show().catch(() => undefined);
+            await appWindow.setFocus().catch(() => undefined);
+          } else {
+            toggleOverlay();
+          }
+        }
+      );
     };
 
     void init();
@@ -95,6 +115,7 @@
       unlistenHotkeyPressed?.();
       unlistenFocusChanged?.();
       unlistenOverlayModeChanged?.();
+      unlistenOverlayVisibilityChanged?.();
       removeWindowBlurListener?.();
       if (autoHideFocusGuardTimer) clearInterval(autoHideFocusGuardTimer);
       unlistenResized?.();

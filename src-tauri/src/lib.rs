@@ -160,9 +160,11 @@ pub fn run() {
                     {
                         if window_for_tray.is_visible().unwrap_or(false) {
                             let _ = window_for_tray.hide();
+                            let _ = window_for_tray.emit("overlay-visibility-changed", false);
                         } else {
                             let _ = window_for_tray.show();
                             let _ = window_for_tray.set_focus();
+                            let _ = window_for_tray.emit("overlay-visibility-changed", true);
                         }
                     }
                 })
@@ -170,9 +172,11 @@ pub fn run() {
                     "show" => {
                         if window_for_menu.is_visible().unwrap_or(false) {
                             let _ = window_for_menu.hide();
+                            let _ = window_for_menu.emit("overlay-visibility-changed", false);
                         } else {
                             let _ = window_for_menu.show();
                             let _ = window_for_menu.set_focus();
+                            let _ = window_for_menu.emit("overlay-visibility-changed", true);
                         }
                     }
                     "mode_pinned" => {
@@ -200,6 +204,7 @@ pub fn run() {
                     "rescan" => {
                         let _ = window_for_menu.show();
                         let _ = window_for_menu.set_focus();
+                        let _ = window_for_menu.emit("overlay-visibility-changed", true);
                         let _ = window_for_menu.eval("window.location.reload()");
                     }
                     "quit" => {

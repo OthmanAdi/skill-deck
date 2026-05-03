@@ -192,6 +192,6 @@ export interface UpdateCheckEntry {
 
 /** UI-only types */
 export type TabView = "all" | "starred";
-export type ViewMode = "grouped" | "tree" | "graph";
+export type ViewMode = "grouped" | "tree";
 
 export const DEFAULT_AGENT_COLOR = "#7a7fad";

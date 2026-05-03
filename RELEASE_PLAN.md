@@ -14,10 +14,8 @@ The release is allowed only when all conditions below are true:
 1. Security
 - No unrestricted file read IPC endpoints
 - CSP enabled for production webview
-- Terminal injection guarded against non-terminal targets
 
 2. Product correctness
-- Drag to inject works on supported platforms
 - Tree view behaves correctly for focus and nested items
 - Update checker reports reliable results for supported repo providers
 
@@ -41,7 +39,6 @@ Status: in progress
 Scope:
 - Harden `read_skill_content` access model
 - Enable production CSP
-- Strengthen injection command validation
 - fix update checker comparison model and timeout behavior
 
 Exit criteria:
@@ -52,7 +49,6 @@ Exit criteria:
 Status: in progress
 
 Scope:
-- fix drag/drop injection flow
 - fix tree indexing and deep hierarchy behavior
 - fix keyboard navigation consistency in overlay
 
@@ -87,7 +83,7 @@ Exit criteria:
 ## Risk Register
 
 1. Platform support mismatch creates user trust debt
-- Mitigation: clear Windows-first labeling until parity lands
+- Mitigation: keep docs strictly aligned with active feature surface
 
 2. Security regressions on IPC commands
 - Mitigation: constrain commands to IDs and scanner-derived allowlists
