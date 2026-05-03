@@ -11,7 +11,7 @@
 // Typical scan of ~100 skills across 5 agents completes in <50ms.
 
 use anyhow::Result;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use walkdir::WalkDir;
@@ -22,9 +22,7 @@ use crate::parsers::{parse_frontmatter, skill_md::parse_skill_md};
 
 /// Scan all known agent directories for skills.
 ///
-/// `project_path`: Optional current project directory (from CWD detection).
-/// If None, only global skills are scanned.
-pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
+pub fn scan_all_skills() -> ScanResult {
     let start = Instant::now();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let registry = get_agent_registry();
@@ -33,14 +31,14 @@ pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
     let mut all_errors: Vec<ScanError> = Vec::new();
 
     for agent in &registry {
-        if !should_scan_agent(agent, &home, project_path) {
+        if !should_scan_agent(agent, &home) {
             continue;
         }
 
         // Scan global paths
         for pattern in &agent.global_paths {
             let resolved = pattern.replace("$HOME", &home.to_string_lossy());
-            match scan_glob_pattern(&resolved, agent, SkillScope::Global, None) {
+            match scan_glob_pattern(&resolved, agent, SkillScope::Global) {
                 Ok((skills, errors)) => {
                     all_skills.extend(skills);
                     all_errors.extend(errors);
@@ -54,31 +52,6 @@ pub fn scan_all_skills(project_path: Option<&Path>) -> ScanResult {
             }
         }
 
-        // Scan project paths (only if we know the project directory)
-        if let Some(project) = project_path {
-            for pattern in &agent.project_paths {
-                let resolved = pattern
-                    .replace("$HOME", &home.to_string_lossy())
-                    .replace("$PROJECT", &project.to_string_lossy());
-                match scan_glob_pattern(
-                    &resolved,
-                    agent,
-                    SkillScope::Project,
-                    Some(project.to_string_lossy().to_string()),
-                ) {
-                    Ok((skills, errors)) => {
-                        all_skills.extend(skills);
-                        all_errors.extend(errors);
-                    }
-                    Err(e) => {
-                        all_errors.push(ScanError {
-                            file_path: resolved,
-                            message: e.to_string(),
-                        });
-                    }
-                }
-            }
-        }
     }
 
     // Deduplicate skill IDs — if two files produce the same ID,
@@ -170,12 +143,7 @@ pub fn scan_custom_paths(custom_scan_paths: &[String]) -> (Vec<Skill>, Vec<ScanE
 }
 
 fn parse_custom_file(path: &Path) -> Result<Skill> {
-    parse_generic_md(
-        AgentId::Custom("custom-scan".to_string()),
-        path,
-        SkillScope::Global,
-        None,
-    )
+    parse_generic_md(AgentId::Custom("custom-scan".to_string()), path, SkillScope::Global)
 }
 
 /// Detect parent/child relationships between skills based on filesystem paths.
@@ -251,7 +219,6 @@ fn scan_glob_pattern(
     pattern: &str,
     agent: &AgentInfo,
     scope: SkillScope,
-    project_path: Option<String>,
 ) -> Result<(Vec<Skill>, Vec<ScanError>)> {
     let mut skills = Vec::new();
     let mut errors = Vec::new();
@@ -262,7 +229,7 @@ fn scan_glob_pattern(
     let paths = collect_candidate_paths(&normalized)?;
 
     for path in paths {
-        match parse_file_for_agent(&path, agent, scope.clone(), project_path.clone()) {
+        match parse_file_for_agent(&path, agent, scope.clone()) {
             Ok(skill) => skills.push(skill),
             Err(e) => errors.push(ScanError {
                 file_path: path.to_string_lossy().to_string(),
@@ -365,7 +332,6 @@ fn parse_file_for_agent(
     path: &Path,
     agent: &AgentInfo,
     scope: SkillScope,
-    project_path: Option<String>,
 ) -> Result<Skill> {
     let mut skill = match agent.format {
         // SKILL.md: richest format, used by Claude Code and Codex
@@ -377,9 +343,9 @@ fn parse_file_for_agent(
                 .unwrap_or(false);
 
             if is_skill_md {
-                parse_skill_md(agent.id.clone(), path, scope, project_path)
+                parse_skill_md(agent.id.clone(), path, scope, None)
             } else {
-                parse_generic_md(agent.id.clone(), path, scope, project_path)
+                parse_generic_md(agent.id.clone(), path, scope)
             }
         }
 
@@ -387,11 +353,11 @@ fn parse_file_for_agent(
         SkillFormat::Mdc
         | SkillFormat::InstructionsMd
         | SkillFormat::PlainMarkdown
-        | SkillFormat::RulesDir => parse_generic_md(agent.id.clone(), path, scope, project_path),
+        | SkillFormat::RulesDir => parse_generic_md(agent.id.clone(), path, scope),
 
         // YAML configs (Aider) — treat the whole file as a "skill" with the filename as name
         SkillFormat::Yaml | SkillFormat::Json => {
-            parse_config_file(agent.id.clone(), path, scope, project_path)
+            parse_config_file(agent.id.clone(), path, scope)
         }
     }?;
 
@@ -420,7 +386,6 @@ fn parse_generic_md(
     agent_id: AgentId,
     path: &Path,
     scope: SkillScope,
-    project_path: Option<String>,
 ) -> Result<Skill> {
     let content = std::fs::read_to_string(path)?;
     let parsed = parse_frontmatter(&content)?;
@@ -471,7 +436,7 @@ fn parse_generic_md(
         agent_id,
         file_path: path.to_string_lossy().to_string(),
         scope,
-        project_path,
+        project_path: None,
         metadata: crate::models::SkillMetadata::default(),
         icon: None,
         starred: false,
@@ -486,7 +451,6 @@ fn parse_config_file(
     agent_id: AgentId,
     path: &Path,
     scope: SkillScope,
-    project_path: Option<String>,
 ) -> Result<Skill> {
     let file_stem = path
         .file_stem()
@@ -510,7 +474,7 @@ fn parse_config_file(
         agent_id,
         file_path: path.to_string_lossy().to_string(),
         scope,
-        project_path,
+        project_path: None,
         metadata: crate::models::SkillMetadata::default(),
         icon: None,
         starred: false,
@@ -521,33 +485,23 @@ fn parse_config_file(
 }
 
 /// Check which agents are installed by testing if their directories exist.
-pub fn detect_installed_agents(project_path: Option<&Path>) -> Vec<AgentInfo> {
+pub fn detect_installed_agents() -> Vec<AgentInfo> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let mut registry = get_agent_registry();
-    let scan_result = scan_all_skills(project_path);
-
-    let mut counts: HashMap<AgentId, usize> = HashMap::new();
-    for skill in &scan_result.skills {
-        let entry = counts.entry(skill.agent_id.clone()).or_insert(0);
-        *entry += 1;
-    }
 
     for agent in &mut registry {
-        let installed_by_path = should_scan_agent(agent, &home, project_path);
-
-        let count = *counts.get(&agent.id).unwrap_or(&0);
-        agent.skill_count = count;
-        agent.installed = installed_by_path || count > 0;
+        agent.installed = should_scan_agent(agent, &home);
+        agent.skill_count = 0;
     }
 
     registry
 }
 
-fn should_scan_agent(agent: &AgentInfo, home: &Path, project_path: Option<&Path>) -> bool {
+fn should_scan_agent(agent: &AgentInfo, home: &Path) -> bool {
     let installed_by_detection_path = agent
         .global_detection_paths
         .iter()
-        .any(|p| resolved_path_exists(p, home, project_path));
+        .any(|p| resolved_path_exists(p, home));
 
     if installed_by_detection_path {
         return true;
@@ -556,24 +510,14 @@ fn should_scan_agent(agent: &AgentInfo, home: &Path, project_path: Option<&Path>
     let global_exists = agent
         .global_paths
         .iter()
-        .any(|p| resolved_path_exists(p, home, project_path));
+        .any(|p| resolved_path_exists(p, home));
 
-    if global_exists {
-        return true;
-    }
-
-    project_path.is_some()
-        && agent
-            .project_paths
-            .iter()
-            .any(|p| resolved_path_exists(p, home, project_path))
+    global_exists
 }
 
-fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>) -> bool {
+fn resolved_path_exists(pattern: &str, home: &Path) -> bool {
     let mut resolved = pattern.replace("$HOME", &home.to_string_lossy());
-    if let Some(project) = project_path {
-        resolved = resolved.replace("$PROJECT", &project.to_string_lossy());
-    }
+    resolved = resolved.replace("$PROJECT", "");
 
     if resolved.contains('*') {
         let parent = resolved
@@ -597,7 +541,7 @@ fn resolved_path_exists(pattern: &str, home: &Path, project_path: Option<&Path>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{AgentId, AgentInfo, SkillFormat, SkillMetadata, SkillScope};
+    use crate::models::{AgentId, SkillMetadata, SkillScope};
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -703,25 +647,4 @@ mod tests {
         assert_eq!(errors.len(), 1);
     }
 
-    #[test]
-    fn should_scan_project_paths_even_without_global_install() {
-        let home = tempfile::tempdir().unwrap();
-        let project = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(project.path().join(".claude").join("skills")).unwrap();
-
-        let agent = AgentInfo {
-            id: AgentId::ClaudeCode,
-            display_name: "Claude Code".to_string(),
-            description: String::new(),
-            color: "#000".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.claude/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.claude".to_string()],
-            project_paths: vec!["$PROJECT/.claude/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        };
-
-        assert!(should_scan_agent(&agent, home.path(), Some(project.path())));
-    }
 }

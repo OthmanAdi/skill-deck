@@ -10,7 +10,6 @@
   import {
     store,
     toggleOverlay,
-    detectContext,
     setOverlayMode,
     type OverlayMode,
   } from "$lib/stores/skills.svelte";
@@ -108,9 +107,7 @@
     const visible = await appWindow.isVisible().catch(() => store.isVisible);
     try {
       if (!visible) {
-        // Capture terminal context before Skill Deck takes foreground focus.
-        await detectContext();
-        toggleOverlay(true);
+        toggleOverlay();
       }
       await appWindow.show();
       await appWindow.setFocus();
@@ -155,10 +152,8 @@
   async function handleGlobalHotkeyPressed() {
     const visible = await appWindow.isVisible().catch(() => store.isVisible);
     if (!visible) {
-      // Detect terminal context before overlay takes focus.
-      await detectContext();
       if (!store.isVisible) {
-        toggleOverlay(true);
+        toggleOverlay();
       }
       await appWindow.show();
       await appWindow.setFocus();

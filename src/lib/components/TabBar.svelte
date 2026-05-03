@@ -1,5 +1,5 @@
 <!--
-  @agent-context: Tab bar — All / Starred / Project.
+  @agent-context: Tab bar — All / Starred.
   Sliding pill indicator with smooth 180ms transition.
 -->
 <script lang="ts">
@@ -9,14 +9,12 @@
   const tabs: { id: TabView; label: string }[] = [
     { id: "all",     label: "All" },
     { id: "starred", label: "Starred" },
-    { id: "project", label: "Project" },
   ];
 
   function getCount(id: TabView): number {
     switch (id) {
       case "all":     return store.skills.length;
       case "starred": return store.starredCount;
-      case "project": return store.projectCount;
     }
   }
 

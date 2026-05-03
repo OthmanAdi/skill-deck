@@ -315,29 +315,6 @@
       {/if}
     </div>
 
-    <!-- Drag-out banner -->
-    {#if store.dragReferencePreview}
-      <div
-        class="shrink-0 flex items-center justify-center gap-2 px-3 py-1.5 text-[10px] font-medium"
-        style="background: var(--color-accent-subtle); border-top: 1px solid var(--color-accent-muted); color: var(--color-accent);"
-      >
-        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-        </svg>
-        <span class="truncate">
-          {#if store.dragOverTerminal}
-            Drop on {store.dragTargetLabel ?? "terminal"} to inject
-          {:else}
-            Drag outside this window, drop on a terminal
-          {/if}
-        </span>
-        <span class="max-w-[190px] truncate rounded px-1.5 py-0.5 font-mono text-[9px]"
-          style="background: var(--color-surface-3); color: var(--color-text-primary); border: 1px solid var(--color-border);">
-          {store.dragReferencePreview}
-        </span>
-      </div>
-    {/if}
-
     <!-- Context bar -->
     <ContextBar />
 

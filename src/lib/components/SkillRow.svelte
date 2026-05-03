@@ -43,7 +43,6 @@
       try {
         fileContent = await invoke<string>("read_skill_content", {
           skillId: skill.id,
-          projectPath: skill.projectPath,
         });
       } catch {
         fileContent = "// Could not read file";
@@ -180,13 +179,6 @@
         style="border-color: var(--color-border); background: var(--color-surface-3);"
       >
         v{skill.metadata.version}
-      </span>
-    {/if}
-
-    {#if skill.scope === "project"}
-      <span class="text-[8px] font-semibold uppercase tracking-[0.06em]
-        text-[var(--color-accent-muted)]">
-        proj
       </span>
     {/if}
 

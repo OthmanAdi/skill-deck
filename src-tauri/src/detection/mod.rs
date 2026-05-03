@@ -3,11 +3,8 @@
 // MODULES:
 // - repo_detector: GitHub/GitLab URL and npx install command detection
 // - update_checker: HTTP-based version comparison via GitHub API
-// - window_at_point: Native OS window-under-cursor detection
-// - terminal_inject: Inject content into terminal windows via clipboard+paste
+// - skill_history: local snapshots for restore workflows
 
 pub mod repo_detector;
 pub mod skill_history;
-pub mod terminal_inject;
 pub mod update_checker;
-pub mod window_at_point;

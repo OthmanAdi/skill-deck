@@ -19,7 +19,6 @@ import type {
   AgentInfo,
   TabView,
   ViewMode,
-  TerminalContext,
   UpdateCheckResponse,
   SkillHistoryResponse,
   SkillVersionEntry,
@@ -72,12 +71,6 @@ class SkillStore {
   hotkey = $state("CommandOrControl+Shift+K");
   scanDurationMs = $state(0);
   lastScanTime = $state<number>(0);
-  terminalContext = $state<TerminalContext>({
-    isTerminalFocused: false,
-    terminalName: null,
-    cwd: null,
-    shellPid: null,
-  });
 
   /** Clipboard toast state */
   toastMessage = $state<string | null>(null);
@@ -104,15 +97,6 @@ class SkillStore {
     this.viewMode = enabled ? "tree" : "grouped";
   }
 
-  /** Whether the cursor is currently over a terminal during a drag */
-  dragOverTerminal = $state(false);
-  /** PID of the terminal under cursor during a drag */
-  dragTerminalPid = $state<number | null>(null);
-  /** Human readable terminal target while dragging */
-  dragTargetLabel = $state<string | null>(null);
-  /** Reference preview shown in the drag affordance */
-  dragReferencePreview = $state<string | null>(null);
-
   /** Last update check status details per skill ID */
   updateStatus = $state<Record<string, UpdateCheckResponse>>({});
 
@@ -126,8 +110,6 @@ class SkillStore {
     // Tab filter
     if (this.activeTab === "starred") {
       result = result.filter((s) => s.starred);
-    } else if (this.activeTab === "project") {
-      result = result.filter((s) => s.scope === "project");
     }
 
     // Agent filter
@@ -158,10 +140,6 @@ class SkillStore {
 
   get starredCount(): number {
     return this.skills.filter((s) => s.starred).length;
-  }
-
-  get projectCount(): number {
-    return this.skills.filter((s) => s.scope === "project").length;
   }
 
   /**
@@ -309,6 +287,7 @@ function persistCollapsedTreeNodes(collapsed: Set<string>) {
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null;
 const REFRESH_INTERVAL_MS = 30_000; // 30 seconds
+const SOFT_CACHE_MS = 60_000;
 
 function startBackgroundRefresh() {
   stopBackgroundRefresh();
@@ -329,19 +308,20 @@ function stopBackgroundRefresh() {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 /** Scan all agents for skills */
-export async function scanSkills(silent = false) {
+export async function scanSkills(silent = false, force = false) {
+  const recentlyScanned = Date.now() - store.lastScanTime < SOFT_CACHE_MS;
+  if (!force && store.skills.length > 0 && recentlyScanned) {
+    return;
+  }
+
   if (!silent) store.isLoading = true;
   try {
-    const result: ScanResult = await invoke("scan_skills", {
-      projectPath: store.terminalContext.cwd,
-    });
+    const result: ScanResult = await invoke("scan_skills");
     store.skills = result.skills;
     store.scanDurationMs = result.scanDurationMs;
     store.lastScanTime = Date.now();
 
-    store.agents = await invoke("list_agents", {
-      projectPath: store.terminalContext.cwd,
-    });
+    store.agents = await invoke("list_agents");
 
     const config = await invoke<{
       hotkey?: string;
@@ -369,8 +349,7 @@ export async function scanSkills(silent = false) {
 
 /** Manual refresh — always shows loading indicator */
 export async function refreshSkills() {
-  await detectContext();
-  await scanSkills(false);
+  await scanSkills(false, true);
 }
 
 /** Toggle star on a skill */
@@ -398,41 +377,12 @@ export async function setSkillIcon(skillId: string, icon: string | null) {
   );
 }
 
-/** Detect the current terminal context */
-export async function detectContext() {
-  const preservePrevious = store.isVisible && !!store.terminalContext.cwd;
-  try {
-    const next: TerminalContext = await invoke("detect_terminal_context");
-    if (!next.cwd && preservePrevious) {
-      store.terminalContext = {
-        ...next,
-        cwd: store.terminalContext.cwd,
-        shellPid: store.terminalContext.shellPid,
-        terminalName: store.terminalContext.terminalName,
-        isTerminalFocused: store.terminalContext.isTerminalFocused,
-      };
-      return;
-    }
-    store.terminalContext = next;
-  } catch (e) {
-    console.error("Context detection failed:", e);
-  }
-}
-
 /** Toggle overlay visibility.
- * @param contextAlreadyDetected — pass true when the caller already called
- *   detectContext() before showing (e.g. from the hotkey handler while the
- *   terminal still has focus). Prevents overwriting a valid CWD with a stale one.
  */
-export function toggleOverlay(contextAlreadyDetected = false) {
+export function toggleOverlay() {
   store.isVisible = !store.isVisible;
   if (store.isVisible) {
-    if (contextAlreadyDetected) {
-      // Context was captured before we grabbed focus — just scan with known CWD
-      scanSkills();
-    } else {
-      detectContext().then(() => scanSkills());
-    }
+    scanSkills();
     startBackgroundRefresh();
   } else {
     stopBackgroundRefresh();
@@ -458,75 +408,6 @@ export async function copySkillReference(skill: Skill) {
   } catch {
     // Fallback: try the Tauri clipboard plugin or just show the path
     showToast(`Path: ${skill.filePath}`);
-  }
-}
-
-// ── Drag & drop terminal injection ───────────────────────────────────────────
-
-let dragPollInterval: ReturnType<typeof setInterval> | null = null;
-
-/** Start polling window-under-cursor during a drag operation */
-export function startDragPoll() {
-  if (dragPollInterval) return;
-  store.dragOverTerminal = false;
-  store.dragTerminalPid = null;
-  store.dragTargetLabel = null;
-
-  dragPollInterval = setInterval(async () => {
-    try {
-      const win: {
-        found: boolean;
-        isTerminal: boolean;
-        pid?: number;
-        processName?: string | null;
-        windowTitle?: string | null;
-      } =
-        await invoke("get_window_at_cursor");
-      store.dragOverTerminal = win.found && win.isTerminal;
-      store.dragTerminalPid = win.isTerminal && win.pid != null ? win.pid : null;
-      store.dragTargetLabel = win.isTerminal
-        ? (win.windowTitle || win.processName || "terminal")
-        : null;
-    } catch {
-      store.dragOverTerminal = false;
-      store.dragTerminalPid = null;
-      store.dragTargetLabel = null;
-    }
-  }, 80); // poll every 80ms — fast enough to feel responsive
-}
-
-/** Stop the drag poll and reset state */
-export function stopDragPoll() {
-  if (dragPollInterval) {
-    clearInterval(dragPollInterval);
-    dragPollInterval = null;
-  }
-  store.dragOverTerminal = false;
-  store.dragTerminalPid = null;
-  store.dragTargetLabel = null;
-  store.dragReferencePreview = null;
-}
-
-/** Inject a skill's content into the terminal under the cursor */
-export async function injectSkillToTerminal(skill: Skill, targetPid?: number): Promise<boolean> {
-  const pid = targetPid ?? store.dragTerminalPid;
-  if (!pid) return false;
-
-  try {
-    const result: { success: boolean; error?: string; reference?: string; referenceKind?: string } = await invoke("inject_skill_to_terminal", {
-      skillId: skill.id,
-      projectPath: store.terminalContext.cwd,
-      targetPid: pid,
-    });
-    if (result.success) {
-      showToast(`Injected: ${result.reference ?? skill.name}`);
-    } else {
-      showToast(`Inject failed: ${result.error ?? "unknown error"}`);
-    }
-    return result.success;
-  } catch (e) {
-    showToast(`Inject failed: ${e}`);
-    return false;
   }
 }
 
@@ -636,7 +517,6 @@ export async function snapshotSkillBeforeUpdate(
   try {
     const entry: SkillVersionEntry = await invoke("snapshot_skill_before_update", {
       skillId: skill.id,
-      projectPath: skill.projectPath,
       sourceRepoUrl: skill.metadata.repositoryUrl,
       remoteRef: remoteRef ?? null,
       reason,
@@ -674,7 +554,6 @@ export async function restoreSkillVersion(skill: Skill, versionId: string): Prom
     const result: RestoreSkillVersionResult = await invoke("restore_skill_version", {
       skillId: skill.id,
       versionId,
-      projectPath: skill.projectPath,
     });
     if (result.restored) {
       await scanSkills(true);
@@ -706,9 +585,22 @@ export async function setSkillInstallCommand(skillId: string, cmd: string): Prom
 }
 
 export async function resolveSkillReference(skill: Skill): Promise<string> {
-  const response: { text: string; kind: string; availableInTarget: boolean } = await invoke("resolve_skill_reference", {
-    skillId: skill.id,
-    projectPath: store.terminalContext.cwd,
-  });
-  return response.text;
+  const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
+  const normalizedPath = skill.filePath.replace(/\\/g, "/").toLowerCase();
+
+  if (agentId === "claude-code" && normalizedPath.includes("/.claude/commands/")) {
+    const filename = skill.filePath.split(/[\\/]/).pop()?.replace(/\.md$/i, "");
+    if (filename) return `/${filename}`;
+  }
+
+  if (agentId === "claude-code" && skill.metadata.userInvocable) {
+    const slug = skill.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (slug) return `/${slug}`;
+  }
+
+  return `"${skill.filePath.replace(/"/g, '\\"')}"`;
 }

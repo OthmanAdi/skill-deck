@@ -1,7 +1,5 @@
 // @agent-context: Update checking, repository management, and local version history.
 
-use std::path::Path;
-
 use tauri::State;
 
 use crate::commands::preferences::ConfigState;
@@ -34,9 +32,8 @@ pub struct RestoreSkillVersionResult {
     pub version_id: String,
 }
 
-fn scan_skill_file_path(project_path: Option<&str>, skill_id: &str) -> Result<String, String> {
-    let path = project_path.map(Path::new);
-    let scan = crate::agents::scan_all_skills(path);
+fn scan_skill_file_path(skill_id: &str) -> Result<String, String> {
+    let scan = crate::agents::scan_all_skills();
     let skill = scan
         .skills
         .into_iter()
@@ -46,11 +43,9 @@ fn scan_skill_file_path(project_path: Option<&str>, skill_id: &str) -> Result<St
 }
 
 fn read_repo_and_remote_ref_for_skill(
-    project_path: Option<&str>,
     skill_id: &str,
 ) -> Result<(Option<String>, Option<String>), String> {
-    let path = project_path.map(Path::new);
-    let scan = crate::agents::scan_all_skills(path);
+    let scan = crate::agents::scan_all_skills();
     let skill = scan
         .skills
         .into_iter()
@@ -223,16 +218,15 @@ pub fn set_skill_install_command(
 pub fn snapshot_skill_before_update(
     state: State<ConfigState>,
     skill_id: String,
-    project_path: Option<String>,
+    _project_path: Option<String>,
     source_repo_url: Option<String>,
     remote_ref: Option<String>,
     reason: Option<String>,
 ) -> Result<SkillVersionEntry, String> {
-    let file_path = scan_skill_file_path(project_path.as_deref(), &skill_id)?;
+    let file_path = scan_skill_file_path(&skill_id)?;
     let current = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
-    let (detected_repo, detected_remote_ref) =
-        read_repo_and_remote_ref_for_skill(project_path.as_deref(), &skill_id)?;
+    let (detected_repo, detected_remote_ref) = read_repo_and_remote_ref_for_skill(&skill_id)?;
 
     let mut config = state
         .0
@@ -275,9 +269,9 @@ pub fn restore_skill_version(
     state: State<ConfigState>,
     skill_id: String,
     version_id: String,
-    project_path: Option<String>,
+    _project_path: Option<String>,
 ) -> Result<RestoreSkillVersionResult, String> {
-    let file_path = scan_skill_file_path(project_path.as_deref(), &skill_id)?;
+    let file_path = scan_skill_file_path(&skill_id)?;
 
     let mut config = state
         .0

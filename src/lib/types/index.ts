@@ -11,8 +11,8 @@ export interface Skill {
   description: string;
   agentId: AgentId;
   filePath: string;
-  scope: "global" | "project";
-  projectPath: string | null;
+  scope: "global";
+  projectPath: null;
   metadata: SkillMetadata;
   icon: string | null;
   starred: boolean;
@@ -159,14 +159,6 @@ export interface ScanError {
   message: string;
 }
 
-/** Terminal context from CWD detection */
-export interface TerminalContext {
-  isTerminalFocused: boolean;
-  terminalName: string | null;
-  cwd: string | null;
-  shellPid: number | null;
-}
-
 /** App configuration */
 export interface AppConfig {
   hotkey: string;
@@ -199,7 +191,7 @@ export interface UpdateCheckEntry {
 }
 
 /** UI-only types */
-export type TabView = "all" | "starred" | "project";
+export type TabView = "all" | "starred";
 export type ViewMode = "grouped" | "tree" | "graph";
 
 export const DEFAULT_AGENT_COLOR = "#7a7fad";

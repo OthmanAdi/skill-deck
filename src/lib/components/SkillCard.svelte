@@ -13,9 +13,6 @@
     toggleStar,
     setSkillIcon,
     copySkillReference,
-    startDragPoll,
-    stopDragPoll,
-    injectSkillToTerminal,
     checkSkillUpdate,
     setSkillRepo,
     snapshotSkillBeforeUpdate,
@@ -30,7 +27,6 @@
   let { skill, index = 0, isFocused = false }: { skill: Skill; index?: number; isFocused?: boolean } = $props();
 
   let isExpanded = $state(false);
-  let isDragging = $state(false);
   let starAnimating = $state(false);
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
@@ -75,7 +71,6 @@
       try {
         const raw: string = await invoke("read_skill_content", {
           skillId: skill.id,
-          projectPath: skill.projectPath,
         });
         fileContent = raw;
       } catch {
@@ -94,90 +89,6 @@
       e.preventDefault();
       copySkillReference(skill);
     }
-  }
-
-  // ── Drag handlers ──
-  function handleDragStart(e: DragEvent) {
-    isDragging = true;
-    const preview = buildLocalReferencePreview();
-    store.dragReferencePreview = preview;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = "copy";
-      e.dataTransfer.setData("text/plain", preview);
-      e.dataTransfer.setData("text/uri-list", `file://${skill.filePath}`);
-      e.dataTransfer.setData("application/x-skill-deck", JSON.stringify({
-        id: skill.id,
-        name: skill.name,
-        filePath: skill.filePath,
-        agentId: skill.agentId,
-      }));
-
-      const dragImage = createDragImage(preview);
-      document.body.appendChild(dragImage);
-      e.dataTransfer.setDragImage(dragImage, 18, 18);
-      setTimeout(() => dragImage.remove(), 0);
-    }
-    startDragPoll();
-  }
-
-  async function handleDragEnd(e: DragEvent) {
-    isDragging = false;
-    const wasOverTerminal = store.dragOverTerminal;
-    const terminalPid = store.dragTerminalPid;
-    stopDragPoll();
-
-    if (wasOverTerminal) {
-      // Try to inject into the terminal — clipboard+paste approach
-      const injected = await injectSkillToTerminal(skill, terminalPid ?? undefined);
-      if (!injected) {
-        copySkillReference(skill);
-      }
-    } else {
-      // Fallback: copy to clipboard so the user can paste manually
-      copySkillReference(skill);
-    }
-  }
-
-  function buildLocalReferencePreview(): string {
-    const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
-    const normalizedPath = skill.filePath.replace(/\\/g, "/").toLowerCase();
-
-    if (agentId === "claude-code" && normalizedPath.includes("/.claude/commands/")) {
-      const filename = skill.filePath.split(/[\\/]/).pop()?.replace(/\.md$/i, "");
-      if (filename) return `/${filename}`;
-    }
-
-    if (agentId === "claude-code" && skill.metadata.userInvocable) {
-      const slug = skill.name.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
-      if (slug) return `/${slug}`;
-    }
-
-    return `"${skill.filePath.replace(/"/g, '\\"')}"`;
-  }
-
-  function createDragImage(preview: string): HTMLDivElement {
-    const el = document.createElement("div");
-    el.textContent = preview;
-    Object.assign(el.style, {
-      position: "fixed",
-      top: "-1000px",
-      left: "-1000px",
-      maxWidth: "320px",
-      padding: "10px 12px",
-      borderRadius: "12px",
-      border: "1px solid rgba(126, 139, 255, 0.55)",
-      background: "linear-gradient(135deg, rgba(26, 29, 40, 0.96), rgba(54, 57, 82, 0.94))",
-      color: "#f7f8f8",
-      boxShadow: "0 18px 42px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255,255,255,0.05) inset",
-      fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace",
-      fontSize: "12px",
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      pointerEvents: "none",
-      zIndex: "99999",
-    });
-    return el;
   }
 
   // ── Repo UI state ──
@@ -264,8 +175,6 @@
     transition-[background,border-color,box-shadow,transform] duration-[180ms] ease-[var(--motion-ease-standard)]
     border
     active:scale-[0.985]
-    {isDragging && !store.dragOverTerminal ? 'opacity-40 scale-[0.96]' : ''}
-    {isDragging && store.dragOverTerminal ? 'opacity-90 scale-[0.97] border-[var(--color-accent-muted)]' : ''}
     {isExpanded
       ? 'border-[var(--color-border-active)] bg-[var(--color-surface-2)]'
       : 'border-transparent bg-[var(--color-surface-1)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-2)]'}
@@ -274,11 +183,8 @@
   style="animation-delay: {entryDelayMs}ms;
     {isExpanded ? 'box-shadow: 0 4px 20px -4px var(--color-overlay-shadow), inset 0 1px 0 0 rgba(247, 248, 248, 0.05);' : ''}"
   data-index={index}
-  draggable="true"
   onclick={handleCardClick}
   onkeydown={handleKeydown}
-  ondragstart={handleDragStart}
-  ondragend={(e) => handleDragEnd(e)}
   role="option"
   aria-selected={isFocused}
   tabindex={isFocused ? 0 : -1}
@@ -355,15 +261,6 @@
     <!-- Metadata row -->
     <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
       <AgentBadge agentId={skill.agentId} />
-
-      {#if skill.scope === "project"}
-        <span class="rounded-md px-1.5 py-0.5 text-[9px] font-medium tracking-wide uppercase
-          border border-[var(--color-border)]
-          text-[var(--color-text-muted)]"
-          style="background: var(--color-surface-2);">
-          project
-        </span>
-      {/if}
 
       {#if skill.metadata.trigger}
         <span class="rounded-md px-1.5 py-0.5 text-[9px] font-medium tracking-wide

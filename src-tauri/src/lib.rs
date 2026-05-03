@@ -10,7 +10,6 @@
 // ┌──────────────▼──────────────────────────────────────┐
 // │  Tauri Commands (src-tauri/src/commands/)            │
 // │  - scan_skills: discover all skills across agents   │
-// │  - detect_terminal_context: CWD of focused terminal │
 // │  - toggle_star / get_config: user preferences       │
 // ├─────────────────────────────────────────────────────┤
 // │  Agents (src-tauri/src/agents/)                     │
@@ -56,8 +55,6 @@ pub fn run() {
             commands::scan_skills,
             commands::list_agents,
             commands::read_skill_content,
-            // Terminal context
-            commands::detect_terminal_context,
             // Preferences
             commands::toggle_star,
             commands::set_skill_icon,
@@ -76,11 +73,6 @@ pub fn run() {
             commands::snapshot_skill_before_update,
             commands::list_skill_versions,
             commands::restore_skill_version,
-            // Drag & drop injection
-            commands::get_window_at_cursor,
-            commands::inject_to_terminal,
-            commands::resolve_skill_reference,
-            commands::inject_skill_to_terminal,
         ])
         .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click
