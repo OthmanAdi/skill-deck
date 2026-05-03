@@ -1,6 +1,6 @@
 [package]
 name = "skill-deck"
-version = "0.1.2"
+version = "0.1.3"
 description = "Universal coding agent skill browser"
 authors = ["Ahmad Adi"]
 edition = "2021"

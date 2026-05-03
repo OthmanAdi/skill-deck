@@ -279,6 +279,16 @@
         </span>
       {/if}
 
+      {#if skill.useCases.length > 0}
+        <span
+          class="rounded-md px-1.5 py-0.5 text-[9px] font-medium"
+          style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-border-active);"
+          title="Primary use case"
+        >
+          {skill.useCases[0]}
+        </span>
+      {/if}
+
       {#if skill.updateAvailable}
         <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-update-available)]"
           style="animation: breathe 2s ease-in-out infinite;"
@@ -293,6 +303,18 @@
       >
         <!-- Quick metadata -->
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+          {#if skill.discoveryTags.length > 0}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Tags</span>
+              <span class="text-[var(--color-text-muted)]">{skill.discoveryTags.join(", ")}</span>
+            </div>
+          {/if}
+          {#if skill.useCases.length > 0}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">When to use</span>
+              <span class="text-[var(--color-text-muted)]">{skill.useCases.join(", ")}</span>
+            </div>
+          {/if}
           {#if skill.metadata.allowedTools}
             <div class="flex gap-1">
               <span class="font-medium text-[var(--color-text-secondary)]">Tools</span>

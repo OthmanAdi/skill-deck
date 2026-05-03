@@ -15,6 +15,10 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Added configurable overlay interaction modes, pinned and auto-hide, persisted in app config.
 - Added tray context controls to switch overlay mode directly from the tray menu.
 - Added window capability permissions required for focus and always-on-top state control.
+- Added skill discovery enrichment model, `discoveryTags`, `useCases`, and `discoveryHints` fields in scan output.
+- Added deterministic discovery classifier and integrated it in scan pipeline for all parsed skills.
+- Added intent-first FacetBar UI with use-case and tag filters.
+- Added skill discovery documentation at `docs/skill-discovery.md`.
 
 ### Changed
 - Removed terminal context and terminal injection command surfaces from backend.
@@ -32,6 +36,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Updated overlay hotkey registration with fallback candidates and explicit failure notification.
 - Updated overlay auto-hide handling with focus-change, window blur, and active focus guard paths.
 - Updated overlay always-on-top state to follow selected interaction mode at startup and runtime.
+- Updated generic markdown parser metadata extraction to include category, tags, use-cases, trigger, globs, and language where available.
+- Updated UI terminology from tree view label to Card View.
 
 ### Fixed
 - Fixed tree focus index mismatch caused by multiple index increments per row.

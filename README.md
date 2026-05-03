@@ -31,10 +31,11 @@ Examples include Claude Code, Codex, Cursor, GitHub Copilot, Windsurf, Gemini CL
 
 - **Universal scan** — discovers skills from all 15+ agents in one pass
 - **Live search** — instant filter across skill names and descriptions
+- **Intent filters** — use-case and tag facets to answer when to use a skill
 - **Starred skills** — pin your most-used skills to a dedicated tab
 - **Update checker** — detects newer versions of skills from their GitHub repos
 - **Repo detection** — automatically finds the GitHub source and `npx skills add` command for each skill
-- **Tree view** — parent/child skill hierarchies rendered as collapsible groups
+- **Card View** — parent/child skill hierarchies rendered as collapsible cards
 - **Agent groups** — skills organized by agent with brand colors
 - **Theme system** — System, Dark, and Light modes
 - **Overlay behavior modes** — switch between pinned and auto-hide in tray menu or in-app settings
@@ -47,7 +48,7 @@ Current status for v0.1:
 
 | Capability | Windows | macOS | Linux |
 |---|---|---|---|
-| Overlay, scan, search, starred, grouped/tree views, update checks | Yes | Yes | Yes |
+| Overlay, scan, search, starred, grouped/Card View, update checks | Yes | Yes | Yes |
 
 ## Install & Run
 
@@ -116,6 +117,16 @@ src/
     ├── stores/           # Runes-based state ($state, $derived)
     └── types/            # TypeScript interfaces matching Rust models
 ```
+
+### Skill Discovery
+
+Skill Deck enriches parsed skills with normalized discovery tags and use-case labels.
+
+- Frontmatter tags and categories are used when available
+- A deterministic heuristic fallback classifies skills by intent
+- Faceted filters in the overlay help users decide which skill to run
+
+Detailed design notes: `docs/skill-discovery.md`
 
 **Key rule:** The frontend never sees agent-specific types. Everything normalizes to `models/skill.rs`. Adding a new agent means editing only `registry.rs`.
 

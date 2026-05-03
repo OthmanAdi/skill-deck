@@ -17,7 +17,9 @@
 use anyhow::Result;
 use std::path::Path;
 
-use super::frontmatter::{parse_frontmatter, yaml_bool, yaml_str, yaml_string_array};
+use super::frontmatter::{
+    parse_frontmatter, yaml_bool, yaml_str, yaml_string_array, yaml_string_list,
+};
 use crate::models::{AgentId, Skill, SkillMetadata, SkillScope};
 
 /// Parse a SKILL.md file into a universal Skill struct.
@@ -53,6 +55,12 @@ pub fn parse_skill_md(
                     .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "author"))),
                 category: yaml_str(fm, "category")
                     .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "category"))),
+                tags: yaml_string_list(fm, "tags")
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "tags"))),
+                use_cases: yaml_string_list(fm, "use-cases")
+                    .or_else(|| yaml_string_list(fm, "use_cases"))
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "use-cases")))
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "use_cases"))),
                 globs: yaml_string_array(fm, "paths"),
                 trigger: determine_trigger(fm),
                 allowed_tools: yaml_str(fm, "allowed-tools"),
@@ -97,6 +105,9 @@ pub fn parse_skill_md(
         scope,
         project_path,
         metadata,
+        discovery_tags: vec![],
+        use_cases: vec![],
+        discovery_hints: vec![],
         icon: None,
         starred: false,
         update_available: false,

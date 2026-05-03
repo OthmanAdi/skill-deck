@@ -14,6 +14,9 @@ export interface Skill {
   scope: "global";
   projectPath: null;
   metadata: SkillMetadata;
+  discoveryTags: string[];
+  useCases: string[];
+  discoveryHints: string[];
   icon: string | null;
   starred: boolean;
   updateAvailable: boolean;
@@ -87,6 +90,8 @@ export interface SkillMetadata {
   version: string | null;
   author: string | null;
   category: string | null;
+  tags: string[] | null;
+  useCases: string[] | null;
   globs: string[] | null;
   trigger: string | null;
   allowedTools: string | null;

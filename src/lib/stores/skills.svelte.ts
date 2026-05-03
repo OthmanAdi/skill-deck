@@ -64,6 +64,8 @@ class SkillStore {
   skills = $state<Skill[]>([]);
   agents = $state<AgentInfo[]>([]);
   searchQuery = $state("");
+  selectedTags = $state<string[]>([]);
+  selectedUseCases = $state<string[]>([]);
   activeTab = $state<TabView>("all");
   agentFilter = $state<string | null>(null);
   isVisible = $state(false);
@@ -127,11 +129,53 @@ class SkillStore {
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q)
+          s.description.toLowerCase().includes(q) ||
+          s.discoveryTags.some((tag) => tag.toLowerCase().includes(q)) ||
+          s.useCases.some((value) => value.toLowerCase().includes(q))
+      );
+    }
+
+    // Discovery tag filters
+    if (this.selectedTags.length > 0) {
+      result = result.filter((s) =>
+        this.selectedTags.every((tag) => s.discoveryTags.includes(tag))
+      );
+    }
+
+    // Use-case filters
+    if (this.selectedUseCases.length > 0) {
+      result = result.filter((s) =>
+        this.selectedUseCases.every((useCase) => s.useCases.includes(useCase))
       );
     }
 
     return result;
+  }
+
+  get availableTags(): { label: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const skill of this.skills) {
+      for (const tag of skill.discoveryTags ?? []) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }
+
+  get availableUseCases(): { label: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const skill of this.skills) {
+      for (const useCase of skill.useCases ?? []) {
+        counts.set(useCase, (counts.get(useCase) ?? 0) + 1);
+      }
+    }
+
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }
 
   get installedAgentCount(): number {
@@ -204,6 +248,35 @@ class SkillStore {
 
 /** Singleton store instance — import this in all components */
 export const store = new SkillStore();
+
+export function toggleTagFilter(tag: string) {
+  const normalized = tag.trim().toLowerCase();
+  if (!normalized) return;
+  const next = new Set(store.selectedTags);
+  if (next.has(normalized)) {
+    next.delete(normalized);
+  } else {
+    next.add(normalized);
+  }
+  store.selectedTags = Array.from(next).sort((a, b) => a.localeCompare(b));
+}
+
+export function toggleUseCaseFilter(useCase: string) {
+  const normalized = useCase.trim().toLowerCase();
+  if (!normalized) return;
+  const next = new Set(store.selectedUseCases);
+  if (next.has(normalized)) {
+    next.delete(normalized);
+  } else {
+    next.add(normalized);
+  }
+  store.selectedUseCases = Array.from(next).sort((a, b) => a.localeCompare(b));
+}
+
+export function clearDiscoveryFilters() {
+  store.selectedTags = [];
+  store.selectedUseCases = [];
+}
 
 /** Toggle collapse state of an agent section in the grouped list view */
 export function toggleAgentCollapse(agentId: string) {

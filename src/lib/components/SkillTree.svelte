@@ -1,5 +1,5 @@
 <!--
-  @agent-context: Tree view renderer for parent/child skill hierarchies.
+  @agent-context: Card view renderer for parent/child skill hierarchies.
   Groups the flat skill list by parentId and renders collapsible parent nodes
   with indented children.
 

@@ -106,6 +106,37 @@ pub fn yaml_string_array(value: &YamlValue, key: &str) -> Option<Vec<String>> {
     }
 }
 
+/// Helper: extract a loose string list from YAML.
+/// Accepts arrays and comma-separated strings.
+pub fn yaml_string_list(value: &YamlValue, key: &str) -> Option<Vec<String>> {
+    let raw = value.get(key)?;
+    let mut values: Vec<String> = match raw {
+        YamlValue::String(s) => s
+            .split(',')
+            .map(|token| token.trim())
+            .filter(|token| !token.is_empty())
+            .map(|token| token.to_string())
+            .collect(),
+        YamlValue::Sequence(seq) => seq
+            .iter()
+            .filter_map(|v| v.as_str())
+            .flat_map(|item| item.split(','))
+            .map(|token| token.trim())
+            .filter(|token| !token.is_empty())
+            .map(|token| token.to_string())
+            .collect(),
+        _ => Vec::new(),
+    };
+
+    if values.is_empty() {
+        None
+    } else {
+        values.sort();
+        values.dedup();
+        Some(values)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +178,20 @@ mod tests {
         let yaml: YamlValue = serde_yaml::from_str("globs:\n  - \"*.rs\"\n  - \"*.toml\"").unwrap();
         let arr = yaml_string_array(&yaml, "globs").unwrap();
         assert_eq!(arr, vec!["*.rs", "*.toml"]);
+    }
+
+    #[test]
+    fn test_yaml_string_list_from_csv() {
+        let yaml: YamlValue = serde_yaml::from_str("tags: \"debugging, testing, release\"").unwrap();
+        let arr = yaml_string_list(&yaml, "tags").unwrap();
+        assert_eq!(arr, vec!["debugging", "release", "testing"]);
+    }
+
+    #[test]
+    fn test_yaml_string_list_from_array_and_csv_fragments() {
+        let yaml: YamlValue =
+            serde_yaml::from_str("tags:\n  - \"debugging, testing\"\n  - \"release\"").unwrap();
+        let arr = yaml_string_list(&yaml, "tags").unwrap();
+        assert_eq!(arr, vec!["debugging", "release", "testing"]);
     }
 }

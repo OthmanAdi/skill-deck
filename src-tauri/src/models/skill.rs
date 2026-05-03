@@ -34,6 +34,18 @@ pub struct Skill {
     /// YAML frontmatter fields preserved as-is for display
     pub metadata: SkillMetadata,
 
+    /// Normalized discovery tags used by faceted filtering in the UI
+    #[serde(default)]
+    pub discovery_tags: Vec<String>,
+
+    /// Normalized use-case labels that answer when this skill should be used
+    #[serde(default)]
+    pub use_cases: Vec<String>,
+
+    /// Short provenance hints that explain why this skill was tagged
+    #[serde(default)]
+    pub discovery_hints: Vec<String>,
+
     /// User-assigned icon: emoji string, or path to an image in assets/
     pub icon: Option<String>,
 
@@ -162,6 +174,12 @@ pub struct SkillMetadata {
     /// Category tag (e.g., "framework", "testing", "deployment")
     pub category: Option<String>,
 
+    /// Optional explicit tags from frontmatter (string or string[])
+    pub tags: Option<Vec<String>>,
+
+    /// Optional explicit use-case hints from frontmatter
+    pub use_cases: Option<Vec<String>>,
+
     /// File glob patterns for auto-activation (Cursor globs, Copilot applyTo)
     pub globs: Option<Vec<String>>,
 
@@ -178,12 +196,15 @@ pub struct SkillMetadata {
     pub language: Option<String>,
 
     /// Any extra frontmatter fields we didn't parse explicitly
+    #[serde(default)]
     pub extra: Option<serde_json::Value>,
 
     /// Detected or user-set GitHub repository URL
+    #[serde(default)]
     pub repository_url: Option<String>,
 
     /// Detected or user-set install command (e.g., `npx skills add owner/repo --skill name -g`)
+    #[serde(default)]
     pub install_command: Option<String>,
 }
 

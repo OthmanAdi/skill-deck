@@ -19,6 +19,7 @@ use walkdir::WalkDir;
 use super::registry::get_agent_registry;
 use crate::models::{AgentId, AgentInfo, ScanError, ScanResult, Skill, SkillFormat, SkillScope};
 use crate::parsers::{parse_frontmatter, skill_md::parse_skill_md};
+use crate::parsers::frontmatter::{yaml_bool, yaml_str, yaml_string_array, yaml_string_list};
 
 /// Scan all known agent directories for skills.
 ///
@@ -396,7 +397,7 @@ fn parse_generic_md(
         .unwrap_or("unknown")
         .to_string();
 
-    let (name, description) = match &parsed.frontmatter {
+    let (name, description, metadata) = match &parsed.frontmatter {
         Some(fm) => {
             let name = crate::parsers::frontmatter::yaml_str(fm, "name")
                 .or_else(|| {
@@ -407,7 +408,49 @@ fn parse_generic_md(
                 })
                 .unwrap_or_else(|| file_stem.clone());
             let desc = crate::parsers::frontmatter::yaml_str(fm, "description").unwrap_or_default();
-            (name, desc)
+
+            let trigger = if yaml_bool(fm, "alwaysApply") == Some(true) {
+                Some("always".to_string())
+            } else if yaml_bool(fm, "disable-model-invocation") == Some(true) {
+                Some("manual".to_string())
+            } else if yaml_bool(fm, "user-invocable") == Some(false) {
+                Some("auto".to_string())
+            } else {
+                yaml_str(fm, "trigger")
+            };
+
+            let metadata = crate::models::SkillMetadata {
+                version: yaml_str(fm, "version"),
+                author: yaml_str(fm, "author")
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "author"))),
+                category: yaml_str(fm, "category")
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "category"))),
+                tags: yaml_string_list(fm, "tags")
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "tags"))),
+                use_cases: yaml_string_list(fm, "use-cases")
+                    .or_else(|| yaml_string_list(fm, "use_cases"))
+                    .or_else(|| {
+                        fm.get("metadata")
+                            .and_then(|m| yaml_string_list(m, "use-cases"))
+                    })
+                    .or_else(|| {
+                        fm.get("metadata")
+                            .and_then(|m| yaml_string_list(m, "use_cases"))
+                    }),
+                globs: yaml_string_array(fm, "globs")
+                    .or_else(|| yaml_string_array(fm, "paths"))
+                    .or_else(|| yaml_string_array(fm, "applyTo")),
+                trigger,
+                allowed_tools: yaml_str(fm, "allowed-tools"),
+                user_invocable: yaml_bool(fm, "user-invocable"),
+                language: yaml_str(fm, "language")
+                    .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "language"))),
+                extra: serde_json::to_value(fm).ok(),
+                repository_url: None,
+                install_command: None,
+            };
+
+            (name, desc, metadata)
         }
         None => {
             // No frontmatter: use first heading or first line
@@ -419,7 +462,7 @@ fn parse_generic_md(
                 .trim_start_matches('#')
                 .trim()
                 .to_string();
-            (file_stem.clone(), first_line)
+            (file_stem.clone(), first_line, crate::models::SkillMetadata::default())
         }
     };
 
@@ -437,7 +480,10 @@ fn parse_generic_md(
         file_path: path.to_string_lossy().to_string(),
         scope,
         project_path: None,
-        metadata: crate::models::SkillMetadata::default(),
+        metadata,
+        discovery_tags: vec![],
+        use_cases: vec![],
+        discovery_hints: vec![],
         icon: None,
         starred: false,
         update_available: false,
@@ -476,6 +522,9 @@ fn parse_config_file(
         scope,
         project_path: None,
         metadata: crate::models::SkillMetadata::default(),
+        discovery_tags: vec![],
+        use_cases: vec![],
+        discovery_hints: vec![],
         icon: None,
         starred: false,
         update_available: false,
@@ -555,6 +604,9 @@ mod tests {
             scope: SkillScope::Global,
             project_path: None,
             metadata: SkillMetadata::default(),
+            discovery_tags: vec![],
+            use_cases: vec![],
+            discovery_hints: vec![],
             icon: None,
             starred: false,
             update_available: false,

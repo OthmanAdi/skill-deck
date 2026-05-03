@@ -13,6 +13,7 @@
     store,
   } from "$lib/stores/skills.svelte";
   import SearchBar from "./SearchBar.svelte";
+  import FacetBar from "./FacetBar.svelte";
   import TabBar from "./TabBar.svelte";
   import AgentGroup from "./AgentGroup.svelte";
   import SkillTree from "./SkillTree.svelte";
@@ -139,7 +140,7 @@
         <span class="text-[10px] tabular-nums text-[var(--color-text-muted)]">
           {store.skills.length}
         </span>
-        <!-- View mode toggle: grouped / tree -->
+        <!-- View mode toggle: grouped / card view -->
         <div class="flex items-center rounded-md border p-0.5"
           style="border-color: var(--color-border); background: var(--color-surface-1);">
           <button
@@ -163,13 +164,13 @@
                 ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
             onclick={() => (store.viewMode = "tree")}
-            data-tooltip="Parent child relation tree"
-            aria-label="Parent child tree view"
+            data-tooltip="Parent child relation cards"
+            aria-label="Parent child card view"
           >
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M7 6h10M7 12h5M7 18h3M4 6h.01M4 12h.01M4 18h.01" />
             </svg>
-            <span>Tree</span>
+            <span>Card View</span>
           </button>
 
           {#if store.viewMode === 'grouped' && store.activeTab === 'all'}
@@ -211,6 +212,11 @@
     <!-- Search -->
     <div class="shrink-0 px-3 pt-2.5 pb-2">
       <SearchBar />
+    </div>
+
+    <!-- Discovery facets -->
+    <div class="shrink-0 px-3 pb-2">
+      <FacetBar />
     </div>
 
     <!-- Tabs -->
@@ -260,13 +266,13 @@
           </p>
           <p class="mt-1 max-w-[220px] text-[10px] leading-relaxed text-[var(--color-text-muted)]">
             {store.searchQuery
-              ? "Try a different search or clear the filter"
+              ? "Try a different search or clear active filters"
               : "Install a coding agent or add skills to ~/.claude/skills/"}
           </p>
         </div>
 
       {:else if store.viewMode === "tree"}
-        <!-- Tree view: parent/child hierarchy by file path -->
+        <!-- Card view: parent/child hierarchy by file path -->
         <div class="py-1 px-1">
           <SkillTree skills={store.filteredSkills} {focusedIndex} />
         </div>

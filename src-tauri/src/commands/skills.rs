@@ -4,6 +4,7 @@
 use crate::agents::{detect_installed_agents, scan_all_skills, scan_custom_paths};
 use crate::commands::preferences::ConfigState;
 use crate::detection::repo_detector::{apply_overrides, DetectedSource};
+use crate::detection::skill_discovery::enrich_skill_discovery;
 use crate::models::{AgentInfo, AppConfig, ScanResult};
 use std::collections::HashSet;
 use tauri::State;
@@ -54,6 +55,8 @@ pub(crate) fn scan_with_config(config: &AppConfig) -> ScanResult {
             skill.update_available = cached.update_available;
         }
     }
+
+    enrich_skill_discovery(&mut result.skills);
 
     result
 }
