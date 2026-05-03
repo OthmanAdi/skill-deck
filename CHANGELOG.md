@@ -19,6 +19,12 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Added deterministic discovery classifier and integrated it in scan pipeline for all parsed skills.
 - Added intent-first FacetBar UI with use-case and tag filters.
 - Added skill discovery documentation at `docs/skill-discovery.md`.
+- Added on-demand Finder panel with keyboard entry points, `Ctrl+F` and `/`, plus a header toggle button.
+- Added persisted Finder open-state preference in app config and IPC command surface.
+- Added artifact-type classification in scan output, skill, command, hook, rule, workflow, prompt, config, and other.
+- Added Claude settings hook extraction parser from `settings.json` and `settings.local.json`.
+- Added artifact-type chips to FacetBar while keeping existing search and intent filters.
+- Added slash and hook command aware copy resolution, slash command preferred for invocable artifacts, hook command preferred for hook entries.
 
 ### Changed
 - Removed terminal context and terminal injection command surfaces from backend.
@@ -38,6 +44,9 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Updated overlay always-on-top state to follow selected interaction mode at startup and runtime.
 - Updated generic markdown parser metadata extraction to include category, tags, use-cases, trigger, globs, and language where available.
 - Updated UI terminology from tree view label to Card View.
+- Updated overlay layout so search and intent filters open only on demand, while keeping existing filtering and search behavior intact.
+- Updated grouped row and card metadata display to surface artifact type, slash command, and hook details.
+- Updated docs and contributor guidance for command and hook coverage in open source workflows.
 
 ### Fixed
 - Fixed tree focus index mismatch caused by multiple index increments per row.

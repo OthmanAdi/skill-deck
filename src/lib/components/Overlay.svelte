@@ -5,11 +5,12 @@
   Keyboard: Arrow keys navigate rows across groups, Enter expands, Escape closes.
 -->
 <script lang="ts">
-  import { fly } from "svelte/transition";
+  import { fly, slide } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import {
     collapseAllAgentGroups,
     expandAllAgentGroups,
+    setFinderOpen,
     store,
   } from "$lib/stores/skills.svelte";
   import SearchBar from "./SearchBar.svelte";
@@ -23,6 +24,15 @@
 
   let focusedIndex = $state(-1);
   let listEl: HTMLDivElement | undefined = $state();
+  let finderOpen = $state(false);
+  let searchBarApi: { focusInput: () => void } | undefined = $state();
+
+  const activeFinderSignals = $derived(
+    (store.searchQuery.trim() ? 1 : 0)
+      + store.selectedTags.length
+      + store.selectedUseCases.length
+      + store.selectedArtifactTypes.length
+  );
 
   // Reset focus index when filtered skills change
   $effect(() => {
@@ -45,7 +55,30 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && finderOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      finderOpen = false;
+      setFinderOpen(false);
+      return;
+    }
+
     if (isTextEntryTarget(e.target)) {
+      return;
+    }
+
+    const isFindShortcut = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f";
+    const isSlashShortcut =
+      !e.ctrlKey
+      && !e.metaKey
+      && !e.altKey
+      && e.key === "/";
+
+    if (isFindShortcut || isSlashShortcut) {
+      e.preventDefault();
+      finderOpen = true;
+      setFinderOpen(true);
+      requestAnimationFrame(() => searchBarApi?.focusInput());
       return;
     }
 
@@ -95,6 +128,24 @@
     opacity: 0,
     easing: cubicOut,
   };
+
+  function toggleFinderPanel() {
+    const next = !finderOpen;
+    setFinderOpen(next);
+    if (next) {
+      requestAnimationFrame(() => searchBarApi?.focusInput());
+    }
+  }
+
+  $effect(() => {
+    finderOpen = store.finderOpen;
+  });
+
+  $effect(() => {
+    if (finderOpen) {
+      requestAnimationFrame(() => searchBarApi?.focusInput());
+    }
+  });
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -133,10 +184,10 @@
       </div>
 
       <!-- Right: loading indicator + skill count + theme menu -->
-      <div class="flex items-center gap-2.5">
-        {#if store.isLoading}
-          <span class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent spin"></span>
-        {/if}
+        <div class="flex items-center gap-2.5">
+          {#if store.isLoading}
+            <span class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent spin"></span>
+          {/if}
         <span class="text-[10px] tabular-nums text-[var(--color-text-muted)]">
           {store.skills.length}
         </span>
@@ -205,22 +256,63 @@
             </button>
           {/if}
         </div>
+
+        <button
+          class="instant-tooltip flex h-6 items-center gap-1.5 rounded-md border px-2 text-[10px] font-medium transition-all duration-150"
+          style={finderOpen
+            ? "border-color: var(--color-border-active); background: var(--color-accent-subtle); color: var(--color-accent);"
+            : "border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-secondary);"}
+          onclick={toggleFinderPanel}
+          data-tooltip="Open finder, Ctrl+F or slash"
+          aria-label="Toggle finder panel"
+          aria-expanded={finderOpen}
+          aria-controls="finder-panel"
+        >
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span>Find</span>
+          {#if activeFinderSignals > 0}
+            <span
+              class="rounded px-1 py-[1px] text-[9px] font-semibold tabular-nums"
+              style="background: var(--color-surface-3); color: var(--color-text-primary);"
+            >
+              {activeFinderSignals}
+            </span>
+          {/if}
+        </button>
+
         <ThemeMenu />
       </div>
     </div>
 
-    <!-- Search -->
-    <div class="shrink-0 px-3 pt-2.5 pb-2">
-      <SearchBar />
+    <div class="shrink-0 px-3 pt-1">
+      <div
+        class="rounded-md border px-2 py-1 text-[9px]"
+        style="background: var(--color-surface-1); border-color: var(--color-border); color: var(--color-text-muted);"
+      >
+        Finder shortcuts, <span class="font-medium text-[var(--color-text-secondary)]">Ctrl+F</span>,
+        <span class="font-medium text-[var(--color-text-secondary)]">/</span>,
+        close with <span class="font-medium text-[var(--color-text-secondary)]">Esc</span>
+      </div>
     </div>
 
-    <!-- Discovery facets -->
-    <div class="shrink-0 px-3 pb-2">
-      <FacetBar />
-    </div>
+    {#if finderOpen}
+      <div
+        id="finder-panel"
+        class="shrink-0 px-3 pt-2.5 pb-2"
+        transition:slide={{ duration: 150, easing: cubicOut }}
+      >
+        <div class="space-y-2 rounded-md border p-2"
+          style="background: var(--color-surface-1); border-color: var(--color-border);">
+          <SearchBar bind:this={searchBarApi} />
+          <FacetBar compact />
+        </div>
+      </div>
+    {/if}
 
     <!-- Tabs -->
-    <div class="shrink-0 px-3 pb-2">
+    <div class="shrink-0 px-3 pb-2 {finderOpen ? '' : 'pt-2.5'}">
       <TabBar />
     </div>
 

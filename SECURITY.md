@@ -32,6 +32,13 @@ When reporting, include:
 Areas with elevated security sensitivity:
 - Tauri IPC commands that access filesystem or window/input APIs
 - update-check network logic and provider validation
+- parser paths that expose command or hook payloads for copy workflows
+
+## Local Privacy Expectations
+
+- Artifact parsing, discovery enrichment, and filtering are local-only operations.
+- Command and hook payloads are displayed and copied locally, they are never uploaded by Skill Deck.
+- Contributors should avoid adding sample docs or fixtures that include real secrets, tokens, or production endpoints.
 
 ## Disclosure
 

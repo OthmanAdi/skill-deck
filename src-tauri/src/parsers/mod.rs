@@ -11,5 +11,6 @@
 
 pub mod frontmatter;
 pub mod skill_md;
+pub mod claude_hooks;
 
 pub use frontmatter::*;

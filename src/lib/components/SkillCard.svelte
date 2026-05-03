@@ -262,6 +262,14 @@
     <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
       <AgentBadge agentId={skill.agentId} />
 
+      <span
+        class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
+        style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
+        title="Artifact type"
+      >
+        {skill.artifactType}
+      </span>
+
       {#if skill.metadata.trigger}
         <span class="rounded-md px-1.5 py-0.5 text-[9px] font-medium tracking-wide
           text-[var(--color-text-muted)]"
@@ -319,6 +327,26 @@
             <div class="flex gap-1">
               <span class="font-medium text-[var(--color-text-secondary)]">Tools</span>
               <span class="text-[var(--color-text-muted)]">{skill.metadata.allowedTools}</span>
+            </div>
+          {/if}
+          {#if skill.metadata.slashCommand}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Slash</span>
+              <span class="font-mono text-[var(--color-text-muted)]">{skill.metadata.slashCommand}</span>
+            </div>
+          {/if}
+          {#if skill.metadata.hookEvent}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Hook</span>
+              <span class="text-[var(--color-text-muted)]">
+                {skill.metadata.hookEvent}{skill.metadata.hookMatcher ? `, ${skill.metadata.hookMatcher}` : ""}
+              </span>
+            </div>
+          {/if}
+          {#if skill.metadata.hookCommand}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Command</span>
+              <span class="font-mono text-[var(--color-text-muted)]">{skill.metadata.hookCommand}</span>
             </div>
           {/if}
           {#if skill.metadata.globs}

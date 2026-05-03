@@ -43,6 +43,10 @@ If behavior changes, update:
 - `CHANGELOG.md`
 - relevant docs in README or planning docs
 
+If scanner coverage or artifact-type behavior changes, also update:
+- `docs/skill-discovery.md`
+- parser docs and comments for any new parser module
+
 ## Scope Guidance
 
 High-impact areas require extra care:
@@ -62,3 +66,9 @@ High-impact areas require extra care:
 - Rust: no `unwrap()` in production paths
 - Frontend: keep Svelte runes patterns consistent
 - Keep comments brief and useful for non-obvious logic
+
+## Artifact Coverage Notes
+
+- Keep the universal model (`src-tauri/src/models/skill.rs`) in sync with frontend types (`src/lib/types/index.ts`).
+- Prefer extending scanner classification over introducing agent-specific frontend branches.
+- For new command or hook sources, add parser tests and at least one discovery-signal test path.

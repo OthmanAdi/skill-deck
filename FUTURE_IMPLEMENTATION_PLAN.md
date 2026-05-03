@@ -42,6 +42,8 @@ Goals:
 Feature work:
 - improve scan performance on large global skill catalogs
 - continue hardening update and history flows
+- expand command and hook source coverage beyond Claude settings while preserving local-only processing
+- add richer risk labeling for command and hook artifacts in UI
 
 Success metrics:
 - documented parity matrix in README

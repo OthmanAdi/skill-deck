@@ -63,6 +63,7 @@ pub fn run() {
             commands::set_theme,
             commands::set_overlay_mode,
             commands::set_overlay_size,
+            commands::set_finder_open,
             commands::set_collapsed_agents,
             commands::set_collapsed_tree_nodes,
             commands::get_starred_skills,

@@ -66,6 +66,7 @@ class SkillStore {
   searchQuery = $state("");
   selectedTags = $state<string[]>([]);
   selectedUseCases = $state<string[]>([]);
+  selectedArtifactTypes = $state<string[]>([]);
   activeTab = $state<TabView>("all");
   agentFilter = $state<string | null>(null);
   isVisible = $state(false);
@@ -89,6 +90,7 @@ class SkillStore {
 
   /** Overlay behavior mode: pinned (stays open) or auto-hide (hides on focus loss) */
   overlayMode = $state<OverlayMode>("pinned");
+  finderOpen = $state(false);
 
   /** Backward-compatible boolean toggle used by existing components */
   get treeMode(): boolean {
@@ -131,8 +133,15 @@ class SkillStore {
           s.name.toLowerCase().includes(q) ||
           s.description.toLowerCase().includes(q) ||
           s.discoveryTags.some((tag) => tag.toLowerCase().includes(q)) ||
-          s.useCases.some((value) => value.toLowerCase().includes(q))
+          s.useCases.some((value) => value.toLowerCase().includes(q)) ||
+          s.artifactType.toLowerCase().includes(q) ||
+          (s.metadata.slashCommand ?? "").toLowerCase().includes(q) ||
+          (s.metadata.hookEvent ?? "").toLowerCase().includes(q)
       );
+    }
+
+    if (this.selectedArtifactTypes.length > 0) {
+      result = result.filter((s) => this.selectedArtifactTypes.includes(s.artifactType));
     }
 
     // Discovery tag filters
@@ -171,6 +180,18 @@ class SkillStore {
       for (const useCase of skill.useCases ?? []) {
         counts.set(useCase, (counts.get(useCase) ?? 0) + 1);
       }
+    }
+
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }
+
+  get availableArtifactTypes(): { label: string; count: number }[] {
+    const counts = new Map<string, number>();
+    for (const skill of this.skills) {
+      const key = (skill.artifactType ?? "skill").toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
 
     return Array.from(counts.entries())
@@ -261,6 +282,27 @@ export function toggleTagFilter(tag: string) {
   store.selectedTags = Array.from(next).sort((a, b) => a.localeCompare(b));
 }
 
+export function setFinderOpen(open: boolean) {
+  store.finderOpen = open;
+  void invoke("set_finder_open", { open }).catch((e) => {
+    console.warn("Failed to persist finder state:", e);
+  });
+}
+
+export function toggleArtifactTypeFilter(artifactType: string) {
+  const normalized = artifactType.trim().toLowerCase();
+  if (!normalized) return;
+
+  const next = new Set(store.selectedArtifactTypes);
+  if (next.has(normalized)) {
+    next.delete(normalized);
+  } else {
+    next.add(normalized);
+  }
+
+  store.selectedArtifactTypes = Array.from(next).sort((a, b) => a.localeCompare(b));
+}
+
 export function toggleUseCaseFilter(useCase: string) {
   const normalized = useCase.trim().toLowerCase();
   if (!normalized) return;
@@ -276,6 +318,7 @@ export function toggleUseCaseFilter(useCase: string) {
 export function clearDiscoveryFilters() {
   store.selectedTags = [];
   store.selectedUseCases = [];
+  store.selectedArtifactTypes = [];
 }
 
 /** Toggle collapse state of an agent section in the grouped list view */
@@ -401,11 +444,13 @@ export async function scanSkills(silent = false, force = false) {
       collapsedAgents?: string[];
       collapsedTreeNodes?: string[];
       overlayMode?: OverlayMode;
+      finderOpen?: boolean;
     }>("get_config");
     store.hotkey = normalizeHotkey(config.hotkey);
     store.collapsedAgents = new Set(config.collapsedAgents ?? []);
     store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
     store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
+    store.finderOpen = config.finderOpen === true;
 
     // Apply starred status from config
     const starred: string[] = await invoke("get_starred_skills");
@@ -658,6 +703,16 @@ export async function setSkillInstallCommand(skillId: string, cmd: string): Prom
 }
 
 export async function resolveSkillReference(skill: Skill): Promise<string> {
+  const hookCommand = (skill.metadata.hookCommand ?? "").trim();
+  if (hookCommand.length > 0) {
+    return hookCommand;
+  }
+
+  const slashCommand = (skill.metadata.slashCommand ?? "").trim();
+  if (slashCommand.length > 0) {
+    return slashCommand;
+  }
+
   const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
   const normalizedPath = skill.filePath.replace(/\\/g, "/").toLowerCase();
 

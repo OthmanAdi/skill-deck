@@ -17,8 +17,10 @@ use std::time::Instant;
 use walkdir::WalkDir;
 
 use super::registry::get_agent_registry;
-use crate::models::{AgentId, AgentInfo, ScanError, ScanResult, Skill, SkillFormat, SkillScope};
-use crate::parsers::{parse_frontmatter, skill_md::parse_skill_md};
+use crate::models::{
+    AgentId, AgentInfo, ArtifactType, ScanError, ScanResult, Skill, SkillFormat, SkillScope,
+};
+use crate::parsers::{claude_hooks::parse_claude_hooks, parse_frontmatter, skill_md::parse_skill_md};
 use crate::parsers::frontmatter::{yaml_bool, yaml_str, yaml_string_array, yaml_string_list};
 
 /// Scan all known agent directories for skills.
@@ -147,6 +149,91 @@ fn parse_custom_file(path: &Path) -> Result<Skill> {
     parse_generic_md(AgentId::Custom("custom-scan".to_string()), path, SkillScope::Global)
 }
 
+fn file_stem_or_default(path: &Path, fallback: &str) -> String {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn is_claude_settings_file(path: &Path, agent_id: &AgentId) -> bool {
+    if !matches!(agent_id, AgentId::ClaudeCode) {
+        return false;
+    }
+
+    let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
+    normalized.ends_with("/.claude/settings.json") || normalized.ends_with("/.claude/settings.local.json")
+}
+
+fn detect_artifact_type(agent_id: &AgentId, path: &Path) -> ArtifactType {
+    let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
+    let file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_lowercase();
+
+    if matches!(agent_id, AgentId::ClaudeCode)
+        && (normalized.contains("/.claude/commands/") || normalized.ends_with("/.claude/commands.md"))
+    {
+        return ArtifactType::Command;
+    }
+
+    if normalized.contains("/.github/prompts/") || file_name.ends_with(".prompt.md") {
+        return ArtifactType::Prompt;
+    }
+
+    if normalized.contains("/workflows/") {
+        return ArtifactType::Workflow;
+    }
+
+    if normalized.contains("/rules/")
+        || file_name == ".cursorrules"
+        || file_name == ".windsurfrules"
+        || file_name == ".clinerules"
+        || file_name == ".roorules"
+    {
+        return ArtifactType::Rule;
+    }
+
+    ArtifactType::Skill
+}
+
+fn sanitize_slash_segment(value: &str) -> String {
+    let mut slug = value
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+
+    while slug.contains("--") {
+        slug = slug.replace("--", "-");
+    }
+
+    slug.trim_matches('-').to_string()
+}
+
+fn derive_slash_command_from_path(agent_id: &AgentId, path: &Path) -> Option<String> {
+    let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
+
+    if matches!(agent_id, AgentId::ClaudeCode) && normalized.contains("/.claude/commands/") {
+        let file = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        let cmd = sanitize_slash_segment(file);
+        if !cmd.is_empty() {
+            return Some(format!("/{}", cmd));
+        }
+    }
+
+    None
+}
+
 /// Detect parent/child relationships between skills based on filesystem paths.
 ///
 /// A skill B is a child of skill A if:
@@ -231,7 +318,7 @@ fn scan_glob_pattern(
 
     for path in paths {
         match parse_file_for_agent(&path, agent, scope.clone()) {
-            Ok(skill) => skills.push(skill),
+            Ok(parsed) => skills.extend(parsed),
             Err(e) => errors.push(ScanError {
                 file_path: path.to_string_lossy().to_string(),
                 message: e.to_string(),
@@ -333,7 +420,11 @@ fn parse_file_for_agent(
     path: &Path,
     agent: &AgentInfo,
     scope: SkillScope,
-) -> Result<Skill> {
+) -> Result<Vec<Skill>> {
+    if is_claude_settings_file(path, &agent.id) {
+        return parse_claude_hooks(path, scope, None);
+    }
+
     let mut skill = match agent.format {
         // SKILL.md: richest format, used by Claude Code and Codex
         SkillFormat::SkillMd => {
@@ -379,7 +470,7 @@ fn parse_file_for_agent(
         }
     }
 
-    Ok(skill)
+    Ok(vec![skill])
 }
 
 /// Generic markdown parser for agents that use .mdc, .md rules, or plain markdown.
@@ -391,11 +482,10 @@ fn parse_generic_md(
     let content = std::fs::read_to_string(path)?;
     let parsed = parse_frontmatter(&content)?;
 
-    let file_stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("unknown")
-        .to_string();
+    let file_stem = file_stem_or_default(path, "unknown");
+
+    let artifact_type = detect_artifact_type(&agent_id, path);
+    let slash_from_path = derive_slash_command_from_path(&agent_id, path);
 
     let (name, description, metadata) = match &parsed.frontmatter {
         Some(fm) => {
@@ -417,6 +507,16 @@ fn parse_generic_md(
                 Some("auto".to_string())
             } else {
                 yaml_str(fm, "trigger")
+            };
+
+            let user_invocable = yaml_bool(fm, "user-invocable");
+            let slash_from_name = if user_invocable == Some(true) {
+                yaml_str(fm, "name")
+                    .map(|name| sanitize_slash_segment(&name))
+                    .filter(|slug| !slug.is_empty())
+                    .map(|slug| format!("/{}", slug))
+            } else {
+                None
             };
 
             let metadata = crate::models::SkillMetadata {
@@ -442,9 +542,13 @@ fn parse_generic_md(
                     .or_else(|| yaml_string_array(fm, "applyTo")),
                 trigger,
                 allowed_tools: yaml_str(fm, "allowed-tools"),
-                user_invocable: yaml_bool(fm, "user-invocable"),
+                user_invocable,
                 language: yaml_str(fm, "language")
                     .or_else(|| fm.get("metadata").and_then(|m| yaml_str(m, "language"))),
+                slash_command: slash_from_name.or_else(|| slash_from_path.clone()),
+                hook_event: None,
+                hook_matcher: None,
+                hook_command: None,
                 extra: serde_json::to_value(fm).ok(),
                 repository_url: None,
                 install_command: None,
@@ -462,7 +566,11 @@ fn parse_generic_md(
                 .trim_start_matches('#')
                 .trim()
                 .to_string();
-            (file_stem.clone(), first_line, crate::models::SkillMetadata::default())
+            let metadata = crate::models::SkillMetadata {
+                slash_command: slash_from_path.clone(),
+                ..crate::models::SkillMetadata::default()
+            };
+            (file_stem.clone(), first_line, metadata)
         }
     };
 
@@ -476,6 +584,7 @@ fn parse_generic_md(
         id,
         name,
         description,
+        artifact_type,
         agent_id,
         file_path: path.to_string_lossy().to_string(),
         scope,
@@ -498,11 +607,7 @@ fn parse_config_file(
     path: &Path,
     scope: SkillScope,
 ) -> Result<Skill> {
-    let file_stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("config")
-        .to_string();
+    let file_stem = file_stem_or_default(path, "config");
 
     let id = format!(
         "{}:{}",
@@ -517,6 +622,7 @@ fn parse_config_file(
             "Configuration file: {}",
             path.file_name().unwrap_or_default().to_string_lossy()
         ),
+        artifact_type: ArtifactType::Config,
         agent_id,
         file_path: path.to_string_lossy().to_string(),
         scope,
@@ -590,7 +696,8 @@ fn resolved_path_exists(pattern: &str, home: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{AgentId, SkillMetadata, SkillScope};
+    use crate::models::{AgentId, AgentInfo, ArtifactType, SkillFormat, SkillMetadata, SkillScope};
+    use std::fs;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -599,6 +706,7 @@ mod tests {
             id: id.to_string(),
             name: id.to_string(),
             description: String::new(),
+            artifact_type: ArtifactType::Skill,
             agent_id: AgentId::ClaudeCode,
             file_path: file_path.to_string(),
             scope: SkillScope::Global,
@@ -697,6 +805,34 @@ mod tests {
         let (skills, errors) = scan_custom_paths(&["C:/definitely/not/here/skill.md".to_string()]);
         assert_eq!(skills.len(), 0);
         assert_eq!(errors.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_file_for_agent_classifies_claude_command() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let command_dir = temp.path().join(".claude").join("commands");
+        fs::create_dir_all(&command_dir).expect("create command dir");
+        let command_path = command_dir.join("review.md");
+        fs::write(&command_path, "# Review command\n").expect("write command file");
+
+        let agent = AgentInfo {
+            id: AgentId::ClaudeCode,
+            display_name: "Claude Code".to_string(),
+            description: "Anthropic CLI coding agent".to_string(),
+            color: "#f28c54".to_string(),
+            installed: true,
+            skill_count: 0,
+            global_paths: vec![],
+            global_detection_paths: vec![],
+            project_paths: vec![],
+            format: SkillFormat::SkillMd,
+        };
+
+        let parsed = parse_file_for_agent(&command_path, &agent, SkillScope::Project)
+            .expect("parse command");
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].artifact_type, ArtifactType::Command);
+        assert_eq!(parsed[0].metadata.slash_command.as_deref(), Some("/review"));
     }
 
 }

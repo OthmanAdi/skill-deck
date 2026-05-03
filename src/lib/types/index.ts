@@ -9,6 +9,7 @@ export interface Skill {
   id: string;
   name: string;
   description: string;
+  artifactType: ArtifactType;
   agentId: AgentId;
   filePath: string;
   scope: "global";
@@ -23,6 +24,16 @@ export interface Skill {
   parentId: string | null;
   children: Skill[];
 }
+
+export type ArtifactType =
+  | "skill"
+  | "command"
+  | "hook"
+  | "rule"
+  | "workflow"
+  | "prompt"
+  | "config"
+  | "other";
 
 /** Coding agent identifiers — matches AgentId enum in Rust */
 export type AgentId =
@@ -97,6 +108,10 @@ export interface SkillMetadata {
   allowedTools: string | null;
   userInvocable: boolean | null;
   language: string | null;
+  slashCommand: string | null;
+  hookEvent: string | null;
+  hookMatcher: string | null;
+  hookCommand: string | null;
   extra: Record<string, unknown> | null;
   repositoryUrl: string | null;
   installCommand: string | null;
@@ -176,6 +191,7 @@ export interface AppConfig {
   overlayWidth: number;
   overlayHeight: number;
   overlayMode?: "pinned" | "auto-hide";
+  finderOpen?: boolean;
   skillRepoOverrides: Record<string, string>;
   skillInstallOverrides: Record<string, string>;
   updateCheckCache: Record<string, UpdateCheckEntry>;

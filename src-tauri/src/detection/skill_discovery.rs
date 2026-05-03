@@ -186,8 +186,7 @@ fn normalize_token(input: &str) -> Option<String> {
     let normalized = input
         .trim()
         .to_lowercase()
-        .replace('_', " ")
-        .replace('-', " ")
+        .replace(['_', '-'], " ")
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
@@ -248,6 +247,44 @@ pub fn enrich_skill_discovery(skills: &mut [Skill]) {
         let mut tags: Vec<String> = Vec::new();
         let mut use_cases: Vec<String> = Vec::new();
         let mut hints: Vec<String> = Vec::new();
+
+        match skill.artifact_type {
+            crate::models::ArtifactType::Skill => {}
+            crate::models::ArtifactType::Command => {
+                push_unique_sorted(&mut tags, "commands".to_string());
+                push_unique_sorted(&mut use_cases, "on-demand".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:command".to_string());
+            }
+            crate::models::ArtifactType::Hook => {
+                push_unique_sorted(&mut tags, "hooks".to_string());
+                push_unique_sorted(&mut use_cases, "auto-run".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:hook".to_string());
+            }
+            crate::models::ArtifactType::Rule => {
+                push_unique_sorted(&mut tags, "rules".to_string());
+                push_unique_sorted(&mut use_cases, "govern".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:rule".to_string());
+            }
+            crate::models::ArtifactType::Workflow => {
+                push_unique_sorted(&mut tags, "workflow".to_string());
+                push_unique_sorted(&mut use_cases, "automate".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:workflow".to_string());
+            }
+            crate::models::ArtifactType::Prompt => {
+                push_unique_sorted(&mut tags, "prompt".to_string());
+                push_unique_sorted(&mut use_cases, "assist".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:prompt".to_string());
+            }
+            crate::models::ArtifactType::Config => {
+                push_unique_sorted(&mut tags, "config".to_string());
+                push_unique_sorted(&mut use_cases, "configure".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:config".to_string());
+            }
+            crate::models::ArtifactType::Other => {
+                push_unique_sorted(&mut tags, "other".to_string());
+                push_unique_sorted(&mut hints, "artifact-type:other".to_string());
+            }
+        }
 
         if let Some(metadata_tags) = &skill.metadata.tags {
             for raw_tag in metadata_tags {
@@ -359,6 +396,7 @@ mod tests {
             id: format!("test:{}", name),
             name: name.to_string(),
             description: description.to_string(),
+            artifact_type: crate::models::ArtifactType::Skill,
             agent_id: AgentId::ClaudeCode,
             file_path: format!("C:/tmp/{}/SKILL.md", name),
             scope: SkillScope::Global,

@@ -56,6 +56,10 @@ pub struct AppConfig {
     #[serde(default = "default_overlay_mode")]
     pub overlay_mode: String,
 
+    /// Persisted state for Finder panel visibility
+    #[serde(default)]
+    pub finder_open: bool,
+
     /// User-overridden repository URLs per skill ID
     pub skill_repo_overrides: std::collections::HashMap<String, String>,
 
@@ -160,6 +164,7 @@ impl Default for AppConfig {
             overlay_width: default_overlay_width(),
             overlay_height: default_overlay_height(),
             overlay_mode: default_overlay_mode(),
+            finder_open: false,
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
             update_check_cache: std::collections::HashMap::new(),

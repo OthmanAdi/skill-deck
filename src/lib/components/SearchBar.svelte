@@ -8,8 +8,12 @@
   let inputEl: HTMLInputElement | undefined = $state();
   let isFocused = $state(false);
 
-  $effect(() => {
+  export function focusInput() {
     inputEl?.focus();
+  }
+
+  $effect(() => {
+    focusInput();
   });
 </script>
 

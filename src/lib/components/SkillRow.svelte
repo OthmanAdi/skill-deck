@@ -172,6 +172,14 @@
       </span>
     {/if}
 
+    <span
+      class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
+      style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-1);"
+      title="Artifact type"
+    >
+      {skill.artifactType}
+    </span>
+
     {#if skill.metadata.version}
       <span
         class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums
@@ -277,7 +285,7 @@
         {skill.filePath}
       </p>
 
-      {#if skill.metadata.repositoryUrl}
+        {#if skill.metadata.repositoryUrl}
         <div class="flex items-center gap-1.5">
           {#if repoUrlDisplay}
             <a
@@ -343,11 +351,29 @@
             {/each}
           </div>
         {/if}
-      {/if}
+        {/if}
 
-      {#if skill.metadata.installCommand}
-        <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
-          {skill.metadata.installCommand}
+        {#if skill.metadata.slashCommand}
+          <p class="truncate font-mono text-[9px] text-[var(--color-text-secondary)] opacity-95">
+            slash {skill.metadata.slashCommand}
+          </p>
+        {/if}
+
+        {#if skill.metadata.hookEvent}
+          <p class="truncate text-[9px] text-[var(--color-text-secondary)] opacity-95">
+            hook event {skill.metadata.hookEvent}{skill.metadata.hookMatcher ? `, matcher ${skill.metadata.hookMatcher}` : ""}
+          </p>
+        {/if}
+
+        {#if skill.metadata.hookCommand}
+          <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
+            {skill.metadata.hookCommand}
+          </p>
+        {/if}
+
+        {#if skill.metadata.installCommand}
+          <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
+            {skill.metadata.installCommand}
         </p>
       {/if}
     </div>

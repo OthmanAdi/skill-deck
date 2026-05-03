@@ -363,6 +363,19 @@ pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> R
     Ok(())
 }
 
+/// Persist finder panel visibility state.
+#[tauri::command]
+pub fn set_finder_open(state: State<ConfigState>, open: bool) -> Result<(), String> {
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.finder_open = open;
+    save_config(&config)?;
+    Ok(())
+}
+
 /// Persist collapsed agent groups for grouped list view.
 #[tauri::command]
 pub fn set_collapsed_agents(

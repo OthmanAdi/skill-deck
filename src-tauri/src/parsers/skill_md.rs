@@ -20,7 +20,7 @@ use std::path::Path;
 use super::frontmatter::{
     parse_frontmatter, yaml_bool, yaml_str, yaml_string_array, yaml_string_list,
 };
-use crate::models::{AgentId, Skill, SkillMetadata, SkillScope};
+use crate::models::{AgentId, ArtifactType, Skill, SkillMetadata, SkillScope};
 
 /// Parse a SKILL.md file into a universal Skill struct.
 ///
@@ -66,6 +66,15 @@ pub fn parse_skill_md(
                 allowed_tools: yaml_str(fm, "allowed-tools"),
                 user_invocable: yaml_bool(fm, "user-invocable"),
                 language: fm.get("metadata").and_then(|m| yaml_str(m, "language")),
+                slash_command: yaml_bool(fm, "user-invocable")
+                    .and_then(|invocable| invocable.then(|| yaml_str(fm, "name")))
+                    .flatten()
+                    .map(|name| slugify(&name))
+                    .filter(|slug| !slug.is_empty())
+                    .map(|slug| format!("/{}", slug)),
+                hook_event: None,
+                hook_matcher: None,
+                hook_command: None,
                 extra: serde_json::to_value(fm).ok(),
                 repository_url: None, // populated by repo_detector after parsing
                 install_command: None, // populated by repo_detector after parsing
@@ -100,6 +109,7 @@ pub fn parse_skill_md(
         id,
         name,
         description,
+        artifact_type: ArtifactType::Skill,
         agent_id,
         file_path: file_path.to_string_lossy().to_string(),
         scope,
@@ -114,6 +124,21 @@ pub fn parse_skill_md(
         parent_id: None,
         children: vec![],
     })
+}
+
+fn slugify(value: &str) -> String {
+    let mut slug = value
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' { ch } else { '-' })
+        .collect::<String>();
+
+    while slug.contains("--") {
+        slug = slug.replace("--", "-");
+    }
+
+    slug.trim_matches('-').to_string()
 }
 
 /// Determine the activation trigger from frontmatter fields.

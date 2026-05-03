@@ -25,6 +25,8 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             global_paths: vec![
                 "$HOME/.claude/skills/**/SKILL.md".to_string(),
                 "$HOME/.claude/commands/*.md".to_string(),
+                "$HOME/.claude/settings.json".to_string(),
+                "$HOME/.claude/settings.local.json".to_string(),
                 shared_global_skills_path(),
             ],
             global_detection_paths: vec![
@@ -34,6 +36,8 @@ pub fn get_agent_registry() -> Vec<AgentInfo> {
             project_paths: vec![
                 "$PROJECT/.claude/skills/**/SKILL.md".to_string(),
                 "$PROJECT/.claude/commands/*.md".to_string(),
+                "$PROJECT/.claude/settings.json".to_string(),
+                "$PROJECT/.claude/settings.local.json".to_string(),
                 "$PROJECT/CLAUDE.md".to_string(),
                 shared_project_skills_path(),
             ],

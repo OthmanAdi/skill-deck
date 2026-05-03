@@ -1,6 +1,6 @@
 # Skill Discovery Design
 
-Skill Deck now includes a discovery layer that helps users decide when to use a skill.
+Skill Deck includes a discovery layer that helps users decide when to use each artifact.
 
 ## Goals
 
@@ -11,13 +11,14 @@ Skill Deck now includes a discovery layer that helps users decide when to use a 
 
 ## Discovery Model
 
-Each skill is enriched with:
+Each artifact is enriched with:
 
 - `discoveryTags`: normalized topic tags used for facets.
 - `useCases`: short action labels that answer when to use a skill.
 - `discoveryHints`: provenance hints for diagnostics and trust.
 
 The enrichment pass runs in backend scan flow after parsing and before returning scan results.
+Artifact type classification is applied before enrichment and contributes to tags and use-cases.
 
 ## Signal Sources
 
@@ -29,10 +30,20 @@ Priority order:
 4. Heuristics from `name`, `description`, `allowed-tools`, `globs`, and language metadata
 5. Fallback tags and use-cases (`general`, `explore`)
 
+Artifact-type priors:
+
+- `command` adds `commands` tag and `on-demand` use-case
+- `hook` adds `hooks` tag and `auto-run` use-case
+- `rule` adds `rules` tag and `govern` use-case
+- `workflow` adds `workflow` tag and `automate` use-case
+- `prompt` adds `prompt` tag and `assist` use-case
+- `config` adds `config` tag and `configure` use-case
+
 ## Faceted Filtering
 
 Frontend adds a FacetBar with two dimensions:
 
+- Artifact-type chips
 - Use-case chips, primary decision axis
 - Tag chips, secondary topic axis
 
@@ -45,6 +56,6 @@ Filters compose with existing controls:
 
 ## Open Source Safety
 
-- No skill content is sent outside local machine for classification.
+- No artifact content is sent outside local machine for classification.
 - No private prompt telemetry is introduced.
 - Feature behavior is reproducible from repository code.

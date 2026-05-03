@@ -17,7 +17,9 @@
 
 ## What It Does
 
-Press `Ctrl+Shift+K`, a skill browser slides in. Search, filter, and browse every skill installed across your coding agents in one place. Open a skill to inspect content, copy its reference, and manage update metadata.
+Press `Ctrl+Shift+K`, a browser overlay slides in. Search, filter, and browse agent artifacts in one place. Open an item to inspect content, copy its reference, and manage update metadata.
+
+The Finder panel is on demand, open it only when needed via `Ctrl+F`, `/`, or the `Find` button. Finder open state is persisted per user.
 
 No switching between editors. No hunting through dotfiles. One overlay, everything visible.
 
@@ -27,12 +29,18 @@ Skill Deck supports 15+ coding agents through a single registry and parser pipel
 
 Examples include Claude Code, Codex, Cursor, GitHub Copilot, Windsurf, Gemini CLI, Cline, Roo Code, Continue, Aider, Amazon Q, JetBrains AI, Tabnine, Augment, and universal `AGENTS.md` conventions.
 
+Artifact support includes skills, slash commands, and hooks (Claude settings hooks), plus rules, prompts, workflows, and config files where present.
+
 ## Features
 
-- **Universal scan** — discovers skills from all 15+ agents in one pass
+- **Universal scan** — discovers agent artifacts from all 15+ agents in one pass
 - **Live search** — instant filter across skill names and descriptions
+- **Type filters** — filter by artifact type, skill, command, hook, rule, workflow, prompt, or config
 - **Intent filters** — use-case and tag facets to answer when to use a skill
+- **On-demand Finder** — search and intent filters stay available, shown only when requested
+- **Finder persistence** — remembers whether Finder was open or collapsed
 - **Starred skills** — pin your most-used skills to a dedicated tab
+- **Command and hook copy flow** — copy slash commands and hook commands directly when available
 - **Update checker** — detects newer versions of skills from their GitHub repos
 - **Repo detection** — automatically finds the GitHub source and `npx skills add` command for each skill
 - **Card View** — parent/child skill hierarchies rendered as collapsible cards
@@ -97,7 +105,8 @@ src-tauri/src/
 │   └── scanner.rs        # Filesystem glob → parse → Vec<Skill>
 ├── parsers/
 │   ├── frontmatter.rs    # Universal YAML+MD parser (covers 90% of formats)
-│   └── skill_md.rs       # SKILL.md format (Claude Code, Codex)
+│   ├── skill_md.rs       # SKILL.md format (Claude Code, Codex)
+│   └── claude_hooks.rs   # Claude settings hook extraction
 ├── models/
 │   ├── skill.rs          # Universal Skill struct — all adapters normalize here
 │   ├── agent.rs          # AgentInfo: paths, format, brand color per agent
@@ -120,7 +129,7 @@ src/
 
 ### Skill Discovery
 
-Skill Deck enriches parsed skills with normalized discovery tags and use-case labels.
+Skill Deck enriches parsed artifacts with normalized discovery tags and use-case labels.
 
 - Frontmatter tags and categories are used when available
 - A deterministic heuristic fallback classifies skills by intent

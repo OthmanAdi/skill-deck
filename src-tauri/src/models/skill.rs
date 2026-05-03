@@ -19,6 +19,9 @@ pub struct Skill {
     /// What the skill does — from frontmatter `description` or first paragraph
     pub description: String,
 
+    /// Normalized artifact class shown in UI type filters
+    pub artifact_type: ArtifactType,
+
     /// Which coding agent owns this skill
     pub agent_id: AgentId,
 
@@ -60,6 +63,20 @@ pub struct Skill {
 
     /// Child skills (populated during tree-building phase of scan)
     pub children: Vec<Skill>,
+}
+
+/// Broad artifact classes supported by the overlay.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case")]
+pub enum ArtifactType {
+    Skill,
+    Command,
+    Hook,
+    Rule,
+    Workflow,
+    Prompt,
+    Config,
+    Other,
 }
 
 /// Identifies which coding agent a skill belongs to.
@@ -194,6 +211,18 @@ pub struct SkillMetadata {
 
     /// Language the skill targets
     pub language: Option<String>,
+
+    /// Slash command text when the artifact is invocable by /name
+    pub slash_command: Option<String>,
+
+    /// Hook event name for hook artifacts (example: PreToolUse)
+    pub hook_event: Option<String>,
+
+    /// Optional matcher scope for hook artifacts
+    pub hook_matcher: Option<String>,
+
+    /// Copyable command payload for command-style hooks
+    pub hook_command: Option<String>,
 
     /// Any extra frontmatter fields we didn't parse explicitly
     #[serde(default)]
