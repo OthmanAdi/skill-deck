@@ -1,6 +1,6 @@
 {
   "name": "skill-deck",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Universal coding agent skill browser — a beautiful desktop overlay for browsing, searching, and managing skills across Claude Code, Cursor, Copilot, Codex, and 20+ AI coding agents.",
   "type": "module",
   "scripts": {

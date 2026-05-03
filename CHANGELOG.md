@@ -6,6 +6,8 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-05-03
+
 ### Added
 - Added structured release planning docs: `RELEASE_PLAN.md`, `CHANGELOG_PLAN.md`, and `FUTURE_IMPLEMENTATION_PLAN.md`.
 - Added production readiness audit reference document: `PRODUCTION_READINESS_AUDIT.md`.
