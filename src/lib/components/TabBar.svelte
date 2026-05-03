@@ -3,18 +3,21 @@
   Sliding pill indicator with smooth 180ms transition.
 -->
 <script lang="ts">
-  import { store } from "$lib/stores/skills.svelte";
+  import { setActiveTab, store } from "$lib/stores/skills.svelte";
   import type { TabView } from "$lib/types";
 
   const tabs: { id: TabView; label: string }[] = [
     { id: "all",     label: "All" },
     { id: "starred", label: "Starred" },
+    { id: "registry", label: "Registry" },
   ];
 
   function getCount(id: TabView): number {
     switch (id) {
       case "all":     return store.skills.length;
       case "starred": return store.starredCount;
+      case "registry": return store.registryResultCount;
+      default: return 0;
     }
   }
 
@@ -51,7 +54,9 @@
         transition-colors duration-[120ms] ease-out
         {isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
       style="border-radius: calc(var(--radius-md) - 2px);"
-      onclick={() => (store.activeTab = tab.id)}
+      onclick={() => {
+        void setActiveTab(tab.id);
+      }}
     >
       {tab.label}
       <span class="ml-1 tabular-nums text-[9px]

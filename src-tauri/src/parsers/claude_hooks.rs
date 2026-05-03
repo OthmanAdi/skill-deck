@@ -107,7 +107,10 @@ pub fn parse_claude_hooks(
                     description,
                     artifact_type: ArtifactType::Hook,
                     agent_id: AgentId::ClaudeCode,
+                    source_agents: vec![AgentId::ClaudeCode],
                     file_path: file_path.to_string_lossy().to_string(),
+                    source_paths: vec![file_path.to_string_lossy().to_string()],
+                    legacy_ids: vec![],
                     scope: scope.clone(),
                     project_path: project_path.clone(),
                     metadata,
@@ -117,6 +120,7 @@ pub fn parse_claude_hooks(
                     icon: None,
                     starred: false,
                     update_available: false,
+                    installed_at: None,
                     parent_id: None,
                     children: vec![],
                 });

@@ -11,7 +11,10 @@ export interface Skill {
   description: string;
   artifactType: ArtifactType;
   agentId: AgentId;
+  sourceAgents: AgentId[];
   filePath: string;
+  sourcePaths: string[];
+  legacyIds: string[];
   scope: "global";
   projectPath: null;
   metadata: SkillMetadata;
@@ -21,8 +24,27 @@ export interface Skill {
   icon: string | null;
   starred: boolean;
   updateAvailable: boolean;
+  installedAt: number | null;
   parentId: string | null;
   children: Skill[];
+}
+
+export type SkillSortMode = "default" | "installed-newest" | "installed-oldest";
+
+export interface RegistrySkillSummary {
+  id: string;
+  skillId: string | null;
+  name: string;
+  installs: number;
+  source: string | null;
+  installCommand: string;
+}
+
+export interface RegistrySearchResponse {
+  query: string;
+  count: number;
+  durationMs: number;
+  skills: RegistrySkillSummary[];
 }
 
 export type ArtifactType =
@@ -192,6 +214,7 @@ export interface AppConfig {
   overlayHeight: number;
   overlayMode?: "pinned" | "auto-hide";
   finderOpen?: boolean;
+  skillSortMode?: SkillSortMode;
   skillRepoOverrides: Record<string, string>;
   skillInstallOverrides: Record<string, string>;
   updateCheckCache: Record<string, UpdateCheckEntry>;
@@ -212,7 +235,7 @@ export interface UpdateCheckEntry {
 }
 
 /** UI-only types */
-export type TabView = "all" | "starred";
+export type TabView = "all" | "starred" | "registry";
 export type ViewMode = "grouped" | "tree";
 
 export const DEFAULT_AGENT_COLOR = "#7a7fad";

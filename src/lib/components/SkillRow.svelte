@@ -16,6 +16,7 @@
     snapshotSkillBeforeUpdate,
     loadSkillVersionHistory,
     restoreSkillVersion,
+    openFullSkillModal,
     store,
   } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
@@ -62,6 +63,11 @@
   function handleCopyClick(e: MouseEvent) {
     e.stopPropagation();
     copySkillReference(skill);
+  }
+
+  function handleOpenFullSkill(e: MouseEvent) {
+    e.stopPropagation();
+    void openFullSkillModal(skill, fileContent);
   }
 
   async function handleCheckUpdate(e: MouseEvent) {
@@ -115,6 +121,8 @@
 
   const updateStatus = $derived(store.updateStatus[skill.id] ?? null);
   const historyEntries = $derived(store.versionHistory[skill.id] ?? []);
+
+  const sourceAgentCount = $derived((skill.sourceAgents ?? []).length);
 
   const repoUrlDisplay = $derived.by(() => {
     const value = skill.metadata.repositoryUrl?.trim() ?? "";
@@ -179,6 +187,16 @@
     >
       {skill.artifactType}
     </span>
+
+    {#if sourceAgentCount > 1}
+      <span
+        class="rounded-md border px-1.5 py-0.5 text-[9px]"
+        style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-2);"
+        title={`Detected by ${sourceAgentCount} agent sources`}
+      >
+        shared {sourceAgentCount}
+      </span>
+    {/if}
 
     {#if skill.metadata.version}
       <span
@@ -262,6 +280,18 @@
     {/if}
 
     <!-- File content preview -->
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
+      <button
+        class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+        style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+        onclick={handleOpenFullSkill}
+        title="Open full skill in modal"
+      >
+        Open full skill
+      </button>
+    </div>
+
     <div class="rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-code-border)]"
       style="background: var(--color-code-bg);">
       {#if contentLoading}

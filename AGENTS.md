@@ -4,7 +4,7 @@
 
 ## Quick Context
 
-**What this is**: A desktop overlay app (triggered by global hotkey) that discovers and displays skills/rules from ALL major AI coding agents (Claude Code, Cursor, Copilot, Codex, Windsurf, Gemini, and 10+ more).
+**What this is**: A desktop overlay app (triggered by global hotkey) that discovers and displays agent artifacts (skills, rules, commands, hooks, prompts, workflows, config) from ALL major AI coding agents (Claude Code, Cursor, Copilot, Codex, Windsurf, Gemini, and 10+ more).
 
 **Stack**: Tauri v2 (Rust) backend, Svelte 5 + Tailwind CSS v4 frontend, cross-platform (Windows/macOS/Linux).
 
@@ -31,7 +31,8 @@ src-tauri/src/           # Rust backend
 │   └── config.rs        # User preferences (stars, hotkey, theme)
 ├── parsers/             # File format parsers
 │   ├── frontmatter.rs   # Base YAML+MD parser (covers 90% of formats)
-│   └── skill_md.rs      # SKILL.md parser (Claude Code / Codex)
+│   ├── skill_md.rs      # SKILL.md parser (Claude Code / Codex)
+│   └── claude_hooks.rs  # Claude settings hook parser
 ├── agents/              # Agent adapter system
 │   ├── registry.rs      # ALL 15+ agents: names, paths, formats, colors
 │   └── scanner.rs       # Filesystem glob → parse → Vec<Skill>
@@ -59,6 +60,40 @@ src/                     # Svelte 5 frontend
 3. **Universal Skill model**: All agents' formats normalize into `models/skill.rs`. The frontend never sees agent-specific types.
 4. **Overlay window**: Borderless, transparent, always-on-top, positioned at bottom-right. Shown/hidden by global hotkey.
 5. **Global-scan consistency**: The scanner uses global agent paths and normalizes all outputs into one universal skill contract.
+
+## Current Product Surface
+
+- Artifact model includes: `skill`, `command`, `hook`, `rule`, `workflow`, `prompt`, `config`, `other`.
+- Finder is on-demand and persisted per user (`Ctrl+F`, `/`, `Esc`).
+- Search and filtering are stable and must not regress.
+- Copy behavior priority: hook command first, then slash command, then file path.
+- Claude hooks are extracted from `.claude/settings.json` and `.claude/settings.local.json`.
+
+## UI Guardrails
+
+- Do not remove or weaken existing search and facet behavior.
+- Keep keyboard-first flow predictable in grouped and card views.
+- Keep Finder collapsible and persisted.
+- Keep visual changes clean and compact, comfort and readability first.
+
+## Release and Ship Rules
+
+- Before shipping, run:
+  - `pnpm check`
+  - `cd src-tauri && cargo test`
+  - `cd src-tauri && cargo clippy -- -D warnings`
+  - `pnpm tauri build`
+- Version bump must stay synchronized in:
+  - `package.json`
+  - `src-tauri/Cargo.toml`
+  - `src-tauri/tauri.conf.json`
+- Update docs for user-visible changes:
+  - `README.md`
+  - `CHANGELOG.md`
+  - `docs/skill-discovery.md`
+  - `CONTRIBUTING.md` or `SECURITY.md` when relevant
+- Release flow is tag-based via `.github/workflows/release.yml` with `v*` tags.
+- Do not include private scratch files in commits.
 
 ## Adding a New Agent
 

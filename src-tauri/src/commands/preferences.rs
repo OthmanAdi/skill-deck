@@ -66,6 +66,13 @@ fn is_hotkey_shape_valid(hotkey: &str) -> bool {
     has_modifier && has_non_modifier
 }
 
+fn normalize_skill_sort_mode(input: &str) -> String {
+    match input.trim() {
+        "installed-newest" | "installed-oldest" | "default" => input.trim().to_string(),
+        _ => "default".to_string(),
+    }
+}
+
 fn hotkey_candidates(preferred: &str, include_fallbacks: bool) -> Vec<String> {
     let preferred = normalize_hotkey(preferred);
     let mut candidates = vec![preferred];
@@ -178,6 +185,7 @@ pub fn load_config() -> AppConfig {
             "auto-hide" => "auto-hide".to_string(),
             _ => "pinned".to_string(),
         };
+        config.skill_sort_mode = normalize_skill_sort_mode(&config.skill_sort_mode);
 
         config
     } else {
@@ -206,11 +214,40 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 #[tauri::command]
 pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
     let mut config = state.0.lock().unwrap();
-    let is_starred = if config.starred_skills.contains(&skill_id) {
+
+    let canonical_skill_id = {
+        let mut temp = config.clone();
+        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
+        scan.skills
+            .iter()
+            .find(|skill| {
+                skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == &skill_id)
+            })
+            .map(|skill| skill.id.clone())
+            .unwrap_or(skill_id.clone())
+    };
+
+    let legacy_ids = {
+        let mut temp = config.clone();
+        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
+        scan.skills
+            .iter()
+            .find(|skill| skill.id == canonical_skill_id)
+            .map(|skill| skill.legacy_ids.clone())
+            .unwrap_or_default()
+    };
+
+    let is_starred = if config.starred_skills.contains(&canonical_skill_id)
+        || config.starred_skills.contains(&skill_id)
+    {
+        config.starred_skills.remove(&canonical_skill_id);
         config.starred_skills.remove(&skill_id);
+        for legacy in &legacy_ids {
+            config.starred_skills.remove(legacy);
+        }
         false
     } else {
-        config.starred_skills.insert(skill_id);
+        config.starred_skills.insert(canonical_skill_id);
         true
     };
     if let Err(e) = save_config(&config) {
@@ -223,11 +260,40 @@ pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
 #[tauri::command]
 pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String) {
     let mut config = state.0.lock().unwrap();
+
+    let canonical_skill_id = {
+        let mut temp = config.clone();
+        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
+        scan.skills
+            .iter()
+            .find(|skill| {
+                skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == &skill_id)
+            })
+            .map(|skill| skill.id.clone())
+            .unwrap_or(skill_id.clone())
+    };
+
+    let legacy_ids = {
+        let mut temp = config.clone();
+        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
+        scan.skills
+            .iter()
+            .find(|skill| skill.id == canonical_skill_id)
+            .map(|skill| skill.legacy_ids.clone())
+            .unwrap_or_default()
+    };
+
     let normalized = icon.trim();
     if normalized.is_empty() {
+        config.skill_icons.remove(&canonical_skill_id);
         config.skill_icons.remove(&skill_id);
+        for legacy in &legacy_ids {
+            config.skill_icons.remove(legacy);
+        }
     } else {
-        config.skill_icons.insert(skill_id, normalized.to_string());
+        config
+            .skill_icons
+            .insert(canonical_skill_id, normalized.to_string());
     }
     if let Err(e) = save_config(&config) {
         warn!("Failed to persist skill icon: {}", e);
@@ -374,6 +440,22 @@ pub fn set_finder_open(state: State<ConfigState>, open: bool) -> Result<(), Stri
     config.finder_open = open;
     save_config(&config)?;
     Ok(())
+}
+
+/// Persist skill sort mode for overlay lists.
+#[tauri::command]
+pub fn set_skill_sort_mode(state: State<ConfigState>, mode: String) -> Result<String, String> {
+    let normalized = normalize_skill_sort_mode(&mode);
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.skill_sort_mode = normalized.clone();
+    save_config(&config)?;
+
+    Ok(normalized)
 }
 
 /// Persist collapsed agent groups for grouped list view.

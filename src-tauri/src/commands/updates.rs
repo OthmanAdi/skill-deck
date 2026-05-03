@@ -3,8 +3,33 @@
 use tauri::State;
 
 use crate::commands::preferences::ConfigState;
-use crate::detection::{skill_history, update_checker};
+use crate::detection::{skill_history, skills_registry, update_checker};
 use crate::models::{SkillVersionEntry, UpdateErrorKind};
+
+fn scan_for_commands(state: &State<'_, ConfigState>) -> Result<crate::models::ScanResult, String> {
+    let (scan, config_changed, config_snapshot) = {
+        let mut config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
+        let (scan, changed) = crate::commands::skills::scan_with_config(&mut config);
+        (scan, changed, config.clone())
+    };
+
+    if config_changed {
+        let _ = crate::commands::preferences::save_config(&config_snapshot);
+    }
+
+    Ok(scan)
+}
+
+fn resolve_canonical_skill_id(scan: &crate::models::ScanResult, skill_id: &str) -> String {
+    scan.skills
+        .iter()
+        .find(|skill| skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == skill_id))
+        .map(|skill| skill.id.clone())
+        .unwrap_or_else(|| skill_id.to_string())
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,24 +57,34 @@ pub struct RestoreSkillVersionResult {
     pub version_id: String,
 }
 
-fn scan_skill_file_path(skill_id: &str) -> Result<String, String> {
-    let scan = crate::agents::scan_all_skills();
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistrySkillSearchResponse {
+    pub query: String,
+    pub count: usize,
+    pub duration_ms: u64,
+    pub skills: Vec<skills_registry::RegistrySkillSummary>,
+}
+
+fn scan_skill_file_path(state: &State<'_, ConfigState>, skill_id: &str) -> Result<String, String> {
+    let scan = scan_for_commands(state)?;
     let skill = scan
         .skills
         .into_iter()
-        .find(|s| s.id == skill_id)
+        .find(|s| s.id == skill_id || s.legacy_ids.iter().any(|legacy| legacy == skill_id))
         .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
     Ok(skill.file_path)
 }
 
 fn read_repo_and_remote_ref_for_skill(
+    state: &State<'_, ConfigState>,
     skill_id: &str,
 ) -> Result<(Option<String>, Option<String>), String> {
-    let scan = crate::agents::scan_all_skills();
+    let scan = scan_for_commands(state)?;
     let skill = scan
         .skills
         .into_iter()
-        .find(|s| s.id == skill_id)
+        .find(|s| s.id == skill_id || s.legacy_ids.iter().any(|legacy| legacy == skill_id))
         .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
 
     let version = skill.metadata.version.clone();
@@ -81,6 +116,9 @@ pub async fn check_skill_update(
     repo_url: String,
     force: Option<bool>,
 ) -> Result<UpdateCheckResponse, String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
     {
         let config = state
             .0
@@ -113,7 +151,7 @@ pub async fn check_skill_update(
             .0
             .lock()
             .map_err(|_| "Failed to lock config state".to_string())?;
-        let cache_entry = config.update_check_cache.get(&skill_id);
+        let cache_entry = config.update_check_cache.get(&canonical_skill_id);
         if !force.unwrap_or(false) && !update_checker::should_check(cache_entry) {
             if let Some(entry) = cache_entry {
                 return Ok(UpdateCheckResponse {
@@ -128,7 +166,7 @@ pub async fn check_skill_update(
             }
         }
 
-        config.update_check_cache.get(&skill_id).and_then(|e| {
+        config.update_check_cache.get(&canonical_skill_id).and_then(|e| {
             if parsed_repo_ref.is_some() && e.repo_ref.as_ref() == parsed_repo_ref.as_ref() {
                 e.remote_ref.clone()
             } else {
@@ -146,7 +184,7 @@ pub async fn check_skill_update(
             .map_err(|_| "Failed to lock config state".to_string())?;
         let mut entry = update_checker::make_cache_entry(&result);
         entry.repo_ref = parsed_repo_ref;
-        config.update_check_cache.insert(skill_id, entry);
+        config.update_check_cache.insert(canonical_skill_id, entry);
         crate::commands::preferences::save_config(&config)?;
     }
 
@@ -169,13 +207,16 @@ pub fn set_skill_repo(
     skill_id: String,
     repo_url: String,
 ) -> Result<Option<String>, String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
     let mut config = state
         .0
         .lock()
         .map_err(|_| "Failed to lock config state".to_string())?;
 
     if repo_url.trim().is_empty() {
-        config.skill_repo_overrides.remove(&skill_id);
+        config.skill_repo_overrides.remove(&canonical_skill_id);
         crate::commands::preferences::save_config(&config)?;
         Ok(None)
     } else {
@@ -185,7 +226,7 @@ pub fn set_skill_repo(
             })?;
         config
             .skill_repo_overrides
-            .insert(skill_id, canonical.clone());
+            .insert(canonical_skill_id, canonical.clone());
         crate::commands::preferences::save_config(&config)?;
         Ok(Some(canonical))
     }
@@ -198,16 +239,19 @@ pub fn set_skill_install_command(
     skill_id: String,
     install_command: String,
 ) -> Result<(), String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
     let mut config = state
         .0
         .lock()
         .map_err(|_| "Failed to lock config state".to_string())?;
     if install_command.is_empty() {
-        config.skill_install_overrides.remove(&skill_id);
+        config.skill_install_overrides.remove(&canonical_skill_id);
     } else {
         config
             .skill_install_overrides
-            .insert(skill_id, install_command);
+            .insert(canonical_skill_id, install_command);
     }
     crate::commands::preferences::save_config(&config)?;
     Ok(())
@@ -223,10 +267,13 @@ pub fn snapshot_skill_before_update(
     remote_ref: Option<String>,
     reason: Option<String>,
 ) -> Result<SkillVersionEntry, String> {
-    let file_path = scan_skill_file_path(&skill_id)?;
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+    let file_path = scan_skill_file_path(&state, &canonical_skill_id)?;
     let current = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
-    let (detected_repo, detected_remote_ref) = read_repo_and_remote_ref_for_skill(&skill_id)?;
+    let (detected_repo, detected_remote_ref) =
+        read_repo_and_remote_ref_for_skill(&state, &canonical_skill_id)?;
 
     let mut config = state
         .0
@@ -238,7 +285,7 @@ pub fn snapshot_skill_before_update(
     let remote_ref = remote_ref.or(detected_remote_ref);
     let entry = skill_history::create_snapshot(
         &mut config,
-        &skill_id,
+        &canonical_skill_id,
         &current,
         &reason_text,
         repo_ref.as_deref(),
@@ -254,13 +301,16 @@ pub fn list_skill_versions(
     state: State<ConfigState>,
     skill_id: String,
 ) -> Result<SkillHistoryResponse, String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
     let config = state
         .0
         .lock()
         .map_err(|_| "Failed to lock config state".to_string())?;
     Ok(SkillHistoryResponse {
-        skill_id: skill_id.clone(),
-        entries: skill_history::get_history(&config, &skill_id),
+        skill_id: canonical_skill_id.clone(),
+        entries: skill_history::get_history(&config, &canonical_skill_id),
     })
 }
 
@@ -271,7 +321,9 @@ pub fn restore_skill_version(
     version_id: String,
     _project_path: Option<String>,
 ) -> Result<RestoreSkillVersionResult, String> {
-    let file_path = scan_skill_file_path(&skill_id)?;
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+    let file_path = scan_skill_file_path(&state, &canonical_skill_id)?;
 
     let mut config = state
         .0
@@ -280,7 +332,7 @@ pub fn restore_skill_version(
 
     let entries = config
         .skill_version_history
-        .get(&skill_id)
+        .get(&canonical_skill_id)
         .cloned()
         .unwrap_or_default();
     let target = entries
@@ -294,7 +346,7 @@ pub fn restore_skill_version(
 
     let _ = skill_history::create_snapshot(
         &mut config,
-        &skill_id,
+        &canonical_skill_id,
         &current,
         "before-restore",
         None,
@@ -308,5 +360,24 @@ pub fn restore_skill_version(
     Ok(RestoreSkillVersionResult {
         restored: true,
         version_id,
+    })
+}
+
+#[tauri::command]
+pub async fn search_skills_registry(
+    query: String,
+    limit: Option<u32>,
+) -> Result<RegistrySkillSearchResponse, String> {
+    let normalized_limit = skills_registry::normalize_limit(limit.unwrap_or(20) as usize);
+
+    let result = skills_registry::search_registry(&query, normalized_limit)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(RegistrySkillSearchResponse {
+        query: result.query,
+        count: result.count,
+        duration_ms: result.duration_ms,
+        skills: result.skills,
     })
 }

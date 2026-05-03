@@ -360,6 +360,22 @@ body {
   color: var(--color-text-secondary);
 }
 
+.full-skill-modal-panel {
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-0);
+  box-shadow: 0 26px 56px -18px var(--color-overlay-shadow);
+}
+
+.full-skill-content {
+  font-size: 12px;
+  line-height: 1.72;
+}
+
+.divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-top: 1px solid var(--color-border);
+}
+
 .instant-tooltip {
   position: relative;
 }

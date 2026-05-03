@@ -25,8 +25,20 @@ pub struct Skill {
     /// Which coding agent owns this skill
     pub agent_id: AgentId,
 
+    /// All agents that discovered this artifact during scan merge
+    #[serde(default)]
+    pub source_agents: Vec<AgentId>,
+
     /// Absolute path to the skill file on disk
     pub file_path: String,
+
+    /// All source file paths merged into this artifact record
+    #[serde(default)]
+    pub source_paths: Vec<String>,
+
+    /// Legacy IDs collapsed into this artifact record
+    #[serde(default)]
+    pub legacy_ids: Vec<String>,
 
     /// Whether this is a global (user-level) or project-scoped skill
     pub scope: SkillScope,
@@ -57,6 +69,10 @@ pub struct Skill {
 
     /// Whether an update is available (for git-sourced skills)
     pub update_available: bool,
+
+    /// Best-effort unix timestamp for when this skill was installed/discovered
+    #[serde(default)]
+    pub installed_at: Option<u64>,
 
     /// Parent skill ID (for sub-skills in a hierarchy)
     pub parent_id: Option<String>,

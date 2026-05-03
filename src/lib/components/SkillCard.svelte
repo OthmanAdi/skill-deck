@@ -18,6 +18,7 @@
     snapshotSkillBeforeUpdate,
     loadSkillVersionHistory,
     restoreSkillVersion,
+    openFullSkillModal,
     store,
   } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
@@ -62,6 +63,11 @@
   function handleCopyClick(e: MouseEvent) {
     e.stopPropagation();
     copySkillReference(skill);
+  }
+
+  function handleOpenFullSkill(e: MouseEvent) {
+    e.stopPropagation();
+    void openFullSkillModal(skill, fileContent);
   }
 
   async function handleCardClick() {
@@ -167,6 +173,21 @@
     store.skills.filter((s) => s.parentId === skill.id)
   );
 
+  const sourceAgentNames = $derived.by(() =>
+    (skill.sourceAgents ?? [])
+      .map((agent) => {
+        const id = typeof agent === "string" ? agent : "custom";
+        return store.getAgentDisplayName(id);
+      })
+      .filter((name, index, list) => list.indexOf(name) === index)
+      .sort((a, b) => a.localeCompare(b))
+  );
+
+  const extraSourceAgentNames = $derived.by(() => {
+    const current = store.getAgentDisplayName(typeof skill.agentId === "string" ? skill.agentId : "custom");
+    return sourceAgentNames.filter((name) => name !== current);
+  });
+
   const entryDelayMs = $derived(Math.min(index, 8) * 16);
 </script>
 
@@ -259,8 +280,18 @@
     </div>
 
     <!-- Metadata row -->
-    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <AgentBadge agentId={skill.agentId} />
+      <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <AgentBadge agentId={skill.agentId} />
+
+        {#if skill.sourceAgents.length > 1}
+          <span
+            class="rounded-md border px-1.5 py-0.5 text-[9px]"
+            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-muted);"
+            title={`Detected by ${skill.sourceAgents.length} agent sources`}
+          >
+            shared {skill.sourceAgents.length}
+          </span>
+        {/if}
 
       <span
         class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
@@ -411,7 +442,40 @@
           </div>
         {/if}
 
+        {#if extraSourceAgentNames.length > 0}
+          <div
+            class="rounded-lg px-2.5 py-2 text-[10px]"
+            style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
+          >
+            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              detected via
+            </div>
+            <div class="flex flex-wrap gap-1">
+              {#each extraSourceAgentNames as sourceName}
+                <span
+                  class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+                  style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
+                >
+                  {sourceName}
+                </span>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- File content preview -->
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
+          <button
+            class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+            onclick={handleOpenFullSkill}
+            title="Open full skill in modal"
+          >
+            Open full skill
+          </button>
+        </div>
+
         <div class="rounded-lg overflow-hidden"
           style="background: var(--color-code-bg); border: 1px solid var(--color-code-border);">
           {#if contentLoading}

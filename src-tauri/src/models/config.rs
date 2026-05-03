@@ -18,6 +18,14 @@ pub enum UpdateErrorKind {
     ProviderError,
 }
 
+/// Persisted install/discovery timestamp for a skill identity key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstallEntry {
+    /// Best-effort unix timestamp for when the skill first appeared locally.
+    pub installed_at: u64,
+}
+
 /// Persisted app configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +68,10 @@ pub struct AppConfig {
     #[serde(default)]
     pub finder_open: bool,
 
+    /// Sort mode for skill lists.
+    #[serde(default = "default_skill_sort_mode")]
+    pub skill_sort_mode: String,
+
     /// User-overridden repository URLs per skill ID
     pub skill_repo_overrides: std::collections::HashMap<String, String>,
 
@@ -72,6 +84,10 @@ pub struct AppConfig {
     /// Archived local version history entries per skill ID
     #[serde(default)]
     pub skill_version_history: std::collections::HashMap<String, Vec<SkillVersionEntry>>,
+
+    /// Stable install/discovery timestamps keyed by skill identity fingerprint.
+    #[serde(default)]
+    pub skill_install_index: std::collections::HashMap<String, SkillInstallEntry>,
 
     /// Maximum number of history entries to retain per skill
     #[serde(default = "default_max_skill_history_entries")]
@@ -165,10 +181,12 @@ impl Default for AppConfig {
             overlay_height: default_overlay_height(),
             overlay_mode: default_overlay_mode(),
             finder_open: false,
+            skill_sort_mode: default_skill_sort_mode(),
             skill_repo_overrides: std::collections::HashMap::new(),
             skill_install_overrides: std::collections::HashMap::new(),
             update_check_cache: std::collections::HashMap::new(),
             skill_version_history: std::collections::HashMap::new(),
+            skill_install_index: std::collections::HashMap::new(),
             max_skill_history_entries: default_max_skill_history_entries(),
             collapsed_agents: HashSet::new(),
             collapsed_tree_nodes: HashSet::new(),
@@ -186,6 +204,10 @@ fn default_overlay_height() -> u32 {
 
 fn default_overlay_mode() -> String {
     "pinned".to_string()
+}
+
+fn default_skill_sort_mode() -> String {
+    "default".to_string()
 }
 
 fn default_max_skill_history_entries() -> usize {

@@ -57,22 +57,7 @@ pub fn scan_all_skills() -> ScanResult {
 
     }
 
-    // Deduplicate skill IDs — if two files produce the same ID,
-    // append a numeric suffix to make each ID unique.
-    let mut seen_ids: HashSet<String> = HashSet::new();
-    for skill in &mut all_skills {
-        if !seen_ids.insert(skill.id.clone()) {
-            let mut counter = 2;
-            loop {
-                let candidate = format!("{}:{}", skill.id, counter);
-                if seen_ids.insert(candidate.clone()) {
-                    skill.id = candidate;
-                    break;
-                }
-                counter += 1;
-            }
-        }
-    }
+    crate::detection::skill_identity::dedupe_skills_by_source(&mut all_skills);
 
     // Build parent/child hierarchy based on path relationships
     build_skill_tree(&mut all_skills);
@@ -585,8 +570,11 @@ fn parse_generic_md(
         name,
         description,
         artifact_type,
-        agent_id,
+        agent_id: agent_id.clone(),
+        source_agents: vec![agent_id],
         file_path: path.to_string_lossy().to_string(),
+        source_paths: vec![path.to_string_lossy().to_string()],
+        legacy_ids: vec![],
         scope,
         project_path: None,
         metadata,
@@ -596,6 +584,7 @@ fn parse_generic_md(
         icon: None,
         starred: false,
         update_available: false,
+        installed_at: None,
         parent_id: None,
         children: vec![],
     })
@@ -623,8 +612,11 @@ fn parse_config_file(
             path.file_name().unwrap_or_default().to_string_lossy()
         ),
         artifact_type: ArtifactType::Config,
-        agent_id,
+        agent_id: agent_id.clone(),
+        source_agents: vec![agent_id],
         file_path: path.to_string_lossy().to_string(),
+        source_paths: vec![path.to_string_lossy().to_string()],
+        legacy_ids: vec![],
         scope,
         project_path: None,
         metadata: crate::models::SkillMetadata::default(),
@@ -634,6 +626,7 @@ fn parse_config_file(
         icon: None,
         starred: false,
         update_available: false,
+        installed_at: None,
         parent_id: None,
         children: vec![],
     })
@@ -708,7 +701,10 @@ mod tests {
             description: String::new(),
             artifact_type: ArtifactType::Skill,
             agent_id: AgentId::ClaudeCode,
+            source_agents: vec![AgentId::ClaudeCode],
             file_path: file_path.to_string(),
+            source_paths: vec![file_path.to_string()],
+            legacy_ids: vec![],
             scope: SkillScope::Global,
             project_path: None,
             metadata: SkillMetadata::default(),
@@ -718,6 +714,7 @@ mod tests {
             icon: None,
             starred: false,
             update_available: false,
+            installed_at: None,
             parent_id: None,
             children: vec![],
         }

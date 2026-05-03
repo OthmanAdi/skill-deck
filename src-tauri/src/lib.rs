@@ -64,6 +64,7 @@ pub fn run() {
             commands::set_overlay_mode,
             commands::set_overlay_size,
             commands::set_finder_open,
+            commands::set_skill_sort_mode,
             commands::set_collapsed_agents,
             commands::set_collapsed_tree_nodes,
             commands::get_starred_skills,
@@ -74,6 +75,7 @@ pub fn run() {
             commands::snapshot_skill_before_update,
             commands::list_skill_versions,
             commands::restore_skill_version,
+            commands::search_skills_registry,
         ])
         .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click

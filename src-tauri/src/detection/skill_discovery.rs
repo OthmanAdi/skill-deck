@@ -398,7 +398,10 @@ mod tests {
             description: description.to_string(),
             artifact_type: crate::models::ArtifactType::Skill,
             agent_id: AgentId::ClaudeCode,
+            source_agents: vec![AgentId::ClaudeCode],
             file_path: format!("C:/tmp/{}/SKILL.md", name),
+            source_paths: vec![format!("C:/tmp/{}/SKILL.md", name)],
+            legacy_ids: vec![],
             scope: SkillScope::Global,
             project_path: None,
             metadata: SkillMetadata::default(),
@@ -408,6 +411,7 @@ mod tests {
             icon: None,
             starred: false,
             update_available: false,
+            installed_at: None,
             parent_id: None,
             children: vec![],
         }

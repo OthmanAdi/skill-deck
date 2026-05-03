@@ -15,6 +15,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Skill,
+  SkillSortMode,
+  RegistrySearchResponse,
+  RegistrySkillSummary,
   ScanResult,
   AgentInfo,
   TabView,
@@ -27,6 +30,21 @@ import type {
 import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
 export type OverlayMode = "pinned" | "auto-hide";
+
+const REGISTRY_DEFAULT_LIMIT = 20;
+
+export const skillSortOptions: { id: SkillSortMode; label: string }[] = [
+  { id: "default", label: "Default" },
+  { id: "installed-newest", label: "Recently installed" },
+  { id: "installed-oldest", label: "Oldest installed" },
+];
+
+function normalizeSkillSortMode(value: string | null | undefined): SkillSortMode {
+  if (value === "installed-newest" || value === "installed-oldest") {
+    return value;
+  }
+  return "default";
+}
 
 function normalizeHotkey(value: string | null | undefined): string {
   const raw = (value ?? "").trim().replace(/\s+/g, "");
@@ -79,6 +97,16 @@ class SkillStore {
   toastMessage = $state<string | null>(null);
   toastTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  /** Full skill modal state */
+  fullSkillModalOpen = $state(false);
+  fullSkillModalSkill = $state<Skill | null>(null);
+  fullSkillModalContent = $state<string | null>(null);
+  fullSkillModalLoading = $state(false);
+  fullSkillModalError = $state<string | null>(null);
+
+  /** Cache full skill file content by skill id */
+  fullSkillContentCache = new Map<string, string>();
+
   /** Tracks which agent group sections are collapsed in the UI */
   collapsedAgents = $state<Set<string>>(new Set());
 
@@ -91,6 +119,39 @@ class SkillStore {
   /** Overlay behavior mode: pinned (stays open) or auto-hide (hides on focus loss) */
   overlayMode = $state<OverlayMode>("pinned");
   finderOpen = $state(false);
+  skillSortMode = $state<SkillSortMode>("default");
+
+  registryQuery = $state("");
+  registryResults = $state<RegistrySkillSummary[]>([]);
+  registryResultCount = $state(0);
+  registryDurationMs = $state(0);
+  registryLoading = $state(false);
+  registryError = $state<string | null>(null);
+  registryLastSearchedQuery = $state("");
+
+  get sortedSkills(): Skill[] {
+    const items = this.skills.slice();
+
+    if (this.skillSortMode === "installed-newest") {
+      return items.sort((a, b) => {
+        const aTs = a.installedAt ?? 0;
+        const bTs = b.installedAt ?? 0;
+        if (aTs !== bTs) return bTs - aTs;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    if (this.skillSortMode === "installed-oldest") {
+      return items.sort((a, b) => {
+        const aTs = a.installedAt ?? Number.MAX_SAFE_INTEGER;
+        const bTs = b.installedAt ?? Number.MAX_SAFE_INTEGER;
+        if (aTs !== bTs) return aTs - bTs;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    return items;
+  }
 
   /** Backward-compatible boolean toggle used by existing components */
   get treeMode(): boolean {
@@ -109,7 +170,11 @@ class SkillStore {
 
   /** Skills filtered by current tab, search query, and agent filter */
   get filteredSkills(): Skill[] {
-    let result = this.skills;
+    if (this.activeTab === "registry") {
+      return [];
+    }
+
+    let result = this.sortedSkills;
 
     // Tab filter
     if (this.activeTab === "starred") {
@@ -232,14 +297,43 @@ class SkillStore {
     }
 
     const sorted = Array.from(groups.entries())
-      .map(([agentId, skills]) => ({
-        agentId,
-        agentName: this.getAgentDisplayName(agentId),
-        skills,
-        count: skills.length,
-        startIndex: 0, // filled below
-      }))
-      .sort((a, b) => b.count - a.count || a.agentName.localeCompare(b.agentName));
+      .map(([agentId, skills]) => {
+        const installedValues = skills
+          .map((skill) => skill.installedAt)
+          .filter((value): value is number => typeof value === "number");
+
+        const newestInstalledAt =
+          installedValues.length > 0 ? Math.max(...installedValues) : Number.NEGATIVE_INFINITY;
+        const oldestInstalledAt =
+          installedValues.length > 0 ? Math.min(...installedValues) : Number.POSITIVE_INFINITY;
+
+        return {
+          agentId,
+          agentName: this.getAgentDisplayName(agentId),
+          skills,
+          count: skills.length,
+          newestInstalledAt,
+          oldestInstalledAt,
+          startIndex: 0, // filled below
+        };
+      })
+      .sort((a, b) => {
+        if (this.skillSortMode === "installed-newest") {
+          if (a.newestInstalledAt !== b.newestInstalledAt) {
+            return b.newestInstalledAt - a.newestInstalledAt;
+          }
+          return a.agentName.localeCompare(b.agentName);
+        }
+
+        if (this.skillSortMode === "installed-oldest") {
+          if (a.oldestInstalledAt !== b.oldestInstalledAt) {
+            return a.oldestInstalledAt - b.oldestInstalledAt;
+          }
+          return a.agentName.localeCompare(b.agentName);
+        }
+
+        return b.count - a.count || a.agentName.localeCompare(b.agentName);
+      });
 
     // Compute cumulative startIndex for flat keyboard navigation
     let cursor = 0;
@@ -287,6 +381,74 @@ export function setFinderOpen(open: boolean) {
   void invoke("set_finder_open", { open }).catch((e) => {
     console.warn("Failed to persist finder state:", e);
   });
+}
+
+export async function setSkillSortMode(mode: SkillSortMode) {
+  const normalized = normalizeSkillSortMode(mode);
+  store.skillSortMode = normalized;
+
+  try {
+    const persisted = await invoke<SkillSortMode>("set_skill_sort_mode", { mode: normalized });
+    store.skillSortMode = normalizeSkillSortMode(persisted);
+  } catch (e) {
+    console.warn("Failed to persist skill sort mode:", e);
+    showToast("Could not save sort mode");
+  }
+}
+
+export async function searchSkillsRegistry(
+  query = store.registryQuery,
+  limit = REGISTRY_DEFAULT_LIMIT,
+) {
+  const normalizedQuery = query.trim();
+  store.registryQuery = query;
+  store.registryLastSearchedQuery = normalizedQuery;
+
+  if (normalizedQuery.length < 2) {
+    store.registryResults = [];
+    store.registryResultCount = 0;
+    store.registryDurationMs = 0;
+    store.registryError = null;
+    store.registryLoading = false;
+    return;
+  }
+
+  store.registryLoading = true;
+  store.registryError = null;
+
+  try {
+    const response = await invoke<RegistrySearchResponse>("search_skills_registry", {
+      query: normalizedQuery,
+      limit,
+    });
+
+    store.registryResults = response.skills;
+    store.registryResultCount = response.count ?? response.skills.length;
+    store.registryDurationMs = response.durationMs ?? 0;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    store.registryResults = [];
+    store.registryResultCount = 0;
+    store.registryDurationMs = 0;
+    store.registryError = message;
+  } finally {
+    store.registryLoading = false;
+  }
+}
+
+export async function setActiveTab(tab: TabView) {
+  if (store.activeTab === tab) {
+    return;
+  }
+
+  store.activeTab = tab;
+
+  if (tab === "registry") {
+    const trimmed = store.registryQuery.trim();
+    if (trimmed.length >= 2 && store.registryLastSearchedQuery !== trimmed) {
+      await searchSkillsRegistry(trimmed);
+    }
+  }
 }
 
 export function toggleArtifactTypeFilter(artifactType: string) {
@@ -445,12 +607,14 @@ export async function scanSkills(silent = false, force = false) {
       collapsedTreeNodes?: string[];
       overlayMode?: OverlayMode;
       finderOpen?: boolean;
+      skillSortMode?: SkillSortMode;
     }>("get_config");
     store.hotkey = normalizeHotkey(config.hotkey);
     store.collapsedAgents = new Set(config.collapsedAgents ?? []);
     store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
     store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
     store.finderOpen = config.finderOpen === true;
+    store.skillSortMode = normalizeSkillSortMode(config.skillSortMode);
 
     // Apply starred status from config
     const starred: string[] = await invoke("get_starred_skills");
@@ -489,7 +653,7 @@ export async function setSkillIcon(skillId: string, icon: string | null) {
   });
 
   store.skills = store.skills.map((s) =>
-    s.id === skillId
+    s.id === skillId || s.legacyIds.includes(skillId)
       ? { ...s, icon: iconValue || null }
       : s
   );
@@ -616,7 +780,7 @@ export async function setSkillRepo(skillId: string, repoUrl: string): Promise<vo
     const resolvedRepo = canonicalRepoUrl ?? null;
     // Update local state — inject the new repo URL into metadata
     store.skills = store.skills.map((s) =>
-      s.id === skillId
+      s.id === skillId || s.legacyIds.includes(skillId)
         ? { ...s, metadata: { ...s.metadata, repositoryUrl: resolvedRepo } }
         : s
     );
@@ -692,7 +856,7 @@ export async function setSkillInstallCommand(skillId: string, cmd: string): Prom
   try {
     await invoke("set_skill_install_command", { skillId, installCommand: cmd });
     store.skills = store.skills.map((s) =>
-      s.id === skillId
+      s.id === skillId || s.legacyIds.includes(skillId)
         ? { ...s, metadata: { ...s.metadata, installCommand: cmd || null } }
         : s
     );
@@ -731,4 +895,62 @@ export async function resolveSkillReference(skill: Skill): Promise<string> {
   }
 
   return `"${skill.filePath.replace(/"/g, '\\"')}"`;
+}
+
+let fullSkillModalRequestToken = 0;
+
+export async function openFullSkillModal(skill: Skill, preloadedContent?: string | null) {
+  fullSkillModalRequestToken += 1;
+  const token = fullSkillModalRequestToken;
+
+  store.fullSkillModalOpen = true;
+  store.fullSkillModalSkill = skill;
+  store.fullSkillModalError = null;
+
+  const normalizedPreloaded = (preloadedContent ?? "").trim();
+  if (normalizedPreloaded && normalizedPreloaded !== "// Could not read file") {
+    store.fullSkillModalContent = preloadedContent ?? null;
+    store.fullSkillContentCache.set(skill.id, preloadedContent ?? "");
+    store.fullSkillModalLoading = false;
+    return;
+  }
+
+  const cached = store.fullSkillContentCache.get(skill.id);
+  if (cached) {
+    store.fullSkillModalContent = cached;
+    store.fullSkillModalLoading = false;
+    return;
+  }
+
+  store.fullSkillModalContent = null;
+  store.fullSkillModalLoading = true;
+
+  try {
+    const content = await invoke<string>("read_skill_content", { skillId: skill.id });
+
+    if (token !== fullSkillModalRequestToken) {
+      return;
+    }
+
+    store.fullSkillModalContent = content;
+    store.fullSkillContentCache.set(skill.id, content);
+    store.fullSkillModalLoading = false;
+  } catch (e) {
+    if (token !== fullSkillModalRequestToken) {
+      return;
+    }
+
+    store.fullSkillModalLoading = false;
+    store.fullSkillModalError =
+      e instanceof Error ? e.message : "Could not load full skill content";
+  }
+}
+
+export function closeFullSkillModal() {
+  fullSkillModalRequestToken += 1;
+  store.fullSkillModalOpen = false;
+  store.fullSkillModalSkill = null;
+  store.fullSkillModalContent = null;
+  store.fullSkillModalLoading = false;
+  store.fullSkillModalError = null;
 }

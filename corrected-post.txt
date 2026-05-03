@@ -1,0 +1,4 @@
+NO AI WAS USED IN THE MAKING OF THIS HELPLESS POST
+OthmanAdi/skill-deck: Universal coding agent skill browser, desktop overlay for Claude Code, Cursor, Copilot, Codex, and 15+ AI agents.
+
+I wonder if this project can build a small community and become a real thing. Drag-and-drop skills, analytics and evaluation, a built-in prompt library (maybe), project detection, and terminal detection are all features that would complete this project. Please check it out and let me know if anyone here is interested in helping out, if you believe it could be a helpful tool. I've tested many tools for skills management and even contributed to some, but none is as lightweight and portable, or has the same multitasking, power-user UX mentality.
