@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::models::{AgentInfo, ScanError, Skill, SkillFormat, SkillScope};
+use crate::parsers::claude_hooks::parse_claude_hooks;
 
 /// Filename segment we must skip while walking a plugin install — Git's
 /// sample hook scripts live under `<plugin>/.git/hooks/` and would otherwise
@@ -186,6 +187,26 @@ fn scan_single_plugin(
             Err(e) => errors.push(ScanError {
                 file_path: path.to_string_lossy().to_string(),
                 message: e.to_string(),
+            }),
+        }
+    }
+
+    // Plugins ship lifecycle hooks inside `.claude-plugin/plugin.json` under
+    // the same JSON shape as `~/.claude/settings.json`, so we can reuse the
+    // existing parser. Without this pass the Hook bucket only contained the
+    // user's personal settings hooks and missed everything plugins contribute.
+    let plugin_manifest = install.install_path.join(".claude-plugin").join("plugin.json");
+    if plugin_manifest.exists() {
+        match parse_claude_hooks(&plugin_manifest, SkillScope::Global, None) {
+            Ok(mut hooks) => {
+                for hook in &mut hooks {
+                    annotate_plugin_origin(hook, install);
+                }
+                skills.extend(hooks);
+            }
+            Err(e) => errors.push(ScanError {
+                file_path: plugin_manifest.to_string_lossy().to_string(),
+                message: format!("plugin manifest hooks: {e}"),
             }),
         }
     }
@@ -444,6 +465,65 @@ mod tests {
         for skill in &skills {
             assert!(skill.description.contains("[plugin: plug@mkt]"));
             assert!(skill.discovery_tags.contains(&"plugin".to_string()));
+        }
+    }
+
+    #[test]
+    fn scan_picks_up_plugin_manifest_hooks() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path();
+        let install_dir = home.join(".claude/plugins/cache/mkt/hooky/1.0.0");
+
+        write(
+            &install_dir.join(".claude-plugin/plugin.json"),
+            r#"{
+              "name": "hooky",
+              "hooks": {
+                "SessionStart": [{
+                  "hooks": [{
+                    "type": "command",
+                    "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/start.js"
+                  }]
+                }],
+                "UserPromptSubmit": [{
+                  "hooks": [{
+                    "type": "command",
+                    "command": "node ${CLAUDE_PLUGIN_ROOT}/hooks/prompt.js"
+                  }]
+                }]
+              }
+            }"#,
+        );
+        write(
+            &home.join(".claude/plugins/installed_plugins.json"),
+            &serde_json::json!({
+                "version": 2,
+                "plugins": {
+                    "hooky@mkt": [{ "installPath": install_dir.to_string_lossy() }]
+                }
+            })
+            .to_string(),
+        );
+        write(
+            &home.join(".claude/settings.json"),
+            &serde_json::json!({"enabledPlugins": {"hooky@mkt": true}}).to_string(),
+        );
+
+        let agent = make_agent_info();
+        let (skills, errors) = scan_claude_plugins(home, &agent);
+        assert!(errors.is_empty(), "errors: {errors:?}");
+
+        let hook_events: HashSet<_> = skills
+            .iter()
+            .filter(|s| s.artifact_type == crate::models::ArtifactType::Hook)
+            .filter_map(|s| s.metadata.hook_event.clone())
+            .collect();
+        assert!(hook_events.contains("SessionStart"), "hooks: {hook_events:?}");
+        assert!(hook_events.contains("UserPromptSubmit"), "hooks: {hook_events:?}");
+
+        // Plugin annotation propagates to hook artifacts too.
+        for skill in skills.iter().filter(|s| s.artifact_type == crate::models::ArtifactType::Hook) {
+            assert!(skill.description.contains("[plugin: hooky@mkt]"));
         }
     }
 
