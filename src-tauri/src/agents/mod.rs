@@ -11,6 +11,7 @@
 // 3. If the format is truly novel, add a parser in parsers/
 // 4. That's it — scanner.rs picks it up automatically
 
+pub mod claude_plugins;
 pub mod registry;
 pub mod scanner;
 

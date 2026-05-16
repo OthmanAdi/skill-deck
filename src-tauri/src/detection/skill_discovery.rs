@@ -1,5 +1,7 @@
 use crate::models::Skill;
+use regex::Regex;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]
 struct Rule {
@@ -87,7 +89,8 @@ const RULES: &[Rule] = &[
             "commit",
             "branch",
             "pull request",
-            "pr",
+            // Removed bare "pr" — two letters, lit up "prompt"/"process"/"production".
+            // The full phrase "pull request" stays as a multi-word keyword.
             "merge",
             "rebase",
             "cherry-pick",
@@ -242,11 +245,69 @@ fn map_trigger_use_case(trigger: Option<&str>) -> Option<&'static str> {
     }
 }
 
+/// Strip the `[plugin: name@marketplace]` annotation the plugin scanner adds
+/// to descriptions. Without this, the plugin's *name* gets fed to keyword
+/// heuristics — so a plugin called `modularity` would mark every one of its
+/// skills as "refactoring" because the rule includes the keyword `modular`.
+fn strip_plugin_annotation(text: &str) -> String {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        Regex::new(r"\[plugin:[^\]]*\]").expect("static regex must compile")
+    });
+    re.replace_all(text, "").to_string()
+}
+
+fn is_word_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Word-boundary-aware keyword match. The keyword must START at a word
+/// boundary in `haystack`; the right-hand side is free to extend further, so
+/// "debug" still matches "debugging" but no longer matches "rebugthing".
+///
+/// Multi-word keywords ("pull request", "stack trace") are specific enough
+/// to be safe with plain substring matching, so they bypass the boundary
+/// check.
+fn keyword_matches_text(keyword: &str, haystack: &str) -> bool {
+    if keyword.contains(' ') {
+        return haystack.contains(keyword);
+    }
+
+    let kw_bytes = keyword.as_bytes();
+    let hay_bytes = haystack.as_bytes();
+    let kw_len = kw_bytes.len();
+
+    if kw_len == 0 || kw_len > hay_bytes.len() {
+        return false;
+    }
+
+    let mut i = 0;
+    while i + kw_len <= hay_bytes.len() {
+        if &hay_bytes[i..i + kw_len] == kw_bytes {
+            let left_ok = i == 0 || !is_word_byte(hay_bytes[i - 1]);
+            if left_ok {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 pub fn enrich_skill_discovery(skills: &mut [Skill]) {
     for skill in skills.iter_mut() {
-        let mut tags: Vec<String> = Vec::new();
-        let mut use_cases: Vec<String> = Vec::new();
-        let mut hints: Vec<String> = Vec::new();
+        // Seed from anything an earlier pass attached (e.g. the plugin scanner
+        // stamps `plugin` here). Without this seed the assignment at the bottom
+        // of the loop would erase those upstream signals.
+        let mut tags: Vec<String> = skill.discovery_tags.clone();
+        tags.sort();
+        tags.dedup();
+        let mut use_cases: Vec<String> = skill.use_cases.clone();
+        use_cases.sort();
+        use_cases.dedup();
+        let mut hints: Vec<String> = skill.discovery_hints.clone();
+        hints.sort();
+        hints.dedup();
 
         match skill.artifact_type {
             crate::models::ArtifactType::Skill => {}
@@ -329,7 +390,8 @@ pub fn enrich_skill_discovery(skills: &mut [Skill]) {
             push_unique_sorted(&mut hints, format!("metadata.trigger:{}", trigger));
         }
 
-        let mut text_parts: Vec<String> = vec![skill.name.clone(), skill.description.clone()];
+        let clean_description = strip_plugin_annotation(&skill.description);
+        let mut text_parts: Vec<String> = vec![skill.name.clone(), clean_description];
         if let Some(category) = &skill.metadata.category {
             text_parts.push(category.clone());
         }
@@ -342,16 +404,15 @@ pub fn enrich_skill_discovery(skills: &mut [Skill]) {
         if let Some(language) = &skill.metadata.language {
             text_parts.push(language.clone());
         }
-        if let Some(version) = &skill.metadata.version {
-            text_parts.push(version.clone());
-        }
+        // `version` deliberately excluded — version strings ("1.0.0", "tag-v2")
+        // contributed false matches without ever helping classification.
 
         let searchable = text_parts.join(" ").to_lowercase();
         for rule in RULES {
             if rule
                 .keywords
                 .iter()
-                .any(|keyword| searchable.contains(keyword))
+                .any(|keyword| keyword_matches_text(keyword, &searchable))
             {
                 push_unique_sorted(&mut tags, rule.tag.to_string());
                 push_unique_sorted(&mut use_cases, rule.use_case.to_string());
@@ -449,5 +510,86 @@ mod tests {
 
         assert!(items[0].discovery_tags.iter().any(|v| v == "general"));
         assert!(items[0].use_cases.iter().any(|v| v == "explore"));
+    }
+
+    #[test]
+    fn keyword_does_not_match_inside_unrelated_word() {
+        // Each description is deliberately void of real rule keywords. The
+        // substrings ("dry" inside "laundry", "tag" inside "vintage",
+        // "ai" inside "claim") used to false-trigger the old contains() check.
+        let cases: &[(&str, &str)] = &[
+            ("misc-laundry", "Manages laundry within an industry workflow helper"),
+            ("misc-vintage", "A vintage furniture marketplace organizer"),
+            ("misc-fail", "Helps you claim every available widget edge"),
+            ("misc-rapid", "Rapid widget arranger for warehouse rooms"),
+            // Old bare-"pr" rule matched "previous"/"preference" via substring.
+            ("misc-preview", "Preview the previous preferences sidebar"),
+        ];
+
+        for (name, description) in cases {
+            let skill = base_skill(name, description);
+            let mut items = vec![skill];
+            enrich_skill_discovery(&mut items);
+            assert_eq!(
+                items[0].discovery_tags,
+                vec!["general"],
+                "leaked tag for `{description}`: {:?}",
+                items[0].discovery_tags
+            );
+        }
+    }
+
+    #[test]
+    fn keyword_still_matches_inflected_word_at_boundary() {
+        // "debug" -> "debugging", "test" -> "testing", "refactor" -> "refactoring"
+        let pairs: &[(&str, &str, &str)] = &[
+            ("dbg", "Debugging gnarly stack traces", "debugging"),
+            ("tst", "Testing happens on every push", "testing"),
+            ("rfc", "Refactoring shared helpers", "refactoring"),
+        ];
+
+        for (name, description, expected_tag) in pairs {
+            let skill = base_skill(name, description);
+            let mut items = vec![skill];
+            enrich_skill_discovery(&mut items);
+            assert!(
+                items[0].discovery_tags.iter().any(|t| t == expected_tag),
+                "expected `{expected_tag}` in {:?} for {description}",
+                items[0].discovery_tags
+            );
+        }
+    }
+
+    #[test]
+    fn plugin_annotation_is_stripped_before_heuristics() {
+        // Plugin annotation contains "modular" via the marketplace name. Without
+        // stripping, every plugin skill would inherit the `refactoring` tag.
+        let mut skill = base_skill("status", "Show status [plugin: modularity@vladikk-modularity]");
+        skill.metadata.tags = None;
+        let mut items = vec![skill];
+        enrich_skill_discovery(&mut items);
+
+        assert!(
+            !items[0].discovery_tags.iter().any(|t| t == "refactoring"),
+            "plugin annotation leaked through: {:?}",
+            items[0].discovery_tags
+        );
+    }
+
+    #[test]
+    fn preserves_upstream_tags_use_cases_and_hints() {
+        // The plugin scanner stamps "plugin" on every plugin-sourced skill
+        // before enrichment runs. Enrichment must keep that signal alive.
+        let mut skill = base_skill("plug-skill", "A skill from a plugin");
+        skill.discovery_tags = vec!["plugin".to_string()];
+        skill.use_cases = vec!["seed-use-case".to_string()];
+        skill.discovery_hints = vec!["seed-hint".to_string()];
+
+        let mut items = vec![skill];
+        enrich_skill_discovery(&mut items);
+
+        assert!(items[0].discovery_tags.iter().any(|t| t == "plugin"));
+        assert!(items[0].use_cases.iter().any(|t| t == "seed-use-case"));
+        assert!(items[0].discovery_hints.iter().any(|t| t == "seed-hint"));
     }
 }

@@ -46,6 +46,68 @@ function normalizeSkillSortMode(value: string | null | undefined): SkillSortMode
   return "default";
 }
 
+/**
+ * Fold a searchable string into a form that's robust to case, diacritics,
+ * and the punctuation that creeps into skill names ("dry-refactoring" vs
+ * "dry refactoring", "modülarité" vs "modularite", `C:\Users\…\foo.md`).
+ *
+ * Keep this in sync with `tokenizeQuery`; both sides must apply the SAME
+ * folding so a typed token can match a folded haystack literally.
+ */
+function normalizeForSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[-_./\\:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeQuery(query: string): string[] {
+  return normalizeForSearch(query)
+    .split(" ")
+    .filter((token) => token.length > 0);
+}
+
+/**
+ * Join every field the user might mentally associate with a skill into one
+ * folded string. Search then becomes "does every typed token appear here?"
+ * which is generous (substring + tokenized) without being stupid (no fuzzy
+ * Levenshtein guessing that would cross-match unrelated skills).
+ */
+function buildSearchHaystack(skill: Skill, agentDisplayName: string): string {
+  const filePath = skill.filePath ?? "";
+  const filePathParts = filePath.split(/[\\/]/).filter((segment) => segment.length > 0);
+  const fileName = filePathParts[filePathParts.length - 1] ?? "";
+  const parentDir = filePathParts[filePathParts.length - 2] ?? "";
+
+  const agentId = typeof skill.agentId === "string" ? skill.agentId : "custom";
+
+  const parts: (string | null | undefined)[] = [
+    skill.name,
+    skill.description,
+    skill.artifactType,
+    agentDisplayName,
+    agentId,
+    skill.metadata?.slashCommand,
+    skill.metadata?.hookEvent,
+    skill.metadata?.hookMatcher,
+    skill.metadata?.category,
+    skill.metadata?.author,
+    skill.metadata?.version,
+    skill.metadata?.language,
+    skill.metadata?.allowedTools,
+    fileName,
+    parentDir,
+    ...(skill.discoveryTags ?? []),
+    ...(skill.useCases ?? []),
+    ...(skill.metadata?.tags ?? []),
+  ];
+
+  return normalizeForSearch(parts.filter((value): value is string => !!value).join(" "));
+}
+
 function normalizeHotkey(value: string | null | undefined): string {
   const raw = (value ?? "").trim().replace(/\s+/g, "");
   if (!raw) return "CommandOrControl+Shift+K";
@@ -190,19 +252,19 @@ class SkillStore {
       });
     }
 
-    // Search filter
+    // Search filter — token-based AND match across a folded, accent-stripped
+    // haystack of every field the user might mentally associate with a skill.
+    // Splits on whitespace so "modu refactor" matches a skill named
+    // "dry-refactoring" with the "modularity" plugin tag, etc.
     if (this.searchQuery.trim()) {
-      const q = this.searchQuery.toLowerCase();
-      result = result.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q) ||
-          s.discoveryTags.some((tag) => tag.toLowerCase().includes(q)) ||
-          s.useCases.some((value) => value.toLowerCase().includes(q)) ||
-          s.artifactType.toLowerCase().includes(q) ||
-          (s.metadata.slashCommand ?? "").toLowerCase().includes(q) ||
-          (s.metadata.hookEvent ?? "").toLowerCase().includes(q)
-      );
+      const tokens = tokenizeQuery(this.searchQuery);
+      if (tokens.length > 0) {
+        result = result.filter((s) => {
+          const agentId = typeof s.agentId === "string" ? s.agentId : "custom";
+          const haystack = buildSearchHaystack(s, this.getAgentDisplayName(agentId));
+          return tokens.every((token) => haystack.includes(token));
+        });
+      }
     }
 
     if (this.selectedArtifactTypes.length > 0) {

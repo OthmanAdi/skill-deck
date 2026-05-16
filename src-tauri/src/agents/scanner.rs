@@ -55,6 +55,18 @@ pub fn scan_all_skills() -> ScanResult {
             }
         }
 
+        // Claude Code plugins live under `~/.claude/plugins/cache/...`, which
+        // is not reachable from a static glob: each plugin install pins its
+        // own version directory and the user can enable/disable plugins
+        // independently of what is on disk. Delegate to the plugin scanner so
+        // we read the canonical registry instead of guessing.
+        if matches!(agent.id, AgentId::ClaudeCode) {
+            let (plugin_skills, plugin_errors) =
+                crate::agents::claude_plugins::scan_claude_plugins(&home, agent);
+            all_skills.extend(plugin_skills);
+            all_errors.extend(plugin_errors);
+        }
+
     }
 
     crate::detection::skill_identity::dedupe_skills_by_source(&mut all_skills);
@@ -164,6 +176,17 @@ fn detect_artifact_type(agent_id: &AgentId, path: &Path) -> ArtifactType {
         return ArtifactType::Command;
     }
 
+    // Claude Code plugins ship commands at
+    // `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/commands/*.md`.
+    // The path doesn't contain `/.claude/commands/`, so the rule above misses
+    // them; classify by the plugin-cache prefix instead.
+    if matches!(agent_id, AgentId::ClaudeCode)
+        && normalized.contains("/.claude/plugins/cache/")
+        && normalized.contains("/commands/")
+    {
+        return ArtifactType::Command;
+    }
+
     if normalized.contains("/.github/prompts/") || file_name.ends_with(".prompt.md") {
         return ArtifactType::Prompt;
     }
@@ -209,6 +232,20 @@ fn derive_slash_command_from_path(agent_id: &AgentId, path: &Path) -> Option<Str
     let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
 
     if matches!(agent_id, AgentId::ClaudeCode) && normalized.contains("/.claude/commands/") {
+        let file = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        let cmd = sanitize_slash_segment(file);
+        if !cmd.is_empty() {
+            return Some(format!("/{}", cmd));
+        }
+    }
+
+    // Plugin commands live at `.../plugins/cache/<mkt>/<plugin>/<version>/commands/<cmd>.md`.
+    // Emit the bare `/<cmd>` here; `annotate_plugin_origin` will namespace it
+    // to `/<plugin>:<cmd>` once it knows which plugin owns the path.
+    if matches!(agent_id, AgentId::ClaudeCode)
+        && normalized.contains("/.claude/plugins/cache/")
+        && normalized.contains("/commands/")
+    {
         let file = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
         let cmd = sanitize_slash_segment(file);
         if !cmd.is_empty() {
@@ -401,7 +438,7 @@ fn wildcard_match(input: &str, pattern: &str) -> bool {
 
 /// Parse a single file using the appropriate parser for the agent's format,
 /// then run repo/install detection to enrich metadata.
-fn parse_file_for_agent(
+pub(crate) fn parse_file_for_agent(
     path: &Path,
     agent: &AgentInfo,
     scope: SkillScope,
