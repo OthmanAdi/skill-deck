@@ -517,6 +517,140 @@ body {
   color: var(--color-text-primary);
 }
 
+/* === Syntax highlighting (highlight.js) =================================
+ * Theme reuses the palette already established for frontmatter (blue keys,
+ * green values, accent for headings) so highlighted JSON / shell / Python
+ * blends with the rest of the modal instead of clashing.
+ * Class names follow the highlight.js v11 spec.
+ */
+
+.skill-content-preview .skill-code-block {
+  margin: 0.35rem 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-code-border);
+  border-radius: 8px;
+  background: var(--color-code-bg);
+  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+  color: var(--color-text-primary);
+}
+
+.skill-content-preview .skill-code-block code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: inherit;
+  font: inherit;
+}
+
+.hljs {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type,
+.hljs-built_in {
+  color: #c891ff;
+}
+
+.hljs-string,
+.hljs-doctag,
+.hljs-meta-string {
+  color: #72b88d;
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-regexp {
+  color: #e8a06d;
+}
+
+.hljs-attr,
+.hljs-property,
+.hljs-attribute,
+.hljs-template-variable {
+  color: #7fa4ff;
+}
+
+.hljs-variable,
+.hljs-params {
+  color: var(--color-text-primary);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.hljs-tag {
+  color: var(--color-text-muted);
+}
+
+.hljs-meta,
+.hljs-meta-keyword,
+.hljs-deletion {
+  color: var(--color-text-muted);
+}
+
+.hljs-addition {
+  color: #72b88d;
+  background: rgba(114, 184, 141, 0.1);
+}
+
+.hljs-deletion {
+  color: #e57373;
+  background: rgba(229, 115, 115, 0.1);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+[data-theme="light"] .hljs-keyword,
+[data-theme="light"] .hljs-selector-tag,
+[data-theme="light"] .hljs-type,
+[data-theme="light"] .hljs-built_in {
+  color: #8b3fb8;
+}
+
+[data-theme="light"] .hljs-string,
+[data-theme="light"] .hljs-doctag {
+  color: #2a7b52;
+}
+
+[data-theme="light"] .hljs-attr,
+[data-theme="light"] .hljs-property,
+[data-theme="light"] .hljs-attribute {
+  color: #355bb0;
+}
+
+[data-theme="light"] .hljs-number,
+[data-theme="light"] .hljs-literal,
+[data-theme="light"] .hljs-symbol {
+  color: #c4661a;
+}
+
 .skill-inline-code {
   border: 1px solid var(--color-border);
   border-radius: 6px;

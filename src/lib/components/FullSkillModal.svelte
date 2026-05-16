@@ -19,7 +19,10 @@
 
   const rendered = $derived.by(() => {
     if (!content) return null;
-    return renderSkillContent(content, Number.MAX_SAFE_INTEGER);
+    return renderSkillContent(content, {
+      maxLines: Number.MAX_SAFE_INTEGER,
+      filePath: skill?.filePath ?? null,
+    });
   });
 
   $effect(() => {

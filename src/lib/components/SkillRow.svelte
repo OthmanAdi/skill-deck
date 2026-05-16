@@ -116,7 +116,7 @@
 
   const contentPreview = $derived.by(() => {
     if (!fileContent) return null;
-    return renderSkillContent(fileContent, 220);
+    return renderSkillContent(fileContent, { maxLines: 220, filePath: skill.filePath });
   });
 
   const updateStatus = $derived(store.updateStatus[skill.id] ?? null);

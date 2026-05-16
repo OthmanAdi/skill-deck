@@ -161,7 +161,7 @@
 
   const contentPreview = $derived.by(() => {
     if (!fileContent) return null;
-    return renderSkillContent(fileContent, 240);
+    return renderSkillContent(fileContent, { maxLines: 240, filePath: skill.filePath });
   });
 
   const parentSkill = $derived.by(() => {
