@@ -146,7 +146,9 @@ class SkillStore {
   searchQuery = $state("");
   selectedTags = $state<string[]>([]);
   selectedUseCases = $state<string[]>([]);
-  selectedArtifactTypes = $state<string[]>([]);
+  // Default to "skill" so the All view shows skills first. The user can
+  // deselect this chip or pick others (hook, command, etc.) to override.
+  selectedArtifactTypes = $state<string[]>(["skill"]);
   activeTab = $state<TabView>("all");
   agentFilter = $state<string | null>(null);
   isVisible = $state(false);

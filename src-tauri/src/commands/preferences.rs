@@ -429,6 +429,29 @@ pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> R
     Ok(())
 }
 
+/// Persist global UI font scale (CSS `zoom` applied to the document root).
+/// Clamped to [1.0, 2.0] so the overlay always stays usable.
+#[tauri::command]
+pub fn set_font_scale(state: State<ConfigState>, scale: f64) -> Result<f64, String> {
+    const MIN_SCALE: f64 = 1.0;
+    const MAX_SCALE: f64 = 2.0;
+
+    let clamped = if scale.is_finite() {
+        scale.clamp(MIN_SCALE, MAX_SCALE)
+    } else {
+        MIN_SCALE
+    };
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    config.font_scale = clamped;
+    save_config(&config)?;
+    Ok(clamped)
+}
+
 /// Persist finder panel visibility state.
 #[tauri::command]
 pub fn set_finder_open(state: State<ConfigState>, open: bool) -> Result<(), String> {

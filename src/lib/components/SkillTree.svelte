@@ -127,26 +127,82 @@
   function childrenOfId(skillId: string): Skill[] {
     return childrenMap.get(skillId) ?? [];
   }
+
+  /**
+   * For a given root, return its visible descendants in DFS order (respecting
+   * per node collapsed state). Used to render a root and all its visible
+   * sub skills inside a single glass container so the visual grouping is
+   * unambiguous.
+   */
+  function collectVisibleDescendants(root: Skill): Skill[] {
+    const result: Skill[] = [];
+    const visit = (node: Skill) => {
+      if (collapsed.has(node.id)) return;
+      const kids = childrenMap.get(node.id) ?? [];
+      for (const kid of kids) {
+        result.push(kid);
+        visit(kid);
+      }
+    };
+    visit(root);
+    return result;
+  }
 </script>
 
 <div class="flex flex-col gap-1">
-  {#each visibleOrder as skill (skill.id)}
-    {@const idx = visibleIndex(skill.id)}
-    {@const depth = indentById.get(skill.id) ?? 0}
-    {@const isCollapsed = collapsed.has(skill.id)}
-    {@const hasKids = hasChildren(skill.id)}
-    {@const childCount = childrenOfId(skill.id).length}
+  {#each roots as root (root.id)}
+    {@const rootIdx = visibleIndex(root.id)}
+    {@const rootHasKids = hasChildren(root.id)}
+    {@const rootChildCount = childrenOfId(root.id).length}
+    {@const rootCollapsed = collapsed.has(root.id)}
+    {@const descendants = collectVisibleDescendants(root)}
+    {@const groupHasVisibleKids = rootHasKids && descendants.length > 0}
 
-    <div style="margin-left: {depth * 16}px;">
+    {#if groupHasVisibleKids}
+      <!-- Glass group container: visually binds the root with its visible sub skills -->
+      <div class="skill-group-glass rounded-2xl p-1.5">
+        <div class="flex flex-col gap-1">
+          <SkillCard
+            skill={root}
+            index={rootIdx}
+            isFocused={focusedIndex === rootIdx}
+            hasChildren={rootHasKids}
+            childrenCollapsed={rootCollapsed}
+            childrenCount={rootChildCount}
+            onToggleChildren={() => toggleTreeNodeCollapse(root.id)}
+          />
+
+          {#each descendants as desc (desc.id)}
+            {@const dIdx = visibleIndex(desc.id)}
+            {@const dDepth = indentById.get(desc.id) ?? 0}
+            {@const dHasKids = hasChildren(desc.id)}
+            {@const dCollapsed = collapsed.has(desc.id)}
+            {@const dCount = childrenOfId(desc.id).length}
+
+            <div style="margin-left: {dDepth * 16}px;">
+              <SkillCard
+                skill={desc}
+                index={dIdx}
+                isFocused={focusedIndex === dIdx}
+                hasChildren={dHasKids}
+                childrenCollapsed={dCollapsed}
+                childrenCount={dCount}
+                onToggleChildren={() => toggleTreeNodeCollapse(desc.id)}
+              />
+            </div>
+          {/each}
+        </div>
+      </div>
+    {:else}
       <SkillCard
-        {skill}
-        index={idx}
-        isFocused={focusedIndex === idx}
-        hasChildren={hasKids}
-        childrenCollapsed={isCollapsed}
-        childrenCount={childCount}
-        onToggleChildren={() => toggleTreeNodeCollapse(skill.id)}
+        skill={root}
+        index={rootIdx}
+        isFocused={focusedIndex === rootIdx}
+        hasChildren={rootHasKids}
+        childrenCollapsed={rootCollapsed}
+        childrenCount={rootChildCount}
+        onToggleChildren={() => toggleTreeNodeCollapse(root.id)}
       />
-    </div>
+    {/if}
   {/each}
 </div>

@@ -6,6 +6,12 @@
 <script lang="ts">
   import { themeStore, setTheme, THEMES, type ThemeId } from "$lib/stores/theme.svelte";
   import { store, setHotkey, setOverlayMode, type OverlayMode } from "$lib/stores/skills.svelte";
+  import {
+    fontScaleStore,
+    setFontScale,
+    FONT_SCALE_STEPS,
+    type FontScale,
+  } from "$lib/stores/fontScale.svelte";
 
   let isOpen = $state(false);
   let menuEl: HTMLDivElement | undefined = $state();
@@ -34,6 +40,10 @@
 
   function selectOverlayMode(mode: OverlayMode) {
     void setOverlayMode(mode);
+  }
+
+  function selectFontScale(scale: FontScale) {
+    void setFontScale(scale);
   }
 
   async function saveHotkey() {
@@ -142,6 +152,49 @@
       {/each}
 
       <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
+
+      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
+        text-[var(--color-text-muted)]">
+        Font size
+      </div>
+
+      <div class="px-3 pb-2.5">
+        <div
+          class="flex items-stretch gap-1 rounded-[var(--radius-md)] border p-1"
+          style="border-color: var(--color-border); background: var(--color-surface-2);"
+          role="radiogroup"
+          aria-label="Font size"
+        >
+          {#each FONT_SCALE_STEPS as step (step.value)}
+            {@const isSelected = fontScaleStore.current === step.value}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              class="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-sm)] py-1.5
+                transition-all duration-[120ms] ease-out
+                {isSelected
+                  ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] shadow-[inset_0_0_0_1px_var(--color-border-active)]'
+                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)]'}"
+              onclick={() => selectFontScale(step.value)}
+              title="{step.label} — {step.value}x"
+            >
+              <span
+                class="font-display font-medium leading-none"
+                style="font-size: {step.previewPx}px; letter-spacing: -0.02em;"
+              >Aa</span>
+              <span class="text-[9px] font-medium tabular-nums leading-none opacity-80">
+                {step.value}x
+              </span>
+            </button>
+          {/each}
+        </div>
+        <p class="mt-1.5 text-[9px] text-[var(--color-text-muted)] leading-snug">
+          Scales the entire overlay. Drag the window wider after picking a larger size.
+        </p>
+      </div>
+
+      <div class="mx-1 border-t border-[var(--color-border)]"></div>
 
       <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
         text-[var(--color-text-muted)]">

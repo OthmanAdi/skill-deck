@@ -22,6 +22,7 @@
     store,
   } from "$lib/stores/skills.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
+  import { relativeTime, absoluteTime } from "$lib/utils/formatTime";
   import AgentBadge from "./AgentBadge.svelte";
   import EmojiPickerPopover from "./EmojiPickerPopover.svelte";
 
@@ -210,6 +211,14 @@
   });
 
   const entryDelayMs = $derived(Math.min(index, 8) * 16);
+
+  // Install timestamp pill (only visible when sorting by install date)
+  const installSortActive = $derived(
+    store.skillSortMode === "installed-newest" || store.skillSortMode === "installed-oldest"
+  );
+  const installedRelative = $derived(relativeTime(skill.installedAt));
+  const installedAbsolute = $derived(absoluteTime(skill.installedAt));
+  const showInstalledPill = $derived(installSortActive && installedRelative !== null);
 </script>
 
 <div
@@ -323,6 +332,16 @@
     <!-- Metadata row -->
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <AgentBadge agentId={skill.agentId} />
+
+        {#if showInstalledPill}
+          <span
+            class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
+            style="border-color: var(--color-border-active); background: var(--color-accent-subtle); color: var(--color-accent);"
+            title={installedAbsolute ?? ""}
+          >
+            installed {installedRelative}
+          </span>
+        {/if}
 
         {#if skill.sourceAgents.length > 1}
           <span

@@ -100,6 +100,11 @@ pub struct AppConfig {
     /// Collapsed skill node ids in tree view
     #[serde(default)]
     pub collapsed_tree_nodes: HashSet<String>,
+
+    /// Global UI font scale (CSS `zoom` applied to the document root).
+    /// Clamped to [1.0, 2.0] on persist.
+    #[serde(default = "default_font_scale")]
+    pub font_scale: f64,
 }
 
 /// Cached result of an update check for a single skill
@@ -190,8 +195,13 @@ impl Default for AppConfig {
             max_skill_history_entries: default_max_skill_history_entries(),
             collapsed_agents: HashSet::new(),
             collapsed_tree_nodes: HashSet::new(),
+            font_scale: default_font_scale(),
         }
     }
+}
+
+fn default_font_scale() -> f64 {
+    1.0
 }
 
 fn default_overlay_width() -> u32 {
