@@ -191,13 +191,24 @@ fn scan_single_plugin(
         }
     }
 
-    // Plugins ship lifecycle hooks inside `.claude-plugin/plugin.json` under
-    // the same JSON shape as `~/.claude/settings.json`, so we can reuse the
-    // existing parser. Without this pass the Hook bucket only contained the
-    // user's personal settings hooks and missed everything plugins contribute.
-    let plugin_manifest = install.install_path.join(".claude-plugin").join("plugin.json");
-    if plugin_manifest.exists() {
-        match parse_claude_hooks(&plugin_manifest, SkillScope::Global, None) {
+    // Plugins ship lifecycle hooks in two conventions:
+    //   1. Inline inside `.claude-plugin/plugin.json` under a top-level
+    //      `hooks` key (caveman does this).
+    //   2. Externalized to `hooks/hooks.json` at the plugin root (warp,
+    //      security-guidance, explanatory-output-style, semgrep, codex, and
+    //      most Anthropic-shipped plugins do this).
+    // Both files use the same schema as `~/.claude/settings.json`, so a
+    // single parser handles every case. Scanning both unconditionally costs
+    // two file existence checks per plugin and gives every hook a home in
+    // the Hook bucket regardless of which convention the author chose.
+    for hook_source in [
+        install.install_path.join(".claude-plugin").join("plugin.json"),
+        install.install_path.join("hooks").join("hooks.json"),
+    ] {
+        if !hook_source.exists() {
+            continue;
+        }
+        match parse_claude_hooks(&hook_source, SkillScope::Global, None) {
             Ok(mut hooks) => {
                 for hook in &mut hooks {
                     annotate_plugin_origin(hook, install);
@@ -205,8 +216,8 @@ fn scan_single_plugin(
                 skills.extend(hooks);
             }
             Err(e) => errors.push(ScanError {
-                file_path: plugin_manifest.to_string_lossy().to_string(),
-                message: format!("plugin manifest hooks: {e}"),
+                file_path: hook_source.to_string_lossy().to_string(),
+                message: format!("plugin hooks: {e}"),
             }),
         }
     }
@@ -466,6 +477,67 @@ mod tests {
             assert!(skill.description.contains("[plugin: plug@mkt]"));
             assert!(skill.discovery_tags.contains(&"plugin".to_string()));
         }
+    }
+
+    #[test]
+    fn scan_picks_up_external_hooks_json_at_plugin_root() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path();
+        let install_dir = home.join(".claude/plugins/cache/mkt/sidecar/1.0.0");
+
+        // No hooks in plugin.json — schema-clean manifest.
+        write(
+            &install_dir.join(".claude-plugin/plugin.json"),
+            r#"{"name": "sidecar", "description": "external hooks"}"#,
+        );
+        // Hooks declared in the sidecar `hooks/hooks.json` (warp / semgrep /
+        // security-guidance style).
+        write(
+            &install_dir.join("hooks/hooks.json"),
+            r#"{
+              "hooks": {
+                "Stop": [{
+                  "hooks": [{
+                    "type": "command",
+                    "command": "echo stop"
+                  }]
+                }],
+                "Notification": [{
+                  "matcher": "idle_prompt",
+                  "hooks": [{
+                    "type": "command",
+                    "command": "echo notify"
+                  }]
+                }]
+              }
+            }"#,
+        );
+        write(
+            &home.join(".claude/plugins/installed_plugins.json"),
+            &serde_json::json!({
+                "version": 2,
+                "plugins": {
+                    "sidecar@mkt": [{ "installPath": install_dir.to_string_lossy() }]
+                }
+            })
+            .to_string(),
+        );
+        write(
+            &home.join(".claude/settings.json"),
+            &serde_json::json!({"enabledPlugins": {"sidecar@mkt": true}}).to_string(),
+        );
+
+        let agent = make_agent_info();
+        let (skills, errors) = scan_claude_plugins(home, &agent);
+        assert!(errors.is_empty(), "errors: {errors:?}");
+
+        let hook_events: HashSet<_> = skills
+            .iter()
+            .filter(|s| s.artifact_type == crate::models::ArtifactType::Hook)
+            .filter_map(|s| s.metadata.hook_event.clone())
+            .collect();
+        assert!(hook_events.contains("Stop"), "hooks: {hook_events:?}");
+        assert!(hook_events.contains("Notification"), "hooks: {hook_events:?}");
     }
 
     #[test]
