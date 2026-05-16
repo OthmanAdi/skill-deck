@@ -25,7 +25,28 @@
   import AgentBadge from "./AgentBadge.svelte";
   import EmojiPickerPopover from "./EmojiPickerPopover.svelte";
 
-  let { skill, index = 0, isFocused = false }: { skill: Skill; index?: number; isFocused?: boolean } = $props();
+  let {
+    skill,
+    index = 0,
+    isFocused = false,
+    hasChildren = false,
+    childrenCollapsed = false,
+    childrenCount = 0,
+    onToggleChildren,
+  }: {
+    skill: Skill;
+    index?: number;
+    isFocused?: boolean;
+    hasChildren?: boolean;
+    childrenCollapsed?: boolean;
+    childrenCount?: number;
+    onToggleChildren?: () => void;
+  } = $props();
+
+  function handleChildrenChevron(e: MouseEvent) {
+    e.stopPropagation();
+    onToggleChildren?.();
+  }
 
   let isExpanded = $state(false);
   let starAnimating = $state(false);
@@ -249,6 +270,26 @@
 
       <!-- Action buttons -->
       <div class="flex shrink-0 items-center gap-1">
+        {#if hasChildren}
+          <!-- Children expand/collapse chevron (inline so parent card keeps full width) -->
+          <button
+            class="flex h-6 w-6 items-center justify-center rounded-md
+              text-[var(--color-text-muted)] opacity-85 transition-all duration-150
+              hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)] hover:opacity-100"
+            onclick={handleChildrenChevron}
+            title="{childrenCollapsed ? 'Expand' : 'Collapse'} {childrenCount} sub-skill{childrenCount !== 1 ? 's' : ''}"
+            aria-label="{childrenCollapsed ? 'Expand' : 'Collapse'} children"
+          >
+            <svg
+              class="h-3 w-3 transition-transform duration-200"
+              style="transform: rotate({childrenCollapsed ? '-90deg' : '0deg'});"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        {/if}
+
         <!-- Copy button -->
         <button
           class="flex h-6 w-6 items-center justify-center rounded-md

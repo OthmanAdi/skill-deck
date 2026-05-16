@@ -22,6 +22,10 @@ vite.config.ts.timestamp-*
 # Research docs (local reference only, not published)
 .research/
 
+# Design system reference output from `npx getdesign add <stack>` (local reference)
+claude/
+linear/
+
 # Internal planning & agent session files — never publish
 .claude/
 task_plan.md

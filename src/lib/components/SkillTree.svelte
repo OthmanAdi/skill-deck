@@ -23,11 +23,6 @@
 
   const idSet = $derived(new Set(skills.map((s) => s.id)));
 
-  /** Top-level visible roots: true roots + filtered orphans whose parent is not visible */
-  const roots = $derived(
-    skills.filter((s) => !s.parentId || !idSet.has(s.parentId))
-  );
-
   function flattenVisible(
     nodes: Skill[],
     collapsedSet: Set<string>,
@@ -49,16 +44,57 @@
     return result;
   }
 
+  /**
+   * Build parent/child map but only keep links where the candidate parent and
+   * child share the SAME agent AND the SAME artifact type. The backend assigns
+   * parent_id by filesystem prefix alone, which creates spurious links such as
+   * `~/.gemini/GEMINI.md` becoming parent of every Gemini SKILL.md, or
+   * `CLAUDE.md` becoming parent of every Claude command. Filtering here keeps
+   * the tree faithful to real plugin / sub-skill relationships.
+   */
+  const skillById = $derived.by(() => {
+    const map = new Map<string, Skill>();
+    for (const skill of skills) map.set(skill.id, skill);
+    return map;
+  });
+
+  function sameAgent(a: Skill, b: Skill): boolean {
+    const aid = typeof a.agentId === "string" ? a.agentId : "custom";
+    const bid = typeof b.agentId === "string" ? b.agentId : "custom";
+    return aid === bid;
+  }
+
   const childrenMap = $derived.by(() => {
     const map = new Map<string, Skill[]>();
     for (const skill of skills) {
       if (!skill.parentId) continue;
+      const parent = skillById.get(skill.parentId);
+      if (!parent) continue;
+      if (!sameAgent(parent, skill)) continue;
+      if (parent.artifactType !== skill.artifactType) continue;
       const existing = map.get(skill.parentId) ?? [];
       existing.push(skill);
       map.set(skill.parentId, existing);
     }
     return map;
   });
+
+  /**
+   * Top-level roots: skills with no real (filtered) parent in the visible set.
+   * Includes orphans whose backend-assigned parent is missing OR was filtered
+   * out by the same-agent / same-type rule above.
+   */
+  const roots = $derived(
+    skills.filter((s) => {
+      if (!s.parentId) return true;
+      if (!idSet.has(s.parentId)) return true;
+      const parent = skillById.get(s.parentId);
+      if (!parent) return true;
+      if (!sameAgent(parent, s)) return true;
+      if (parent.artifactType !== s.artifactType) return true;
+      return false;
+    })
+  );
 
   const visibleOrder = $derived(
     flattenVisible(roots, collapsed, childrenMap)
@@ -99,30 +135,18 @@
     {@const depth = indentById.get(skill.id) ?? 0}
     {@const isCollapsed = collapsed.has(skill.id)}
     {@const hasKids = hasChildren(skill.id)}
+    {@const childCount = childrenOfId(skill.id).length}
 
-    <div class="flex items-start gap-1" style="margin-left: {depth * 16}px;">
-      <div class="flex-1 min-w-0">
-        <SkillCard skill={skill} index={idx} isFocused={focusedIndex === idx} />
-      </div>
-
-      {#if hasKids}
-        <button
-          class="mt-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg
-            text-[var(--color-text-muted)] transition-all duration-150
-            hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
-          onclick={() => toggleTreeNodeCollapse(skill.id)}
-          title="{isCollapsed ? 'Expand' : 'Collapse'} {childrenOfId(skill.id).length} sub-skill{childrenOfId(skill.id).length !== 1 ? 's' : ''}"
-          aria-label="{isCollapsed ? 'Expand' : 'Collapse'} children"
-        >
-          <svg
-            class="h-3 w-3 transition-transform duration-200"
-            style="transform: rotate({isCollapsed ? '-90deg' : '0deg'});"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      {/if}
+    <div style="margin-left: {depth * 16}px;">
+      <SkillCard
+        {skill}
+        index={idx}
+        isFocused={focusedIndex === idx}
+        hasChildren={hasKids}
+        childrenCollapsed={isCollapsed}
+        childrenCount={childCount}
+        onToggleChildren={() => toggleTreeNodeCollapse(skill.id)}
+      />
     </div>
   {/each}
 </div>

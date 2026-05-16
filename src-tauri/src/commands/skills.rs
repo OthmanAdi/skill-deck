@@ -89,6 +89,13 @@ pub(crate) fn scan_with_config(config: &mut AppConfig) -> (ScanResult, bool) {
 
     let current_time = now_unix_secs();
 
+    // True only on the very first scan after a fresh install (or after the
+    // user wiped their config). When false, an unknown fingerprint means a
+    // genuinely new skill the user just installed, so prefer "now" over the
+    // source file's mtime — that mtime might be from years ago if the skill
+    // was authored long before the user installed it.
+    let is_bootstrap_scan = config.skill_install_index.is_empty();
+
     for skill in &mut result.skills {
         let mut detected = DetectedSource {
             repository_url: skill.metadata.repository_url.clone(),
@@ -161,7 +168,15 @@ pub(crate) fn scan_with_config(config: &mut AppConfig) -> (ScanResult, bool) {
         let installed_at = if let Some(existing) = config.skill_install_index.get(&install_key) {
             existing.installed_at
         } else {
-            let inferred = infer_install_timestamp(skill, current_time);
+            // On a bootstrap scan, fall back to file mtime so existing skills
+            // don't all collapse to one timestamp. Otherwise this is a newly
+            // installed skill — use current_time so "Recently installed" puts
+            // it at the top instead of inheriting the source file's old mtime.
+            let inferred = if is_bootstrap_scan {
+                infer_install_timestamp(skill, current_time)
+            } else {
+                current_time
+            };
             config
                 .skill_install_index
                 .insert(install_key.clone(), SkillInstallEntry { installed_at: inferred });
