@@ -31,20 +31,54 @@ export interface Skill {
 
 export type SkillSortMode = "default" | "installed-newest" | "installed-oldest";
 
-export interface RegistrySkillSummary {
+/** Marketplace / registry provider identifiers — match Rust ProviderId. */
+export type RegistryProviderId = "skills-sh" | "claw-hub";
+
+/** UI-only convenience: the "all sources" virtual provider for the selector. */
+export type RegistryProviderSelection = RegistryProviderId | "all";
+
+export type RegistryKind = "skill" | "plugin" | "hook" | "command" | "unknown";
+
+/** Universal marketplace item — every provider normalizes into this shape. */
+export interface RegistryItem {
   id: string;
-  skillId: string | null;
+  provider: RegistryProviderId;
+  kind: RegistryKind;
   name: string;
+  slug: string;
+  installCommand: string;
+  author: string | null;
+  authorHandle: string | null;
+  authorAvatarUrl: string | null;
+  description: string | null;
+  version: string | null;
   installs: number;
   source: string | null;
-  installCommand: string;
+  /** Origin URL — the repo or canonical upstream (GitHub, GitLab, etc.). */
+  sourceUrl: string | null;
+  /** Marketplace listing URL on the hub itself (skills.sh, clawhub.ai, ...). */
+  homepageUrl: string | null;
+  updatedAt: string | null;
+  score: number | null;
 }
 
-export interface RegistrySearchResponse {
+export interface MarketplaceSearchResponse {
+  provider: RegistryProviderId;
   query: string;
   count: number;
   durationMs: number;
-  skills: RegistrySkillSummary[];
+  items: RegistryItem[];
+}
+
+export interface ProviderSearchOutcome {
+  provider: RegistryProviderId;
+  response: MarketplaceSearchResponse | null;
+  error: string | null;
+}
+
+export interface AggregatedMarketplaceResponse {
+  query: string;
+  providers: ProviderSearchOutcome[];
 }
 
 export type ArtifactType =

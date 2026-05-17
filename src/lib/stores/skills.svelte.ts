@@ -16,8 +16,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Skill,
   SkillSortMode,
-  RegistrySearchResponse,
-  RegistrySkillSummary,
+  AggregatedMarketplaceResponse,
+  MarketplaceSearchResponse,
+  ProviderSearchOutcome,
+  RegistryItem,
+  RegistryProviderId,
+  RegistryProviderSelection,
   ScanResult,
   AgentInfo,
   TabView,
@@ -186,12 +190,18 @@ class SkillStore {
   skillSortMode = $state<SkillSortMode>("default");
 
   registryQuery = $state("");
-  registryResults = $state<RegistrySkillSummary[]>([]);
+  /** Which provider the user has selected — "all" merges across providers. */
+  registryProvider = $state<RegistryProviderSelection>("skills-sh");
+  /** Flat list of items shown in the UI — pre-merged when provider === "all". */
+  registryItems = $state<RegistryItem[]>([]);
+  /** Per-provider outcomes when provider === "all" (so we can show partial errors). */
+  registryProviderOutcomes = $state<ProviderSearchOutcome[]>([]);
   registryResultCount = $state(0);
   registryDurationMs = $state(0);
   registryLoading = $state(false);
   registryError = $state<string | null>(null);
   registryLastSearchedQuery = $state("");
+  registryLastSearchedProvider = $state<RegistryProviderSelection>("skills-sh");
 
   get sortedSkills(): Skill[] {
     const items = this.skills.slice();
@@ -460,16 +470,26 @@ export async function setSkillSortMode(mode: SkillSortMode) {
   }
 }
 
-export async function searchSkillsRegistry(
+/**
+ * Search the selected marketplace(s). When `provider === "all"` we hit a Tauri
+ * aggregator command that fans out to every provider in parallel; otherwise
+ * we hit a single provider. The store always exposes a flat `registryItems`
+ * list to make rendering uniform.
+ */
+export async function searchMarketplace(
   query = store.registryQuery,
+  provider: RegistryProviderSelection = store.registryProvider,
   limit = REGISTRY_DEFAULT_LIMIT,
 ) {
   const normalizedQuery = query.trim();
   store.registryQuery = query;
+  store.registryProvider = provider;
   store.registryLastSearchedQuery = normalizedQuery;
+  store.registryLastSearchedProvider = provider;
 
   if (normalizedQuery.length < 2) {
-    store.registryResults = [];
+    store.registryItems = [];
+    store.registryProviderOutcomes = [];
     store.registryResultCount = 0;
     store.registryDurationMs = 0;
     store.registryError = null;
@@ -480,23 +500,83 @@ export async function searchSkillsRegistry(
   store.registryLoading = true;
   store.registryError = null;
 
-  try {
-    const response = await invoke<RegistrySearchResponse>("search_skills_registry", {
-      query: normalizedQuery,
-      limit,
-    });
+  const startedAt = performance.now();
 
-    store.registryResults = response.skills;
-    store.registryResultCount = response.count ?? response.skills.length;
-    store.registryDurationMs = response.durationMs ?? 0;
+  try {
+    if (provider === "all") {
+      const response = await invoke<AggregatedMarketplaceResponse>(
+        "search_marketplaces_aggregated",
+        { query: normalizedQuery, limit },
+      );
+
+      const merged: RegistryItem[] = [];
+      for (const outcome of response.providers) {
+        if (outcome.response) {
+          merged.push(...outcome.response.items);
+        }
+      }
+      mergeAndRankItems(merged);
+
+      store.registryItems = merged;
+      store.registryProviderOutcomes = response.providers;
+      store.registryResultCount = merged.length;
+      store.registryDurationMs = Math.round(performance.now() - startedAt);
+
+      const allErrored = response.providers.length > 0
+        && response.providers.every((p) => p.error !== null);
+      store.registryError = allErrored
+        ? response.providers.map((p) => `${labelForProvider(p.provider)}: ${p.error}`).join(" — ")
+        : null;
+    } else {
+      const response = await invoke<MarketplaceSearchResponse>("search_marketplace", {
+        provider,
+        query: normalizedQuery,
+        limit,
+      });
+
+      store.registryItems = response.items;
+      store.registryProviderOutcomes = [
+        { provider, response, error: null },
+      ];
+      store.registryResultCount = response.count ?? response.items.length;
+      store.registryDurationMs = response.durationMs ?? Math.round(performance.now() - startedAt);
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    store.registryResults = [];
+    store.registryItems = [];
+    store.registryProviderOutcomes = [];
     store.registryResultCount = 0;
     store.registryDurationMs = 0;
     store.registryError = message;
   } finally {
     store.registryLoading = false;
+  }
+}
+
+/** Sort items so highest installs / scores come first; stable across providers. */
+function mergeAndRankItems(items: RegistryItem[]) {
+  items.sort((a, b) => {
+    // Prefer items with install counts, then scores, then name.
+    if (b.installs !== a.installs) return b.installs - a.installs;
+    const aScore = a.score ?? 0;
+    const bScore = b.score ?? 0;
+    if (bScore !== aScore) return bScore - aScore;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function labelForProvider(provider: RegistryProviderId | "all"): string {
+  if (provider === "all") return "All sources";
+  if (provider === "skills-sh") return "Skills.sh";
+  if (provider === "claw-hub") return "ClawHub";
+  return provider;
+}
+
+export function setRegistryProvider(provider: RegistryProviderSelection) {
+  if (store.registryProvider === provider) return;
+  store.registryProvider = provider;
+  if (store.registryLastSearchedQuery.length >= 2) {
+    void searchMarketplace(store.registryQuery, provider);
   }
 }
 
@@ -509,8 +589,9 @@ export async function setActiveTab(tab: TabView) {
 
   if (tab === "registry") {
     const trimmed = store.registryQuery.trim();
-    if (trimmed.length >= 2 && store.registryLastSearchedQuery !== trimmed) {
-      await searchSkillsRegistry(trimmed);
+    const providerChanged = store.registryLastSearchedProvider !== store.registryProvider;
+    if (trimmed.length >= 2 && (store.registryLastSearchedQuery !== trimmed || providerChanged)) {
+      await searchMarketplace(trimmed, store.registryProvider);
     }
   }
 }
