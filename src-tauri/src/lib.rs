@@ -39,8 +39,8 @@ use tauri::{Emitter, Manager};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config = load_config();
-    let startup_overlay_width = config.overlay_width.clamp(380, 1600) as f64;
-    let startup_overlay_height = config.overlay_height.clamp(560, 1100) as f64;
+    let startup_overlay_width = config.overlay_width.clamp(380, 2400) as f64;
+    let startup_overlay_height = config.overlay_height.clamp(560, 1800) as f64;
     let startup_overlay_mode = config.overlay_mode.clone();
     let startup_hotkey = config.hotkey.clone();
 

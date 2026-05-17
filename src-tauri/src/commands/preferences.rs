@@ -411,13 +411,15 @@ pub fn set_overlay_mode<R: Runtime>(
     Ok(normalized)
 }
 
-/// Persist overlay size.
+/// Persist overlay size. The bounds account for font-scale resizing —
+/// at scale 2.0 the default 460x640 layout becomes 920x1280, which must
+/// still fit within MAX_W / MAX_H.
 #[tauri::command]
 pub fn set_overlay_size(state: State<ConfigState>, width: u32, height: u32) -> Result<(), String> {
     const MIN_W: u32 = 380;
-    const MAX_W: u32 = 1600;
+    const MAX_W: u32 = 2400;
     const MIN_H: u32 = 560;
-    const MAX_H: u32 = 1100;
+    const MAX_H: u32 = 1800;
 
     let clamped_w = width.clamp(MIN_W, MAX_W);
     let clamped_h = height.clamp(MIN_H, MAX_H);

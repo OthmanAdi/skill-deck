@@ -173,7 +173,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 {#if store.isVisible}
   <div
-    class="overlay-shell flex h-screen w-screen flex-col"
+    class="flex h-screen w-screen flex-col overflow-hidden"
     style="
       background: var(--color-surface-0);
       border: 1px solid var(--color-border);
@@ -183,14 +183,13 @@
     transition:fly={overlayTransition}
     onkeydown={handleKeydown}
   >
-    <!-- Title bar / drag region — wraps to a second row when the font scale
-         (CSS zoom) makes the buttons exceed the OS window width. -->
+    <!-- Title bar / drag region -->
     <div
-      class="flex shrink-0 flex-wrap items-center justify-between gap-y-1.5 px-3 py-2.5 border-b border-[var(--color-border)]"
+      class="flex shrink-0 items-center justify-between px-3 py-2.5 border-b border-[var(--color-border)]"
       data-tauri-drag-region
     >
       <!-- Left: logo + name -->
-      <div class="flex min-w-0 items-center gap-2" data-tauri-drag-region>
+      <div class="flex items-center gap-2" data-tauri-drag-region>
         <div
           class="flex h-5 w-5 shrink-0 items-center justify-center rounded"
           style="background: var(--color-accent); border-radius: var(--radius-sm);"
@@ -206,10 +205,8 @@
         >Skill Deck</span>
       </div>
 
-      <!-- Right: loading indicator + skill count + theme menu.
-           `flex-wrap` ensures controls reflow to a second line at high font
-           scale instead of clipping off the right border. -->
-        <div class="flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
+      <!-- Right: loading indicator + skill count + theme menu -->
+        <div class="flex items-center gap-2.5">
           {#if store.isLoading || store.registryLoading}
             <span class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent spin"></span>
           {/if}
