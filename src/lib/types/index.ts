@@ -281,6 +281,9 @@ export interface AppConfig {
   collapsedAgents?: string[];
   collapsedTreeNodes?: string[];
   fontScale?: number;
+  aiProviders?: import("./ai").AiProviderConfig[];
+  aiActiveProvider?: string | null;
+  aiActiveModel?: string | null;
 }
 
 /** Cached update check result */
