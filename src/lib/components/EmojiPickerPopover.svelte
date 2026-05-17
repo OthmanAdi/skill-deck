@@ -29,6 +29,7 @@
   let handleResize: (() => void) | null = null;
   let viewportWidth = $state(0);
   let viewportHeight = $state(0);
+  let rootZoom = $state(1);
 
   const POPOVER_W = 336;
   const POPOVER_H = 430;
@@ -38,14 +39,32 @@
   const PICKER_MIN_H = 160;
   const VIEWPORT_MARGIN = 8;
 
+  // @agent-context: CSS `zoom` on <html> from fontScale store inflates
+  // getBoundingClientRect() AND the inline left/top of any position:fixed
+  // descendant — both get multiplied. To position correctly, divide every
+  // anchor + viewport measurement by the current zoom so the popover's
+  // left/top — which the engine will re-multiply by zoom — lands where the
+  // anchor visually is. Without this, at zoom=2 the popover floats ~2x
+  // intended offset and falls off-screen.
+  function readRootZoom(): number {
+    if (typeof document === "undefined") return 1;
+    const raw = (document.documentElement.style.zoom || "").trim();
+    if (!raw) return 1;
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  }
+
   function syncViewport() {
     viewportWidth = window.innerWidth;
     viewportHeight = window.innerHeight;
+    rootZoom = readRootZoom();
   }
 
   const popoverLayout = $derived.by(() => {
-    const viewportW = Math.max(viewportWidth, 1);
-    const viewportH = Math.max(viewportHeight, 1);
+    const zoom = rootZoom > 0 ? rootZoom : 1;
+    // Visual viewport in unscaled CSS pixels (the space inline left/top lives in).
+    const viewportW = Math.max(viewportWidth / zoom, 1);
+    const viewportH = Math.max(viewportHeight / zoom, 1);
     const width = Math.max(
       POPOVER_MIN_W,
       Math.min(POPOVER_W, viewportW - VIEWPORT_MARGIN * 2)
@@ -75,15 +94,21 @@
       };
     }
 
+    // Convert the post-zoom DOMRect into the unscaled space.
+    const anchorLeft = anchorRect.left / zoom;
+    const anchorRight = anchorRect.right / zoom;
+    const anchorTop = anchorRect.top / zoom;
+    const anchorHeight = anchorRect.height / zoom;
+
     const gap = 8;
 
-    let left = anchorRect.right + gap;
+    let left = anchorRight + gap;
     if (left + width > viewportW - VIEWPORT_MARGIN) {
-      left = anchorRect.left - width - gap;
+      left = anchorLeft - width - gap;
     }
     left = Math.max(VIEWPORT_MARGIN, Math.min(left, viewportW - width - VIEWPORT_MARGIN));
 
-    let top = anchorRect.top + (anchorRect.height / 2) - (height / 2);
+    let top = anchorTop + (anchorHeight / 2) - (height / 2);
     if (top + height > viewportH - VIEWPORT_MARGIN) {
       top = viewportH - height - VIEWPORT_MARGIN;
     }
