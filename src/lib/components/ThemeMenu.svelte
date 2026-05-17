@@ -144,9 +144,9 @@
 
           <!-- Color scheme indicator dot -->
           <span
-            class="ml-auto h-2 w-2 shrink-0 rounded-full border border-[var(--color-border)]"
+            class="instant-tooltip ml-auto h-2 w-2 shrink-0 rounded-full border border-[var(--color-border)]"
             style="background: {theme.id === 'system' ? 'linear-gradient(135deg, #18191a 50%, #f5f6f6 50%)' : theme.colorScheme === 'dark' ? '#18191a' : '#f5f6f6'};"
-            title={theme.colorScheme}
+            data-tooltip="Color scheme: {theme.colorScheme}"
           ></span>
         </button>
       {/each}
@@ -171,13 +171,13 @@
               type="button"
               role="radio"
               aria-checked={isSelected}
-              class="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-sm)] py-1.5
+              class="instant-tooltip flex flex-1 flex-col items-center justify-center gap-0.5 rounded-[var(--radius-sm)] py-1.5
                 transition-all duration-[120ms] ease-out
                 {isSelected
                   ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] shadow-[inset_0_0_0_1px_var(--color-border-active)]'
                   : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)]'}"
               onclick={() => selectFontScale(step.value)}
-              title="{step.label} — {step.value}x"
+              data-tooltip="{step.label} font size ({step.value}x)"
             >
               <span
                 class="font-display font-medium leading-none"

@@ -150,14 +150,14 @@
           type="button"
           role="tab"
           aria-selected={isActive}
-          class="group flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium
+          class="instant-tooltip group flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium
             transition-all duration-150"
           style="
             border-color: {isActive ? 'var(--color-border-active)' : 'var(--color-border)'};
             background: {isActive ? 'var(--color-accent-subtle)' : 'var(--color-surface-2)'};
             color: {isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)'};
           "
-          title={option.hint}
+          data-tooltip={option.hint}
           onclick={() => setRegistryProvider(option.id)}
         >
           <span
@@ -208,9 +208,9 @@
           <span class="flex items-center gap-1.5">
             {#each store.registryProviderOutcomes as outcome (outcome.provider)}
               <span
-                class="flex items-center gap-1 rounded px-1.5 py-0.5"
+                class="instant-tooltip flex items-center gap-1 rounded px-1.5 py-0.5"
                 style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                title={outcome.error ?? `${outcome.response?.items.length ?? 0} from ${labelForProvider(outcome.provider)}`}
+                data-tooltip={outcome.error ?? `${outcome.response?.items.length ?? 0} from ${labelForProvider(outcome.provider)}`}
               >
                 <span
                   class="h-1 w-1 rounded-full"
@@ -261,10 +261,10 @@
           <article class="group flex w-full gap-3 px-3 py-2.5">
             <!-- Avatar -->
             <div
-              class="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg
+              class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg
                 text-[12px] font-semibold text-[var(--color-text-secondary)]"
               style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
-              title={item.author ?? item.authorHandle ?? ""}
+              data-tooltip={item.author ?? item.authorHandle ?? "Unknown author"}
             >
               {#if item.authorAvatarUrl}
                 <img
@@ -309,9 +309,9 @@
                 <div class="flex shrink-0 items-center gap-1">
                   {#if item.installs > 0}
                     <span
-                      class="rounded-md border px-1.5 py-0.5 text-[9px] tabular-nums"
+                      class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] tabular-nums"
                       style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
-                      title="Total installs"
+                      data-tooltip="Total installs reported by the marketplace"
                     >
                       {item.installs.toLocaleString()}
                     </span>
@@ -345,18 +345,18 @@
                 </span>
 
                 <span
-                  class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
+                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
                   style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
-                  title="Artifact kind"
+                  data-tooltip="Artifact kind reported by this marketplace"
                 >
                   {item.kind}
                 </span>
 
                 {#if item.updatedAt}
                   <span
-                    class="rounded-md px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]"
+                    class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]"
                     style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                    title={item.updatedAt}
+                    data-tooltip={item.updatedAt}
                   >
                     {item.updatedAt.slice(0, 10)}
                   </span>
@@ -364,9 +364,9 @@
 
                 {#if item.score !== null && item.score !== undefined && item.score > 0}
                   <span
-                    class="rounded-md px-1.5 py-0.5 text-[9px] tabular-nums text-[var(--color-text-muted)]"
+                    class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] tabular-nums text-[var(--color-text-muted)]"
                     style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                    title="Relevance score"
+                    data-tooltip="Relevance score reported by this marketplace"
                   >
                     score {item.score.toFixed(2)}
                   </span>
@@ -378,12 +378,12 @@
                 {#if item.sourceUrl}
                   <button
                     type="button"
-                    class="flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
+                    class="instant-tooltip flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
                       transition-colors duration-150
                       hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
                     style="border-color: var(--color-border); color: var(--color-text-secondary);"
                     onclick={() => openExternalUrl(item.sourceUrl, "Open source failed")}
-                    title="Open the original source — {item.sourceUrl}"
+                    data-tooltip="Open the original source — {item.sourceUrl}"
                   >
                     <svg
                       class="h-3 w-3"
@@ -405,12 +405,12 @@
                 {#if item.homepageUrl}
                   <button
                     type="button"
-                    class="flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
+                    class="instant-tooltip flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
                       transition-colors duration-150
                       hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
                     style="border-color: var(--color-border); color: var(--color-text-secondary);"
                     onclick={() => openExternalUrl(item.homepageUrl, "Open hub page failed")}
-                    title="Open marketplace listing — {item.homepageUrl}"
+                    data-tooltip="Open marketplace listing — {item.homepageUrl}"
                   >
                     <svg
                       class="h-3 w-3"
@@ -431,22 +431,22 @@
 
                 <button
                   type="button"
-                  class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
+                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
                     hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
                   style="border-color: var(--color-border); color: var(--color-text-secondary);"
                   onclick={() => copyInstallCommand(item)}
-                  title="Copy install command"
+                  data-tooltip="Copy the install command to the clipboard"
                 >
                   Copy install
                 </button>
 
                 <button
                   type="button"
-                  class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
+                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
                     hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
                   style="border-color: var(--color-border); color: var(--color-text-secondary);"
                   onclick={() => copyReference(item)}
-                  title="Copy reference (pseudo-skill path)"
+                  data-tooltip="Copy the marketplace reference (pseudo-skill path)"
                 >
                   Copy ref
                 </button>
@@ -454,8 +454,8 @@
 
               <!-- Install command preview -->
               <p
-                class="mt-1.5 truncate font-mono text-[9px] text-[var(--color-text-muted)]"
-                title={item.installCommand}
+                class="instant-tooltip mt-1.5 truncate font-mono text-[9px] text-[var(--color-text-muted)]"
+                data-tooltip={item.installCommand}
               >
                 {item.installCommand}
               </p>

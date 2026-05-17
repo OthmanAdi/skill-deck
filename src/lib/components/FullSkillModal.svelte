@@ -173,21 +173,23 @@
         <div class="flex shrink-0 items-center gap-1.5">
           {#if skill}
             <button
-              class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+              class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
               style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
               onclick={handleCopyReference}
-              title="Copy reference"
+              data-tooltip="Copy the canonical reference for this skill"
+              aria-label="Copy skill reference"
             >
               Copy ref
             </button>
           {/if}
 
           <button
-            class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
+            class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
             style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
             onclick={handleCopyFullContent}
             disabled={!content}
-            title="Copy full content"
+            data-tooltip="Copy the full skill body to the clipboard"
+            aria-label="Copy full skill content"
           >
             Copy full
           </button>

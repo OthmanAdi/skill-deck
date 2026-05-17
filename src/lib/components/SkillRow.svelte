@@ -243,18 +243,18 @@
     {/if}
 
     <span
-      class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
+      class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
       style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-1);"
-      title="Artifact type"
+      data-tooltip="Artifact type"
     >
       {skill.artifactType}
     </span>
 
     {#if sourceAgentCount > 1}
       <span
-        class="rounded-md border px-1.5 py-0.5 text-[9px]"
+        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px]"
         style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-2);"
-        title={`Detected by ${sourceAgentCount} agent sources`}
+        data-tooltip={`Detected by ${sourceAgentCount} agent sources`}
       >
         shared {sourceAgentCount}
       </span>
@@ -272,13 +272,13 @@
 
     {#if showTimePill}
       <span
-        class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
+        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
         style="
           border-color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-border-active)'};
           background: {pillIsUpdated ? 'var(--color-surface-3)' : 'var(--color-accent-subtle)'};
           color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-accent)'};
         "
-        title={timePillTooltip}
+        data-tooltip={timePillTooltip}
       >
         {timePillLabel} {timePillRelative}
       </span>
@@ -286,9 +286,9 @@
 
     {#if archiveCount > 0}
       <span
-        class="flex h-5 items-center gap-0.5 rounded-md border px-1 text-[9px] font-semibold tabular-nums"
+        class="instant-tooltip flex h-5 items-center gap-0.5 rounded-md border px-1 text-[9px] font-semibold tabular-nums"
         style="border-color: var(--color-border-active); background: var(--color-accent-subtle); color: var(--color-accent);"
-        title="Has {archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand to manage"
+        data-tooltip="{archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand to manage"
       >
         <svg class="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
           <path stroke-linecap="round" stroke-linejoin="round"
@@ -299,8 +299,8 @@
     {/if}
 
     {#if skill.updateAvailable}
-      <span class="h-[5px] w-[5px] rounded-full bg-[var(--color-update-available)]"
-        title="Update available"></span>
+      <span class="instant-tooltip h-[5px] w-[5px] rounded-full bg-[var(--color-update-available)]"
+        data-tooltip="A newer version of this skill is available"></span>
     {/if}
 
     <!-- Star -->
@@ -373,10 +373,10 @@
     <div class="flex items-center justify-between gap-2">
       <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
       <button
-        class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+        class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
         style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
         onclick={handleOpenFullSkill}
-        title="Open full skill in modal"
+        data-tooltip="Open the full skill body in a modal"
       >
         Open full skill
       </button>
@@ -422,28 +422,28 @@
           {/if}
 
           <button
-            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleCheckUpdate}
             disabled={repoCheckLoading || !repoUrlDisplay}
-            title="Check live update status"
+            data-tooltip="Check upstream for a newer version"
           >
             {repoCheckLoading ? "..." : "check"}
           </button>
 
           <button
-            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleSnapshot}
             disabled={snapshotLoading}
-            title="Archive local snapshot before updating"
+            data-tooltip="Snapshot the current file so you can restore it later"
           >
             {snapshotLoading ? "..." : "archive"}
           </button>
 
           <button
-            class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleLoadHistory}
             disabled={historyLoading}
-            title="Load archived versions"
+            data-tooltip="Show the list of archived versions for this skill"
           >
             {historyLoading ? "..." : "history"}
           </button>
@@ -457,29 +457,29 @@
           <div class="max-h-[120px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5 text-[9px]">
             {#each historyEntries as entry (entry.versionId)}
               <div class="mb-1 flex items-center justify-between gap-1 last:mb-0">
-                <span class="truncate text-[var(--color-text-muted)]" title={entry.versionId}>
+                <span class="instant-tooltip truncate text-[var(--color-text-muted)]" data-tooltip={entry.versionId}>
                   {entry.reason} {new Date(entry.createdAt * 1000).toLocaleString()}
                 </span>
                 <div class="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    class="rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => {
                       e.stopPropagation();
                       openDiffModal(skill, entry.versionId, "view");
                     }}
-                    title="View this archived version"
+                    data-tooltip="Open this archived version in the diff viewer"
                   >
                     view
                   </button>
                   <button
                     type="button"
-                    class="rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => {
                       e.stopPropagation();
                       openDiffModal(skill, entry.versionId, "compare");
                     }}
-                    title={historyEntries.length > 1
+                    data-tooltip={historyEntries.length > 1
                       ? "Compare against another archive or the current file"
                       : "Compare against the current file"}
                   >
@@ -487,19 +487,19 @@
                   </button>
                   <button
                     type="button"
-                    class="rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => handleRestore(e, entry.versionId)}
                     disabled={restoringVersionId === entry.versionId}
-                    title="Restore this archived version onto the live file"
+                    data-tooltip="Overwrite the live skill file with this archived version"
                   >
                     {restoringVersionId === entry.versionId ? "..." : "restore"}
                   </button>
                   <button
                     type="button"
-                    class="rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
+                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
                     onclick={(e) => startDeleteVersion(e, entry.versionId)}
                     disabled={archiveDeleteLoading === entry.versionId}
-                    title="Permanently delete this archive entry"
+                    data-tooltip="Permanently delete this archive entry"
                   >
                     {archiveDeleteLoading === entry.versionId ? "..." : "delete"}
                   </button>

@@ -291,7 +291,7 @@
 >
   <!-- Icon / Emoji / Letter avatar (click to change icon) -->
   <button
-    class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold
+    class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold
       transition-all duration-200 group-hover:scale-105
       {isEmoji ? '' : 'text-[var(--color-text-secondary)]'}"
     style="{isEmoji
@@ -299,7 +299,7 @@
       : `background: var(--color-surface-3); border: 1px solid var(--color-border);`}"
     onclick={handleIconClick}
     data-emoji-picker-trigger
-    title="Change icon"
+    data-tooltip="Pick an emoji icon for this skill"
     aria-label="Change icon"
   >
     <span class={isEmoji ? "emoji-avatar" : "letter-avatar"}>{displayIcon}</span>
@@ -329,8 +329,7 @@
               background: var(--color-accent-subtle);
               color: var(--color-accent);
             "
-            data-tooltip="Has {archiveCount} archived version{archiveCount === 1 ? '' : 's'}"
-            title="Has {archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand to view"
+            data-tooltip="{archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand the card to view"
           >
             <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
               <path stroke-linecap="round" stroke-linejoin="round"
@@ -343,11 +342,11 @@
         {#if hasChildren}
           <!-- Children expand/collapse chevron (inline so parent card keeps full width) -->
           <button
-            class="flex h-6 w-6 items-center justify-center rounded-md
+            class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-md
               text-[var(--color-text-muted)] opacity-85 transition-all duration-150
               hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)] hover:opacity-100"
             onclick={handleChildrenChevron}
-            title="{childrenCollapsed ? 'Expand' : 'Collapse'} {childrenCount} sub-skill{childrenCount !== 1 ? 's' : ''}"
+            data-tooltip="{childrenCollapsed ? 'Expand' : 'Collapse'} {childrenCount} sub-skill{childrenCount !== 1 ? 's' : ''}"
             aria-label="{childrenCollapsed ? 'Expand' : 'Collapse'} children"
           >
             <svg
@@ -362,11 +361,11 @@
 
         <!-- Copy button -->
         <button
-          class="flex h-6 w-6 items-center justify-center rounded-md
+          class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-md
             text-[var(--color-text-secondary)] opacity-85 transition-all duration-150
             hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)] hover:opacity-100"
           onclick={handleCopyClick}
-          title="Copy skill reference (Ctrl+C)"
+          data-tooltip="Copy skill reference (Ctrl+C)"
           aria-label="Copy skill reference"
         >
           <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -396,13 +395,13 @@
 
         {#if showTimePill}
           <span
-            class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
+            class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
             style="
               border-color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-border-active)'};
               background: {pillIsUpdated ? 'var(--color-surface-3)' : 'var(--color-accent-subtle)'};
               color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-accent)'};
             "
-            title={timePillTooltip}
+            data-tooltip={timePillTooltip}
           >
             {timePillLabel} {timePillRelative}
           </span>
@@ -410,18 +409,18 @@
 
         {#if skill.sourceAgents.length > 1}
           <span
-            class="rounded-md border px-1.5 py-0.5 text-[9px]"
+            class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px]"
             style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-muted);"
-            title={`Detected by ${skill.sourceAgents.length} agent sources`}
+            data-tooltip={`Detected by ${skill.sourceAgents.length} agent sources`}
           >
             shared {skill.sourceAgents.length}
           </span>
         {/if}
 
       <span
-        class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
+        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
         style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
-        title="Artifact type"
+        data-tooltip="Artifact type"
       >
         {skill.artifactType}
       </span>
@@ -445,18 +444,18 @@
 
       {#if skill.useCases.length > 0}
         <span
-          class="rounded-md px-1.5 py-0.5 text-[9px] font-medium"
+          class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] font-medium"
           style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-border-active);"
-          title="Primary use case"
+          data-tooltip="Primary use case"
         >
           {skill.useCases[0]}
         </span>
       {/if}
 
       {#if skill.updateAvailable}
-        <span class="h-1.5 w-1.5 rounded-full bg-[var(--color-update-available)]"
+        <span class="instant-tooltip h-1.5 w-1.5 rounded-full bg-[var(--color-update-available)]"
           style="animation: breathe 2s ease-in-out infinite;"
-          title="Update available"></span>
+          data-tooltip="A newer version of this skill is available"></span>
       {/if}
     </div>
 
@@ -528,7 +527,7 @@
                   style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
                   parent
                 </span>
-                <span class="truncate text-[var(--color-text-secondary)]" title={parentSkill.name}>
+                <span class="instant-tooltip truncate text-[var(--color-text-secondary)]" data-tooltip={parentSkill.name}>
                   {parentSkill.name}
                 </span>
               </div>
@@ -547,9 +546,9 @@
                 <div class="flex flex-wrap gap-1">
                   {#each childSkills.slice(0, 5) as child}
                     <span
-                      class="max-w-[180px] truncate rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+                      class="instant-tooltip max-w-[180px] truncate rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
                       style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                      title={child.name}
+                      data-tooltip={child.name}
                     >
                       {child.name}
                     </span>
@@ -592,10 +591,10 @@
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
           <button
-            class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+            class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
             style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
             onclick={handleOpenFullSkill}
-            title="Open full skill in modal"
+            data-tooltip="Open the full skill body in a modal"
           >
             Open full skill
           </button>
@@ -643,11 +642,11 @@
                 <span class="truncate text-[var(--color-text-muted)]">Invalid repo URL</span>
               {/if}
               <button
-                class="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleCheckUpdate(); }}
                 disabled={repoCheckLoading || !repoUrlDisplay}
-                title="Check live update status"
+                data-tooltip="Check upstream for a newer version"
               >
                 {#if repoCheckLoading}
                   <span class="spin inline-block h-2.5 w-2.5 rounded-full border border-[var(--color-accent)] border-t-transparent"></span>
@@ -661,20 +660,20 @@
 
             <div class="mt-1.5 flex flex-wrap items-center gap-1">
               <button
-                class="rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleSnapshot(); }}
                 disabled={snapshotLoading}
-                title="Archive local snapshot before updating"
+                data-tooltip="Snapshot the current file so you can restore it later"
               >
                 {snapshotLoading ? "saving..." : "archive"}
               </button>
               <button
-                class="rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleLoadHistory(); }}
                 disabled={historyLoading}
-                title="Load archived versions"
+                data-tooltip="Show the list of archived versions for this skill"
               >
                 {historyLoading ? "loading..." : "history"}
               </button>
@@ -699,51 +698,51 @@
                 {#each historyEntries as entry (entry.versionId)}
                   <div class="mb-1 flex items-center justify-between gap-1 text-[9px] last:mb-0">
                     <span
-                      class="truncate text-[var(--color-text-muted)]"
-                      title={entry.versionId}
+                      class="instant-tooltip truncate text-[var(--color-text-muted)]"
+                      data-tooltip={entry.versionId}
                     >
                       {entry.reason} {new Date(entry.createdAt * 1000).toLocaleString()}
                     </span>
                     <div class="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => {
                           e.stopPropagation();
                           openDiffModal(skill, entry.versionId, "view");
                         }}
-                        title="View this archived version"
+                        data-tooltip="Open this archived version in the diff viewer"
                       >
                         view
                       </button>
                       <button
                         type="button"
-                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => {
                           e.stopPropagation();
                           openDiffModal(skill, entry.versionId, "compare");
                         }}
-                        title={historyEntries.length > 1
+                        data-tooltip={historyEntries.length > 1
                           ? "Compare against another archive or the current file"
-                          : "Compare against the current file (only one archive available)"}
+                          : "Compare against the current file"}
                       >
                         diff
                       </button>
                       <button
                         type="button"
-                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => { e.stopPropagation(); handleRestore(entry.versionId); }}
                         disabled={restoringVersionId === entry.versionId}
-                        title="Restore this archived version onto the live skill file"
+                        data-tooltip="Overwrite the live skill file with this archived version"
                       >
                         {restoringVersionId === entry.versionId ? "..." : "restore"}
                       </button>
                       <button
                         type="button"
-                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
+                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
                         onclick={(e) => startDeleteVersion(e, entry.versionId)}
                         disabled={archiveDeleteLoading === entry.versionId}
-                        title="Permanently delete this archive entry"
+                        data-tooltip="Permanently delete this archive entry"
                       >
                         {archiveDeleteLoading === entry.versionId ? "..." : "delete"}
                       </button>
@@ -799,13 +798,13 @@
                 {skill.metadata.installCommand}
               </span>
               <button
-                class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]
+                class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]
                   hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] transition-colors"
                 onclick={(e) => {
                   e.stopPropagation();
                   navigator.clipboard.writeText(skill.metadata.installCommand!).catch(() => {});
                 }}
-                title="Copy install command"
+                data-tooltip="Copy the install command to the clipboard"
               >copy</button>
             </div>
           {/if}

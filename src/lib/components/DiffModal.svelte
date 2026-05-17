@@ -294,9 +294,9 @@
           <span class="font-medium text-[var(--color-text-muted)]">Comparing</span>
           {#if leftMeta}
             <span
-              class="rounded-md border px-1.5 py-0.5"
+              class="instant-tooltip rounded-md border px-1.5 py-0.5"
               style="border-color: var(--color-border); background: var(--color-surface-2);"
-              title={leftMeta.sub}
+              data-tooltip={leftMeta.sub}
             >
               {leftMeta.label}
             </span>
@@ -333,9 +333,9 @@
           {/if}
         {:else if leftMeta}
           <span
-            class="rounded-md border px-1.5 py-0.5"
+            class="instant-tooltip rounded-md border px-1.5 py-0.5"
             style="border-color: var(--color-border); background: var(--color-surface-2);"
-            title={leftMeta.sub}
+            data-tooltip={leftMeta.sub}
           >
             {leftMeta.label}
           </span>
