@@ -59,6 +59,52 @@ fn git_remote_url_re() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r#"url\s*=\s*(.+)"#).expect("git remote url regex"))
 }
 
+// First path segments under github.com that are NOT a repository — these are
+// site routes (sponsors, marketplace, org listings, search, etc.). We exclude
+// them so a "sponsor me" link in the body of a SKILL.md doesn't get scraped
+// as `github.com/sponsors/<user>` and then 404 on every update check.
+const GITHUB_RESERVED_FIRST_SEGMENTS: &[&str] = &[
+    "sponsors",
+    "orgs",
+    "organizations",
+    "marketplace",
+    "topics",
+    "features",
+    "pricing",
+    "about",
+    "login",
+    "signup",
+    "join",
+    "settings",
+    "explore",
+    "trending",
+    "collections",
+    "events",
+    "enterprise",
+    "security",
+    "pulls",
+    "issues",
+    "notifications",
+    "search",
+    "stars",
+    "watching",
+    "new",
+    "site",
+    "contact",
+    "readme",
+    "discussions",
+    "advisories",
+    "codespaces",
+    "copilot",
+    "apps",
+    "github-copilot",
+];
+
+pub(crate) fn github_first_segment_is_repo(segment: &str) -> bool {
+    let lower = segment.to_ascii_lowercase();
+    !GITHUB_RESERVED_FIRST_SEGMENTS.contains(&lower.as_str())
+}
+
 // ── YAML frontmatter keys that may contain a repo URL ───────────────────────
 
 const REPO_FRONTMATTER_KEYS: &[&str] = &[
@@ -160,10 +206,15 @@ fn detect_install_from_frontmatter(fm: &serde_yaml::Value) -> Option<String> {
 // ── Body content detection ──────────────────────────────────────────────────
 
 fn detect_repo_from_body(body: &str) -> Option<String> {
-    // Try GitHub first (most common)
-    if let Some(caps) = github_url_re().captures(body) {
+    // Try GitHub first (most common). Skip matches whose first path segment is
+    // a known site route (sponsors / marketplace / etc.) so they don't get
+    // saved as a fake repo URL.
+    for caps in github_url_re().captures_iter(body) {
         let owner = caps.get(1)?.as_str();
         let repo = caps.get(2)?.as_str();
+        if !github_first_segment_is_repo(owner) {
+            continue;
+        }
         return Some(format!("https://github.com/{}/{}", owner, repo));
     }
     // Try GitLab
@@ -294,6 +345,27 @@ mod tests {
         let body = "This is a plain skill with no links.";
         let result = detect_repo_from_body(body);
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_github_sponsor_url_is_ignored() {
+        let body = "Support me at https://github.com/sponsors/safishamsi";
+        let result = detect_repo_from_body(body);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_github_marketplace_url_is_ignored() {
+        let body = "See https://github.com/marketplace/actions/foo";
+        let result = detect_repo_from_body(body);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_github_repo_after_sponsor_link_wins() {
+        let body = "Sponsor at https://github.com/sponsors/me. Repo at https://github.com/me/cool-skill";
+        let result = detect_repo_from_body(body);
+        assert_eq!(result, Some("https://github.com/me/cool-skill".to_string()));
     }
 
     #[test]

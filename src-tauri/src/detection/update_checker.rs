@@ -11,6 +11,7 @@ use reqwest::{StatusCode, Url};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::detection::repo_detector::github_first_segment_is_repo;
 use crate::models::{UpdateCheckEntry, UpdateErrorKind};
 
 /// Minimum seconds between update checks for the same skill
@@ -82,6 +83,13 @@ fn parse_github_repo_ref(input: &str) -> Result<GithubRepoRef, String> {
             return Err("GitHub owner/repo contains unsupported characters".to_string());
         }
 
+        if !github_first_segment_is_repo(&owner) {
+            return Err(format!(
+                "{} is a GitHub site path, not a repository",
+                owner
+            ));
+        }
+
         return Ok(GithubRepoRef { owner, repo });
     }
 
@@ -121,6 +129,13 @@ fn parse_github_repo_ref(input: &str) -> Result<GithubRepoRef, String> {
 
     if !is_valid_repo_segment(&owner) || !is_valid_repo_segment(&repo) {
         return Err("GitHub owner/repo contains unsupported characters".to_string());
+    }
+
+    if !github_first_segment_is_repo(&owner) {
+        return Err(format!(
+            "github.com/{}/* is a GitHub site path, not a repository",
+            owner
+        ));
     }
 
     Ok(GithubRepoRef { owner, repo })
@@ -326,6 +341,25 @@ mod tests {
             result,
             Some(("OthmanAdi".to_string(), "vibe-skills".to_string()))
         );
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_sponsor_path() {
+        let result = parse_github_owner_repo("https://github.com/sponsors/safishamsi");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_marketplace_path() {
+        let result = parse_github_owner_repo("https://github.com/marketplace/actions/setup-node");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_github_owner_repo_rejects_shorthand_for_site_path() {
+        // Shorthand "sponsors/foo" is still a site path, not a repo.
+        let result = parse_github_owner_repo("sponsors/safishamsi");
+        assert_eq!(result, None);
     }
 
     #[test]
