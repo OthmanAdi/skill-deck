@@ -68,7 +68,12 @@ fn is_hotkey_shape_valid(hotkey: &str) -> bool {
 
 fn normalize_skill_sort_mode(input: &str) -> String {
     match input.trim() {
-        "installed-newest" | "installed-oldest" | "default" => input.trim().to_string(),
+        "installed-newest"
+        | "installed-oldest"
+        | "archived-most"
+        | "archived-recent"
+        | "updated-newest"
+        | "default" => input.trim().to_string(),
         _ => "default".to_string(),
     }
 }

@@ -76,6 +76,8 @@ pub fn run() {
             commands::snapshot_skill_before_update,
             commands::list_skill_versions,
             commands::restore_skill_version,
+            commands::delete_skill_version,
+            commands::read_skill_snapshot,
             commands::search_marketplace,
             commands::search_marketplaces_aggregated,
         ])

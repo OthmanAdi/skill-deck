@@ -121,6 +121,8 @@ pub fn parse_claude_hooks(
                     starred: false,
                     update_available: false,
                     installed_at: None,
+                    last_modified_at: None,
+                    archive_count: 0,
                     parent_id: None,
                     children: vec![],
                 });

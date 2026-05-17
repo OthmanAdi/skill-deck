@@ -315,6 +315,89 @@ pub fn list_skill_versions(
     })
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillSnapshotContentResponse {
+    pub version_id: String,
+    pub skill_id: String,
+    pub created_at: u64,
+    pub reason: String,
+    pub content: String,
+    pub source_repo_url: Option<String>,
+    pub remote_ref: Option<String>,
+}
+
+/// Read the raw text content of one archived snapshot — used by the diff /
+/// view dialog in the UI. Performs the integrity check baked into
+/// `skill_history::load_snapshot`.
+#[tauri::command]
+pub fn read_skill_snapshot(
+    state: State<'_, ConfigState>,
+    skill_id: String,
+    version_id: String,
+) -> Result<SkillSnapshotContentResponse, String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
+    let config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    let entry = config
+        .skill_version_history
+        .get(&canonical_skill_id)
+        .and_then(|entries| entries.iter().find(|e| e.version_id == version_id))
+        .cloned()
+        .ok_or_else(|| "Requested version not found".to_string())?;
+
+    let snapshot = skill_history::load_snapshot(&entry)?;
+
+    Ok(SkillSnapshotContentResponse {
+        version_id: snapshot.version_id,
+        skill_id: snapshot.skill_id,
+        created_at: snapshot.created_at,
+        reason: snapshot.reason,
+        content: snapshot.content,
+        source_repo_url: snapshot.source_repo_url,
+        remote_ref: snapshot.remote_ref,
+    })
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteSkillVersionResult {
+    pub deleted: bool,
+    pub version_id: String,
+    pub remaining_entries: Vec<SkillVersionEntry>,
+}
+
+/// Permanently remove a single archived version. Returns the new history list
+/// so the UI can re-render without an extra round trip.
+#[tauri::command]
+pub fn delete_skill_version(
+    state: State<'_, ConfigState>,
+    skill_id: String,
+    version_id: String,
+) -> Result<DeleteSkillVersionResult, String> {
+    let scan = scan_for_commands(&state)?;
+    let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+
+    let remaining = skill_history::delete_version(&mut config, &canonical_skill_id, &version_id)?;
+    crate::commands::preferences::save_config(&config)?;
+
+    Ok(DeleteSkillVersionResult {
+        deleted: true,
+        version_id,
+        remaining_entries: remaining,
+    })
+}
+
 #[tauri::command]
 pub fn restore_skill_version(
     state: State<ConfigState>,

@@ -211,6 +211,41 @@ pub fn get_history(config: &AppConfig, skill_id: &str) -> Vec<SkillVersionEntry>
         .unwrap_or_default()
 }
 
+/// Remove a single archived version (snapshot file + history index entry).
+/// Returns the remaining history list for the skill so the UI can refresh
+/// without a follow-up query.
+pub fn delete_version(
+    config: &mut AppConfig,
+    skill_id: &str,
+    version_id: &str,
+) -> Result<Vec<SkillVersionEntry>, String> {
+    let history = config
+        .skill_version_history
+        .get_mut(skill_id)
+        .ok_or_else(|| "No history found for skill".to_string())?;
+
+    let position = history
+        .iter()
+        .position(|entry| entry.version_id == version_id)
+        .ok_or_else(|| "Requested version not found".to_string())?;
+
+    let removed = history.remove(position);
+
+    // Best-effort delete — a missing snapshot file should not block removing
+    // the index entry, since the user's intent is clear.
+    let absolute = history_root_dir().join(&removed.snapshot_path);
+    let _ = std::fs::remove_file(absolute);
+
+    // Drop the per-skill bucket entirely when it becomes empty so the next
+    // scan stops reporting archiveCount > 0.
+    if history.is_empty() {
+        config.skill_version_history.remove(skill_id);
+        return Ok(Vec::new());
+    }
+
+    Ok(history.clone())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

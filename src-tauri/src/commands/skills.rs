@@ -60,6 +60,28 @@ fn file_timestamp(path: &str, current_time: u64) -> Option<u64> {
     best
 }
 
+/// Best-effort last-modified timestamp from filesystem metadata. Falls back to
+/// `created()` if `modified()` is unavailable. Used to drive the
+/// "updated X ago" pill in the UI.
+fn file_last_modified(path: &str, current_time: u64) -> Option<u64> {
+    let metadata = std::fs::metadata(path).ok()?;
+
+    for stamp in [metadata.modified().ok(), metadata.created().ok()] {
+        let Some(stamp) = stamp else {
+            continue;
+        };
+        let Some(secs) = stamp.duration_since(UNIX_EPOCH).ok().map(|d| d.as_secs()) else {
+            continue;
+        };
+        if secs == 0 || secs > current_time + 3600 {
+            continue;
+        }
+        return Some(secs);
+    }
+
+    None
+}
+
 fn infer_install_timestamp(skill: &Skill, current_time: u64) -> u64 {
     file_timestamp(&skill.file_path, current_time).unwrap_or(current_time)
 }
@@ -185,6 +207,16 @@ pub(crate) fn scan_with_config(config: &mut AppConfig) -> (ScanResult, bool) {
         };
 
         skill.installed_at = Some(installed_at);
+        skill.last_modified_at = file_last_modified(&skill.file_path, current_time);
+
+        // Surface archive count from history so the UI can show an indicator
+        // without an extra round-trip. Legacy ids are merged into the canonical
+        // id during `remap_config_ids_for_skills`, so a single lookup is enough.
+        skill.archive_count = config
+            .skill_version_history
+            .get(&skill.id)
+            .map(|entries| entries.len() as u32)
+            .unwrap_or(0);
     }
 
     enrich_skill_discovery(&mut result.skills);

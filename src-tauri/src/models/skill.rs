@@ -74,6 +74,17 @@ pub struct Skill {
     #[serde(default)]
     pub installed_at: Option<u64>,
 
+    /// Best-effort unix timestamp for the most recent on-disk modification.
+    /// Used by the UI to flip the "installed X ago" pill into "updated X ago"
+    /// when the file mtime is newer than the recorded install timestamp.
+    #[serde(default)]
+    pub last_modified_at: Option<u64>,
+
+    /// Number of archived version snapshots the user has for this skill.
+    /// Used by the UI for the "has archive" indicator + archive sort modes.
+    #[serde(default)]
+    pub archive_count: u32,
+
     /// Parent skill ID (for sub-skills in a hierarchy)
     pub parent_id: Option<String>,
 
