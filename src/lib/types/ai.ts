@@ -55,7 +55,28 @@ export interface AiSessionMessage {
   toolCalls?: AiToolCall[];
   toolCallId?: string | null;
   toolName?: string | null;
+  toolLabel?: string | null;
+  toolError?: string | null;
   createdAt: number;
+}
+
+export interface ToolDispatchRecord {
+  name: string;
+  label?: string | null;
+  success: boolean;
+  error?: string | null;
+  durationMs: number;
+}
+
+export interface AgentTurnTelemetry {
+  userText: string;
+  iterations: number;
+  totalChunks: number;
+  totalAssistantChars: number;
+  durationMs: number;
+  toolDispatches: ToolDispatchRecord[];
+  finishReason?: string | null;
+  error?: string | null;
 }
 
 export interface AiSession {
@@ -66,6 +87,7 @@ export interface AiSession {
   createdAt: number;
   updatedAt: number;
   messages: AiSessionMessage[];
+  lastTelemetry?: AgentTurnTelemetry | null;
 }
 
 export interface AgentTurnResult {

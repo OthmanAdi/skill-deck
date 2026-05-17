@@ -21,7 +21,7 @@ import type {
   DetectedOllama,
 } from "$lib/types/ai";
 
-export type ChatView = "chat" | "settings" | "sessions";
+export type ChatView = "chat" | "settings" | "sessions" | "debug";
 
 export interface PendingToolCall {
   callId: string;

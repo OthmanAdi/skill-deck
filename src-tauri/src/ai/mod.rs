@@ -27,6 +27,7 @@ pub mod session;
 pub mod tools;
 
 pub use agent::{run_agent_turn, AgentTurnRequest, AgentTurnResult};
+#[allow(unused_imports)]
 pub use provider::{
     ChatChunk, ChatMessage, ChatRequest, ChatRole, LlmProvider, ModelInfo, ProviderConfig,
     ProviderError, ProviderHealth, ProviderId, ToolCall, ToolDefinition,

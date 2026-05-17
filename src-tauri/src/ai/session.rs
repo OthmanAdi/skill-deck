@@ -21,6 +21,15 @@ pub struct AiSessionMessage {
     pub tool_call_id: Option<String>,
     #[serde(default)]
     pub tool_name: Option<String>,
+    /// Human label produced by the tool (e.g. "search_skills(\"rust\") → 4
+    /// result(s)"). Stored only for UI replay — never sent to the model
+    /// because ChatMessage doesn't carry it.
+    #[serde(default)]
+    pub tool_label: Option<String>,
+    /// When the tool errored, the agent flags it here so the UI can render
+    /// the persisted card with an error state instead of guessing.
+    #[serde(default)]
+    pub tool_error: Option<String>,
     pub created_at: u64,
 }
 
@@ -46,6 +55,54 @@ pub struct AiSession {
     pub created_at: u64,
     pub updated_at: u64,
     pub messages: Vec<AiSessionMessage>,
+    /// Telemetry snapshot from the most recent agent turn. Updated every
+    /// time the agent loop runs so the Debug tab can show iterations,
+    /// chunk counts, tool dispatches, and per-step durations.
+    #[serde(default)]
+    pub last_telemetry: Option<AgentTurnTelemetry>,
+}
+
+/// Diagnostics for a single agent turn.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnTelemetry {
+    pub user_text: String,
+    pub iterations: usize,
+    pub total_chunks: u64,
+    pub total_assistant_chars: u64,
+    pub duration_ms: u64,
+    pub tool_dispatches: Vec<ToolDispatchRecord>,
+    #[serde(default)]
+    pub finish_reason: Option<String>,
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+impl AgentTurnTelemetry {
+    pub fn new(user_text: String) -> Self {
+        Self {
+            user_text,
+            iterations: 0,
+            total_chunks: 0,
+            total_assistant_chars: 0,
+            duration_ms: 0,
+            tool_dispatches: Vec::new(),
+            finish_reason: None,
+            error: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolDispatchRecord {
+    pub name: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    pub success: bool,
+    #[serde(default)]
+    pub error: Option<String>,
+    pub duration_ms: u64,
 }
 
 impl AiSession {
@@ -59,6 +116,7 @@ impl AiSession {
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
+            last_telemetry: None,
         }
     }
 }

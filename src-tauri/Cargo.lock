@@ -4001,6 +4001,7 @@ version = "0.1.4"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "cocoa",
  "dirs",
  "env_logger",

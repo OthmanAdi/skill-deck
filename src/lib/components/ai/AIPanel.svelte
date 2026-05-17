@@ -6,6 +6,7 @@
   import { fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
   import AIComposer from "./AIComposer.svelte";
+  import AIDebug from "./AIDebug.svelte";
   import AIMessage from "./AIMessage.svelte";
   import AISessionList from "./AISessionList.svelte";
   import AISettings from "./AISettings.svelte";
@@ -54,9 +55,79 @@
     }
   }
 
-  const visibleMessages = $derived(
-    (aiStore.activeSession?.messages ?? []).filter((m) => m.role !== "tool"),
-  );
+  type ChatItem =
+    | { kind: "message"; key: string; message: import("$lib/types/ai").AiSessionMessage }
+    | {
+        kind: "toolCard";
+        key: string;
+        name: string;
+        argumentsJson: string;
+        status: "success" | "error";
+        label?: string;
+        data?: unknown;
+        errorMessage?: string;
+      };
+
+  function safeParse(text: string): unknown {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+
+  // Walk the persisted session into an ordered render list. Tool messages
+  // are folded into the assistant turn that issued them so the user sees
+  // every tool card with its full result, then the final assistant reply,
+  // exactly in the order the agent produced them.
+  function flattenSession(messages: import("$lib/types/ai").AiSessionMessage[]): ChatItem[] {
+    const out: ChatItem[] = [];
+    const toolByCallId = new Map<string, import("$lib/types/ai").AiSessionMessage>();
+    for (const m of messages) {
+      if (m.role === "tool" && m.toolCallId) {
+        toolByCallId.set(m.toolCallId, m);
+      }
+    }
+    for (const m of messages) {
+      if (m.role === "user") {
+        out.push({ kind: "message", key: m.id, message: m });
+        continue;
+      }
+      if (m.role === "assistant") {
+        if (m.content && m.content.trim().length > 0) {
+          out.push({ kind: "message", key: m.id, message: m });
+        }
+        if (m.toolCalls && m.toolCalls.length > 0) {
+          for (const call of m.toolCalls) {
+            const toolMsg = toolByCallId.get(call.id);
+            const parsed = toolMsg ? safeParse(toolMsg.content) : null;
+            const isError =
+              !!toolMsg?.toolError ||
+              (parsed !== null &&
+                typeof parsed === "object" &&
+                parsed !== null &&
+                "error" in (parsed as Record<string, unknown>));
+            out.push({
+              kind: "toolCard",
+              key: `${m.id}:${call.id}`,
+              name: call.name,
+              argumentsJson: call.argumentsJson,
+              status: isError ? "error" : "success",
+              label: toolMsg?.toolLabel ?? undefined,
+              data: parsed,
+              errorMessage: toolMsg?.toolError ?? undefined,
+            });
+          }
+        }
+        continue;
+      }
+      // role === "tool" already consumed via lookup map.
+    }
+    return out;
+  }
+
+  const chatItems = $derived(flattenSession(aiStore.activeSession?.messages ?? []));
 
   const providerSummary = $derived(
     aiStore.activeProvider
@@ -93,6 +164,10 @@
           onclick={() => (aiStore.view = "sessions")}
         >History</button>
         <button
+          class="tab {aiStore.view === 'debug' ? 'active' : ''}"
+          onclick={() => (aiStore.view = "debug")}
+        >Debug</button>
+        <button
           class="tab {aiStore.view === 'settings' ? 'active' : ''}"
           onclick={() => (aiStore.view = "settings")}
         >Settings</button>
@@ -102,7 +177,7 @@
 
     {#if aiStore.view === "chat"}
       <div class="ai-scroll" bind:this={scrollEl}>
-        {#if visibleMessages.length === 0 && !aiStore.pending}
+        {#if chatItems.length === 0 && !aiStore.pending}
           <div class="empty">
             <h3>Talk to your skills</h3>
             <p>
@@ -118,8 +193,20 @@
           </div>
         {/if}
 
-        {#each visibleMessages as msg (msg.id)}
-          <AIMessage message={msg} />
+        {#each chatItems as item (item.key)}
+          {#if item.kind === "message"}
+            <AIMessage message={item.message} />
+          {:else}
+            <AIToolCard
+              name={item.name}
+              argumentsJson={item.argumentsJson}
+              status={item.status}
+              label={item.label}
+              data={item.data}
+              errorMessage={item.errorMessage}
+              initiallyExpanded={true}
+            />
+          {/if}
         {/each}
 
         {#if aiStore.pending}
@@ -132,6 +219,7 @@
                 label={call.label}
                 data={call.data}
                 errorMessage={call.errorMessage}
+                initiallyExpanded={true}
               />
             {/each}
             {#if aiStore.pending.text.length > 0}
@@ -159,6 +247,10 @@
     {:else if aiStore.view === "sessions"}
       <div class="ai-scroll">
         <AISessionList />
+      </div>
+    {:else if aiStore.view === "debug"}
+      <div class="ai-scroll">
+        <AIDebug />
       </div>
     {:else}
       <div class="ai-scroll">

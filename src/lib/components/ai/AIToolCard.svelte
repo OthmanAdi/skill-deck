@@ -13,6 +13,7 @@
     label,
     data,
     errorMessage,
+    initiallyExpanded = false,
   }: {
     name: string;
     argumentsJson: string;
@@ -20,9 +21,11 @@
     label?: string;
     data?: unknown;
     errorMessage?: string;
+    initiallyExpanded?: boolean;
   } = $props();
 
-  let expanded = $state(false);
+  // svelte-ignore state_referenced_locally
+  let expanded = $state(initiallyExpanded);
 
   const formattedArgs = $derived(formatToolCallArguments(argumentsJson));
   const formattedData = $derived(
