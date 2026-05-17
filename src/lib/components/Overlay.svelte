@@ -27,6 +27,7 @@
   import DiffModal from "./DiffModal.svelte";
   import RegistryTab from "./RegistryTab.svelte";
   import AIPanel from "./ai/AIPanel.svelte";
+  import EmojiPickerPopover from "./EmojiPickerPopover.svelte";
   import { aiStore, openAiPanel } from "$lib/stores/ai.svelte";
 
   let focusedIndex = $state(-1);
@@ -467,5 +468,8 @@
 
     <!-- AI panel -->
     <AIPanel />
+
+    <!-- Singleton emoji picker — only ever one open at a time. -->
+    <EmojiPickerPopover />
   </div>
 {/if}

@@ -11,7 +11,6 @@
   import type { Skill } from "$lib/types";
   import {
     toggleStar,
-    setSkillIcon,
     copySkillReference,
     checkSkillUpdate,
     setSkillRepo,
@@ -27,7 +26,10 @@
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import { relativeTime, absoluteTime } from "$lib/utils/formatTime";
   import AgentBadge from "./AgentBadge.svelte";
-  import EmojiPickerPopover from "./EmojiPickerPopover.svelte";
+  import {
+    emojiPicker,
+    requestOpenEmojiPicker,
+  } from "$lib/stores/emojiPicker.svelte";
 
   let {
     skill,
@@ -56,8 +58,12 @@
   let starAnimating = $state(false);
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
-  let emojiPickerOpen = $state(false);
-  let emojiAnchorRect = $state<DOMRect | null>(null);
+
+  // Per-card flag derived from the global picker so styling / z-index still
+  // reflects which card is hosting the open popover.
+  const emojiPickerOpen = $derived(
+    emojiPicker.open && emojiPicker.skill?.id === skill.id
+  );
 
   function handleStarClick(e: MouseEvent) {
     e.stopPropagation();
@@ -66,23 +72,11 @@
     setTimeout(() => { starAnimating = false; }, 350);
   }
 
-  async function handleEmojiSelect(emoji: string) {
-    await setSkillIcon(skill.id, emoji || null);
-    emojiPickerOpen = false;
-  }
-
   function handleIconClick(e: MouseEvent) {
     e.stopPropagation();
     const target = e.currentTarget as HTMLElement | null;
     if (!target) return;
-
-    if (emojiPickerOpen) {
-      emojiPickerOpen = false;
-      return;
-    }
-
-    emojiAnchorRect = target.getBoundingClientRect();
-    emojiPickerOpen = true;
+    requestOpenEmojiPicker(skill, target.getBoundingClientRect());
   }
 
   function handleCopyClick(e: MouseEvent) {
@@ -310,14 +304,6 @@
   >
     <span class={isEmoji ? "emoji-avatar" : "letter-avatar"}>{displayIcon}</span>
   </button>
-
-  <EmojiPickerPopover
-    open={emojiPickerOpen}
-    {skill}
-    anchorRect={emojiAnchorRect}
-    onSelect={handleEmojiSelect}
-    onClose={() => (emojiPickerOpen = false)}
-  />
 
   <!-- Content -->
   <div class="min-w-0 flex-1">
