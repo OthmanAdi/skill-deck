@@ -18,9 +18,12 @@
     snapshotSkillBeforeUpdate,
     loadSkillVersionHistory,
     restoreSkillVersion,
+    deleteSkillVersion,
+    openDiffModal,
     openFullSkillModal,
     store,
   } from "$lib/stores/skills.svelte";
+  import ConfirmPopover from "./ConfirmPopover.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import { relativeTime, absoluteTime } from "$lib/utils/formatTime";
   import AgentBadge from "./AgentBadge.svelte";
@@ -212,13 +215,65 @@
 
   const entryDelayMs = $derived(Math.min(index, 8) * 16);
 
-  // Install timestamp pill (only visible when sorting by install date)
-  const installSortActive = $derived(
-    store.skillSortMode === "installed-newest" || store.skillSortMode === "installed-oldest"
+  // Install / updated timestamp pill — shows on install-related and updated-newest sorts.
+  const timeAwareSort = $derived(
+    store.skillSortMode === "installed-newest"
+      || store.skillSortMode === "installed-oldest"
+      || store.skillSortMode === "updated-newest"
   );
   const installedRelative = $derived(relativeTime(skill.installedAt));
   const installedAbsolute = $derived(absoluteTime(skill.installedAt));
-  const showInstalledPill = $derived(installSortActive && installedRelative !== null);
+  const lastModifiedAt = $derived(skill.lastModifiedAt ?? null);
+  const updatedRelative = $derived(relativeTime(lastModifiedAt));
+  const updatedAbsolute = $derived(absoluteTime(lastModifiedAt));
+  // Treat the file as "updated since install" only when the on-disk mtime is
+  // meaningfully newer (60 second grace) than the recorded install timestamp.
+  const wasUpdatedAfterInstall = $derived(
+    lastModifiedAt !== null
+      && skill.installedAt !== null
+      && skill.installedAt !== undefined
+      && lastModifiedAt > skill.installedAt + 60
+  );
+  const showTimePill = $derived(
+    timeAwareSort && (installedRelative !== null || updatedRelative !== null)
+  );
+  const pillIsUpdated = $derived(
+    store.skillSortMode === "updated-newest" || wasUpdatedAfterInstall
+  );
+  const timePillRelative = $derived(
+    pillIsUpdated ? updatedRelative ?? installedRelative : installedRelative ?? updatedRelative
+  );
+  const timePillTooltip = $derived(
+    pillIsUpdated
+      ? `Updated ${updatedAbsolute ?? "?"}${installedAbsolute ? ` • installed ${installedAbsolute}` : ""}`
+      : `Installed ${installedAbsolute ?? "?"}${updatedAbsolute ? ` • last modified ${updatedAbsolute}` : ""}`
+  );
+  const timePillLabel = $derived(pillIsUpdated ? "updated" : "installed");
+
+  // Archive indicator + delete confirm popover state.
+  const archiveCount = $derived(skill.archiveCount ?? 0);
+  let archiveDeleteOpenFor = $state<string | null>(null);
+  let archiveDeleteAnchorRect = $state<DOMRect | null>(null);
+  let archiveDeleteLoading = $state<string | null>(null);
+
+  function startDeleteVersion(e: MouseEvent, versionId: string) {
+    e.stopPropagation();
+    const target = e.currentTarget as HTMLElement | null;
+    archiveDeleteAnchorRect = target?.getBoundingClientRect() ?? null;
+    archiveDeleteOpenFor = versionId;
+  }
+
+  async function confirmDeleteVersion() {
+    const versionId = archiveDeleteOpenFor;
+    if (!versionId) return;
+    archiveDeleteLoading = versionId;
+    const ok = await deleteSkillVersion(skill, versionId);
+    archiveDeleteLoading = null;
+    if (ok) {
+      archiveDeleteOpenFor = null;
+      archiveDeleteAnchorRect = null;
+    }
+  }
 </script>
 
 <div
@@ -279,6 +334,26 @@
 
       <!-- Action buttons -->
       <div class="flex shrink-0 items-center gap-1">
+        {#if archiveCount > 0}
+          <span
+            class="instant-tooltip flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-md
+              border px-1 text-[9.5px] font-semibold tabular-nums leading-none"
+            style="
+              border-color: var(--color-border-active);
+              background: var(--color-accent-subtle);
+              color: var(--color-accent);
+            "
+            data-tooltip="Has {archiveCount} archived version{archiveCount === 1 ? '' : 's'}"
+            title="Has {archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand to view"
+          >
+            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M3 4h18l-2 4H5L3 4z M5 8h14v10a2 2 0 01-2 2H7a2 2 0 01-2-2V8z M10 12h4" />
+            </svg>
+            {archiveCount}
+          </span>
+        {/if}
+
         {#if hasChildren}
           <!-- Children expand/collapse chevron (inline so parent card keeps full width) -->
           <button
@@ -333,13 +408,17 @@
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <AgentBadge agentId={skill.agentId} />
 
-        {#if showInstalledPill}
+        {#if showTimePill}
           <span
             class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
-            style="border-color: var(--color-border-active); background: var(--color-accent-subtle); color: var(--color-accent);"
-            title={installedAbsolute ?? ""}
+            style="
+              border-color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-border-active)'};
+              background: {pillIsUpdated ? 'var(--color-surface-3)' : 'var(--color-accent-subtle)'};
+              color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-accent)'};
+            "
+            title={timePillTooltip}
           >
-            installed {installedRelative}
+            {timePillLabel} {timePillRelative}
           </span>
         {/if}
 
@@ -628,20 +707,61 @@
             {/if}
 
             {#if historyEntries.length > 0}
-              <div class="mt-1.5 max-h-[100px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5">
+              <div
+                class="mt-1.5 max-h-[140px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5"
+              >
                 {#each historyEntries as entry (entry.versionId)}
                   <div class="mb-1 flex items-center justify-between gap-1 text-[9px] last:mb-0">
-                    <span class="truncate text-[var(--color-text-muted)]" title={entry.versionId}>
+                    <span
+                      class="truncate text-[var(--color-text-muted)]"
+                      title={entry.versionId}
+                    >
                       {entry.reason} {new Date(entry.createdAt * 1000).toLocaleString()}
                     </span>
-                    <button
-                      class="shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
-                      onclick={(e) => { e.stopPropagation(); handleRestore(entry.versionId); }}
-                      disabled={restoringVersionId === entry.versionId}
-                      title="Restore this archived version"
-                    >
-                      {restoringVersionId === entry.versionId ? "..." : "restore"}
-                    </button>
+                    <div class="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          openDiffModal(skill, entry.versionId, "view");
+                        }}
+                        title="View this archived version"
+                      >
+                        view
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          openDiffModal(skill, entry.versionId, "compare");
+                        }}
+                        title={historyEntries.length > 1
+                          ? "Compare against another archive or the current file"
+                          : "Compare against the current file (only one archive available)"}
+                      >
+                        diff
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        onclick={(e) => { e.stopPropagation(); handleRestore(entry.versionId); }}
+                        disabled={restoringVersionId === entry.versionId}
+                        title="Restore this archived version onto the live skill file"
+                      >
+                        {restoringVersionId === entry.versionId ? "..." : "restore"}
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
+                        onclick={(e) => startDeleteVersion(e, entry.versionId)}
+                        disabled={archiveDeleteLoading === entry.versionId}
+                        title="Permanently delete this archive entry"
+                      >
+                        {archiveDeleteLoading === entry.versionId ? "..." : "delete"}
+                      </button>
+                    </div>
                   </div>
                 {/each}
               </div>
@@ -716,3 +836,17 @@
     {/if}
   </div>
 </div>
+
+<ConfirmPopover
+  open={archiveDeleteOpenFor !== null}
+  anchorRect={archiveDeleteAnchorRect}
+  title="Delete this archive?"
+  message="The snapshot file is permanently removed and cannot be recovered."
+  confirmLabel="Delete"
+  tone="danger"
+  onConfirm={confirmDeleteVersion}
+  onCancel={() => {
+    archiveDeleteOpenFor = null;
+    archiveDeleteAnchorRect = null;
+  }}
+/>
