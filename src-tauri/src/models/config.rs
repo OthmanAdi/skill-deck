@@ -105,6 +105,18 @@ pub struct AppConfig {
     /// Clamped to [1.0, 2.0] on persist.
     #[serde(default = "default_font_scale")]
     pub font_scale: f64,
+
+    /// Configured AI providers (Ollama, Azure Foundry, etc.).
+    #[serde(default)]
+    pub ai_providers: Vec<crate::ai::ProviderConfig>,
+
+    /// Id of the currently selected AI provider.
+    #[serde(default)]
+    pub ai_active_provider: Option<String>,
+
+    /// Currently selected model id (must belong to the active provider).
+    #[serde(default)]
+    pub ai_active_model: Option<String>,
 }
 
 /// Cached result of an update check for a single skill
@@ -196,6 +208,9 @@ impl Default for AppConfig {
             collapsed_agents: HashSet::new(),
             collapsed_tree_nodes: HashSet::new(),
             font_scale: default_font_scale(),
+            ai_providers: Vec::new(),
+            ai_active_provider: None,
+            ai_active_model: None,
         }
     }
 }

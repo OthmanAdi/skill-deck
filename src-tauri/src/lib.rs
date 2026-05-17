@@ -25,6 +25,7 @@
 // └─────────────────────────────────────────────────────┘
 
 mod agents;
+mod ai;
 mod commands;
 mod detection;
 mod models;
@@ -80,6 +81,18 @@ pub fn run() {
             commands::read_skill_snapshot,
             commands::search_marketplace,
             commands::search_marketplaces_aggregated,
+            // AI
+            commands::ai_detect_ollama,
+            commands::ai_list_providers,
+            commands::ai_save_provider,
+            commands::ai_delete_provider,
+            commands::ai_set_active_selection,
+            commands::ai_health,
+            commands::ai_list_models,
+            commands::ai_chat_send,
+            commands::ai_list_sessions,
+            commands::ai_get_session,
+            commands::ai_delete_session,
         ])
         .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click

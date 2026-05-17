@@ -53,8 +53,13 @@ regex = "1"
 # --- Hashing (snapshot integrity) ---
 sha2 = "0.10"
 
-# --- HTTP client (for update checking via GitHub API) ---
-reqwest = { version = "0.12", features = ["json"] }
+# --- HTTP client (for update checking via GitHub API + AI providers) ---
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# --- AI provider runtime ---
+async-trait = "0.1"
+futures-util = "0.3"
+uuid = { version = "1", features = ["v4"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [
