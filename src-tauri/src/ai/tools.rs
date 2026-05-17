@@ -103,6 +103,23 @@ pub fn all_tools() -> Vec<ToolDefinition> {
                 }
             }),
         },
+        ToolDefinition {
+            name: "search_marketplace".into(),
+            description: "Search the public skill marketplaces (Skills.sh and ClawHub) — the SAME registries the user's Registry tab uses — for skills the user does NOT yet have installed. Use ONLY when the user explicitly asks to look on skills.sh / clawhub / marketplace / registry / hub, OR when search_skills + list_skills together returned ZERO matches for the user's intent and no local skill can fulfill the task. Each returned item carries an install_command the user can run to add the skill locally. Never use this for questions about what is already installed — those go through search_skills / list_skills.".into(),
+            parameters: json!({
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": { "type": "string", "description": "Keywords or natural-language phrase to look up." },
+                    "provider": {
+                        "type": "string",
+                        "enum": ["all", "skills-sh", "claw-hub"],
+                        "description": "Which marketplace to query. Default 'all' fans out in parallel."
+                    },
+                    "limit": { "type": "integer", "description": "Max results per provider, default 10, hard cap 25." }
+                }
+            }),
+        },
     ]
 }
 
@@ -180,7 +197,7 @@ pub struct ToolResult {
     pub data: Value,
 }
 
-pub fn dispatch_tool(
+pub async fn dispatch_tool(
     name: &str,
     arguments_json: &str,
     skills: &[Skill],
@@ -201,6 +218,7 @@ pub fn dispatch_tool(
         "get_skill_stats" => get_skill_stats(&args, skills),
         "combine_skills_workflow" => combine_skills_workflow(&args, skills),
         "render_prompt_for_coding_agent" => render_prompt_for_coding_agent(&args, skills),
+        "search_marketplace" => search_marketplace(&args).await,
         other => Err(format!("unknown tool: {}", other)),
     };
     let ms = start.elapsed().as_millis();
@@ -741,6 +759,154 @@ fn render_prompt_for_coding_agent(args: &Value, skills: &[Skill]) -> Result<Tool
             "target_agent": target_agent,
             "prompt": prompt,
             "skill_count": chosen.len(),
+        }),
+    })
+}
+
+// -- search_marketplace ---------------------------------------------------
+
+async fn search_marketplace(args: &Value) -> Result<ToolResult, String> {
+    use crate::detection::marketplaces::{self, types::ProviderId, normalize_limit};
+
+    let query = args
+        .get("query")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "search_marketplace: 'query' is required".to_string())?
+        .to_string();
+    let provider_filter = args
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("all")
+        .to_lowercase();
+    let limit = normalize_limit(
+        args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10).min(25) as usize,
+    );
+
+    // Local lightweight outcome to avoid touching the private `from_result`
+    // constructor on marketplaces::ProviderSearchOutcome.
+    struct LocalOutcome {
+        provider: ProviderId,
+        response: Option<marketplaces::MarketplaceSearchResponse>,
+        error: Option<String>,
+    }
+
+    let outcomes: Vec<LocalOutcome> = match provider_filter.as_str() {
+        "skills-sh" | "skillssh" => {
+            let result = marketplaces::search(ProviderId::SkillsSh, &query, limit).await;
+            vec![match result {
+                Ok(response) => LocalOutcome {
+                    provider: ProviderId::SkillsSh,
+                    response: Some(response),
+                    error: None,
+                },
+                Err(e) => LocalOutcome {
+                    provider: ProviderId::SkillsSh,
+                    response: None,
+                    error: Some(e.to_string()),
+                },
+            }]
+        }
+        "claw-hub" | "clawhub" => {
+            let result = marketplaces::search(ProviderId::ClawHub, &query, limit).await;
+            vec![match result {
+                Ok(response) => LocalOutcome {
+                    provider: ProviderId::ClawHub,
+                    response: Some(response),
+                    error: None,
+                },
+                Err(e) => LocalOutcome {
+                    provider: ProviderId::ClawHub,
+                    response: None,
+                    error: Some(e.to_string()),
+                },
+            }]
+        }
+        _ => marketplaces::search_all(&query, limit)
+            .await
+            .into_iter()
+            .map(|o| LocalOutcome {
+                provider: o.provider,
+                response: o.response,
+                error: o.error,
+            })
+            .collect(),
+    };
+
+    let mut items_out: Vec<Value> = Vec::new();
+    let mut per_provider: Vec<Value> = Vec::new();
+    let mut total_items = 0usize;
+    let mut any_error: Option<String> = None;
+
+    for outcome in &outcomes {
+        let provider_str = serde_json::to_string(&outcome.provider)
+            .unwrap_or_else(|_| "\"unknown\"".into())
+            .trim_matches('"')
+            .to_string();
+        match (&outcome.response, &outcome.error) {
+            (Some(resp), _) => {
+                per_provider.push(json!({
+                    "provider": provider_str,
+                    "count": resp.items.len(),
+                    "duration_ms": resp.duration_ms,
+                }));
+                for item in &resp.items {
+                    total_items += 1;
+                    items_out.push(json!({
+                        "id": item.id,
+                        "provider": serde_json::to_string(&item.provider)
+                            .unwrap_or_default()
+                            .trim_matches('"')
+                            .to_string(),
+                        "kind": serde_json::to_string(&item.kind)
+                            .unwrap_or_default()
+                            .trim_matches('"')
+                            .to_string(),
+                        "name": item.name,
+                        "description": item.description,
+                        "install_command": item.install_command,
+                        "source_url": item.source_url,
+                        "homepage_url": item.homepage_url,
+                        "installs": item.installs,
+                        "version": item.version,
+                        "author": item.author,
+                        "updated_at": item.updated_at,
+                    }));
+                }
+            }
+            (None, Some(err)) => {
+                per_provider.push(json!({
+                    "provider": provider_str,
+                    "error": err,
+                }));
+                if any_error.is_none() {
+                    any_error = Some(format!("{}: {}", provider_str, err));
+                }
+            }
+            (None, None) => {
+                per_provider.push(json!({
+                    "provider": provider_str,
+                    "count": 0,
+                }));
+            }
+        }
+    }
+
+    let label = format!(
+        "search_marketplace(\"{}\") → {} item(s) across {} provider(s)",
+        query,
+        total_items,
+        per_provider.len()
+    );
+
+    Ok(ToolResult {
+        label,
+        data: json!({
+            "query": query,
+            "provider_filter": provider_filter,
+            "total": total_items,
+            "providers": per_provider,
+            "items": items_out,
+            "warning": any_error,
         }),
     })
 }

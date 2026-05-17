@@ -49,6 +49,8 @@ const DEFAULT_SYSTEM_PROMPT_BASE: &str = r##"You are Skill Deck's resident agent
 | "show me skill X in detail" | get_skill_detail(skill_id=...) |
 | "make me a prompt using X and Y" | search_skills(X) + search_skills(Y) → combine_skills_workflow → render_prompt_for_coding_agent |
 | "summarize my registry" | get_skill_stats(group_by=agent_id) + get_skill_stats(group_by=tag, top_n=10) |
+| "find me a skill on skills.sh / clawhub / the marketplace / the registry / the hub for X" | search_marketplace(query=X) |
+| user has no local skill for the task after a thorough local search | search_marketplace(query=...) and surface install_command for top match(es) |
 
 If your first call returns nothing or feels thin, your NEXT message must be another tool call (different field, broader keyword, wider time window) — not a final answer.
 
@@ -403,7 +405,7 @@ pub async fn run_agent_turn(
                 arguments_json: call.arguments_json.clone(),
             });
             let dispatch_start = std::time::Instant::now();
-            let dispatched = dispatch_tool(&call.name, &call.arguments_json, &skills);
+            let dispatched = dispatch_tool(&call.name, &call.arguments_json, &skills).await;
             let dispatch_ms = dispatch_start.elapsed().as_millis() as u64;
             match dispatched {
                 Ok(result) => {
@@ -587,38 +589,45 @@ fn build_system_prompt(skills: &[Skill]) -> String {
         "\nIf the user says 'today' use today_start_unix. 'yesterday' = yesterday_start_unix. 'this week' / 'last 7 days' / 'recently' = seven_days_ago_unix. 'this month' / 'last 30 days' = thirty_days_ago_unix. 'this quarter' = ninety_days_ago_unix. 'this year' = year_ago_unix."
     );
 
-    let _ = writeln!(
-        &mut header,
-        "\nskill_registry_size: {} skill(s) across {} agent(s)",
-        skills.len(),
-        skills
-            .iter()
-            .map(|s| serde_json::to_string(&s.agent_id).unwrap_or_default())
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-    );
-
-    let mut preview = String::new();
-    for s in skills.iter().take(40) {
+    // Aggregate counts only — do NOT inline skill names/descriptions. Small
+    // models would otherwise answer directly from this preview without
+    // calling a tool, which produced "lazy" replies and stale results.
+    let mut agent_counts: std::collections::HashMap<String, u32> =
+        std::collections::HashMap::new();
+    for s in skills.iter() {
         let agent = serde_json::to_string(&s.agent_id)
             .unwrap_or_default()
             .trim_matches('"')
             .to_string();
-        let _ = writeln!(
-            &mut preview,
-            "- [{}] {} (id={}) — {}",
-            agent,
-            s.name,
-            s.id,
-            s.description.chars().take(120).collect::<String>()
-        );
+        *agent_counts.entry(agent).or_insert(0) += 1;
     }
+    let mut by_agent: Vec<(String, u32)> = agent_counts.into_iter().collect();
+    by_agent.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    let _ = writeln!(
+        &mut header,
+        "\nskill_registry_size: {} skill(s) across {} agent(s)",
+        skills.len(),
+        by_agent.len()
+    );
+    let top_summary: String = by_agent
+        .iter()
+        .take(10)
+        .map(|(a, n)| format!("{}={}", a, n))
+        .collect::<Vec<_>>()
+        .join(", ");
+    if !top_summary.is_empty() {
+        let _ = writeln!(&mut header, "top_agents_by_count: {}", top_summary);
+    }
+    let _ = writeln!(
+        &mut header,
+        "\nThe full skill list is NOT inlined here. To answer anything about specific skills you MUST call search_skills, list_skills, get_skill_detail, or get_skill_stats. Do not invent skill names."
+    );
 
     format!(
-        "{base}\n\n## Runtime context\n{header}\n## Skill registry preview (first 40 — call tools for full data)\n{preview}\n",
+        "{base}\n\n## Runtime context\n{header}",
         base = DEFAULT_SYSTEM_PROMPT_BASE,
         header = header,
-        preview = preview
     )
 }
 

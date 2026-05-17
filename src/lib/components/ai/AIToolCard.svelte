@@ -124,6 +124,24 @@
     | { kind: "prompt"; target_agent?: string; skill_count?: number; prompt?: string }
     | { kind: "workflow"; intent?: string; steps: unknown[] }
     | { kind: "detail"; skill?: unknown; metadata?: unknown; body?: string }
+    | {
+        kind: "marketplace";
+        query: string;
+        total: number;
+        providers: Array<{ provider: string; count?: number; error?: string; durationMs?: number }>;
+        warning?: string;
+        items: Array<{
+          name?: string;
+          provider?: string;
+          description?: string | null;
+          install_command?: string;
+          source_url?: string | null;
+          homepage_url?: string | null;
+          installs?: number;
+          version?: string | null;
+          author?: string | null;
+        }>;
+      }
     | { kind: "json"; value: unknown };
 
   const resultPreview: ResultPreview = $derived.by(() => {
@@ -183,6 +201,33 @@
         skill: obj["skill"],
         metadata: obj["metadata"],
         body: obj["body"] as string,
+      };
+    }
+
+    if (Array.isArray(obj["items"]) && Array.isArray(obj["providers"])) {
+      return {
+        kind: "marketplace",
+        query: typeof obj["query"] === "string" ? (obj["query"] as string) : "",
+        total: typeof obj["total"] === "number" ? (obj["total"] as number) : 0,
+        providers: (obj["providers"] as Array<Record<string, unknown>>).map((p) => ({
+          provider: String(p["provider"] ?? ""),
+          count: typeof p["count"] === "number" ? (p["count"] as number) : undefined,
+          error: typeof p["error"] === "string" ? (p["error"] as string) : undefined,
+          durationMs: typeof p["duration_ms"] === "number" ? (p["duration_ms"] as number) : undefined,
+        })),
+        warning: typeof obj["warning"] === "string" ? (obj["warning"] as string) : undefined,
+        items: (obj["items"] as Array<Record<string, unknown>>).map((i) => ({
+          name: typeof i["name"] === "string" ? (i["name"] as string) : undefined,
+          provider: typeof i["provider"] === "string" ? (i["provider"] as string) : undefined,
+          description: (i["description"] as string | null | undefined) ?? null,
+          install_command:
+            typeof i["install_command"] === "string" ? (i["install_command"] as string) : undefined,
+          source_url: (i["source_url"] as string | null | undefined) ?? null,
+          homepage_url: (i["homepage_url"] as string | null | undefined) ?? null,
+          installs: typeof i["installs"] === "number" ? (i["installs"] as number) : undefined,
+          version: (i["version"] as string | null | undefined) ?? null,
+          author: (i["author"] as string | null | undefined) ?? null,
+        })),
       };
     }
 
@@ -313,6 +358,62 @@
         <pre class="detail-meta">{JSON.stringify(resultPreview.metadata ?? {}, null, 2)}</pre>
         <div class="section-label">body</div>
         <pre class="detail-body">{resultPreview.body}</pre>
+      {:else if resultPreview.kind === "marketplace"}
+        <div class="result-head">
+          <span><strong>{resultPreview.total}</strong> item(s) for “{resultPreview.query}”</span>
+          {#each resultPreview.providers as p (p.provider)}
+            <span class="muted">
+              {p.provider}: {p.error ? `error (${p.error})` : `${p.count ?? 0}`}
+              {#if p.durationMs !== undefined}
+                · {p.durationMs} ms
+              {/if}
+            </span>
+          {/each}
+        </div>
+        {#if resultPreview.warning}
+          <div class="err">{resultPreview.warning}</div>
+        {/if}
+        <ul class="market-list scrollable">
+          {#each resultPreview.items as it, i (i)}
+            <li>
+              <div class="market-head">
+                <span class="row-name">{it.name ?? "(unnamed)"}</span>
+                {#if it.provider}
+                  <span class="row-agent">{it.provider}</span>
+                {/if}
+                {#if it.version}
+                  <span class="tag muted-tag">v{it.version}</span>
+                {/if}
+                {#if it.installs !== undefined && it.installs > 0}
+                  <span class="tag muted-tag">{it.installs.toLocaleString()} installs</span>
+                {/if}
+              </div>
+              {#if it.description}
+                <span class="row-desc">{it.description}</span>
+              {/if}
+              {#if it.author}
+                <span class="muted">by {it.author}</span>
+              {/if}
+              {#if it.install_command}
+                <div class="install-row">
+                  <pre class="install-cmd">{it.install_command}</pre>
+                  <button
+                    class="copy-btn"
+                    onclick={() => copyToClipboard(it.install_command ?? "")}
+                  >copy install</button>
+                </div>
+              {/if}
+              <div class="link-row">
+                {#if it.homepage_url}
+                  <a href={it.homepage_url} target="_blank" rel="noopener noreferrer">listing ↗</a>
+                {/if}
+                {#if it.source_url}
+                  <a href={it.source_url} target="_blank" rel="noopener noreferrer">source ↗</a>
+                {/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
       {:else if resultPreview.kind === "string"}
         <pre class="prompt-block">{resultPreview.value}</pre>
       {:else if resultPreview.kind === "empty"}
@@ -554,6 +655,63 @@
   }
   .step-json {
     max-height: 200px;
+  }
+  .market-list {
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .market-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface-0);
+    font-size: 11px;
+  }
+  .market-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .install-row {
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .install-cmd {
+    flex: 1;
+    margin: 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
+    font-size: 10.5px;
+    line-height: 1.4;
+    color: var(--color-text-primary);
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+  .link-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 2px;
+    font-size: 10.5px;
+  }
+  .link-row a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .link-row a:hover {
+    text-decoration: underline;
   }
   .raw-toggle {
     display: flex;
