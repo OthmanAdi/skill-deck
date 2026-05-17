@@ -3,7 +3,10 @@
 use tauri::State;
 
 use crate::commands::preferences::ConfigState;
-use crate::detection::{skill_history, skills_registry, update_checker};
+use crate::detection::marketplaces::{
+    self, MarketplaceSearchResponse, ProviderId, ProviderSearchOutcome,
+};
+use crate::detection::{skill_history, update_checker};
 use crate::models::{SkillVersionEntry, UpdateErrorKind};
 
 fn scan_for_commands(state: &State<'_, ConfigState>) -> Result<crate::models::ScanResult, String> {
@@ -59,11 +62,9 @@ pub struct RestoreSkillVersionResult {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RegistrySkillSearchResponse {
+pub struct AggregatedMarketplaceResponse {
     pub query: String,
-    pub count: usize,
-    pub duration_ms: u64,
-    pub skills: Vec<skills_registry::RegistrySkillSummary>,
+    pub providers: Vec<ProviderSearchOutcome>,
 }
 
 fn scan_skill_file_path(state: &State<'_, ConfigState>, skill_id: &str) -> Result<String, String> {
@@ -363,21 +364,29 @@ pub fn restore_skill_version(
     })
 }
 
+/// Search a single marketplace provider (skills.sh, ClawHub, ...).
 #[tauri::command]
-pub async fn search_skills_registry(
+pub async fn search_marketplace(
+    provider: ProviderId,
     query: String,
     limit: Option<u32>,
-) -> Result<RegistrySkillSearchResponse, String> {
-    let normalized_limit = skills_registry::normalize_limit(limit.unwrap_or(20) as usize);
-
-    let result = skills_registry::search_registry(&query, normalized_limit)
+) -> Result<MarketplaceSearchResponse, String> {
+    let normalized_limit = marketplaces::normalize_limit(limit.unwrap_or(20) as usize);
+    marketplaces::search(provider, &query, normalized_limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+}
 
-    Ok(RegistrySkillSearchResponse {
-        query: result.query,
-        count: result.count,
-        duration_ms: result.duration_ms,
-        skills: result.skills,
+/// Fan-out search across every known marketplace in parallel.
+#[tauri::command]
+pub async fn search_marketplaces_aggregated(
+    query: String,
+    limit: Option<u32>,
+) -> Result<AggregatedMarketplaceResponse, String> {
+    let normalized_limit = marketplaces::normalize_limit(limit.unwrap_or(20) as usize);
+    let providers = marketplaces::search_all(&query, normalized_limit).await;
+    Ok(AggregatedMarketplaceResponse {
+        query,
+        providers,
     })
 }

@@ -76,7 +76,8 @@ pub fn run() {
             commands::snapshot_skill_before_update,
             commands::list_skill_versions,
             commands::restore_skill_version,
-            commands::search_skills_registry,
+            commands::search_marketplace,
+            commands::search_marketplaces_aggregated,
         ])
         .setup(move |app| {
             // The overlay window starts hidden — shown on global hotkey or tray click
