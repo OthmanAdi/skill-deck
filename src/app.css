@@ -351,6 +351,14 @@ body {
   );
 }
 
+/* Compare-mode diff rows in DiffModal — each cell holds a highlight.js HTML
+ * span tree, so we set the base text color and font here. The .hljs-* token
+ * colors layered on top come from the existing block lower in this file. */
+.diff-code-cell {
+  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  color: var(--color-text-primary);
+}
+
 .skill-content-preview {
   font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
   font-size: 11px;

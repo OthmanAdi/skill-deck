@@ -24,7 +24,9 @@
     showToast,
     store,
   } from "$lib/stores/skills.svelte";
-  import { diffLines, type DiffResult } from "$lib/utils/diffLines";
+  import { diffLines, type DiffResult, type DiffRow } from "$lib/utils/diffLines";
+  import { renderSkillContent } from "$lib/utils/renderSkillContent";
+  import { highlightCode, languageFromPath } from "$lib/utils/highlight";
 
   const CURRENT_FILE_SENTINEL = "__current_file__";
 
@@ -149,6 +151,46 @@
     if (mode !== "compare") return null;
     if (leftContent === null || rightContent === null) return null;
     return diffLines(leftContent, rightContent);
+  });
+
+  /**
+   * Render the View pane through `renderSkillContent` so it gets the same
+   * markdown structure (headings, lists, frontmatter, fenced code blocks with
+   * syntax highlighting) as FullSkillModal. For non-markdown files this
+   * automatically falls back to a single highlighted code block.
+   */
+  const viewRendered = $derived.by(() => {
+    if (mode !== "view") return null;
+    if (leftContent === null) return null;
+    return renderSkillContent(leftContent, {
+      maxLines: Number.MAX_SAFE_INTEGER,
+      filePath: skill?.filePath ?? null,
+    });
+  });
+
+  /**
+   * For Compare mode, pre-highlight every diff row's left/right line content
+   * using the source file's language so reviewers see actual syntax colors
+   * instead of monochrome text. Done in one pass and cached via `$derived`
+   * so we don't re-highlight on every re-render.
+   */
+  const diffLanguage = $derived.by(() => {
+    return languageFromPath(skill?.filePath ?? null) ?? "markdown";
+  });
+
+  interface HighlightedDiffRow extends DiffRow {
+    leftHtml: string;
+    rightHtml: string;
+  }
+
+  const highlightedDiffRows = $derived.by<HighlightedDiffRow[] | null>(() => {
+    if (!diff) return null;
+    const lang = diffLanguage;
+    return diff.rows.map((row) => ({
+      ...row,
+      leftHtml: row.left ? highlightCode(row.left, lang).html : "",
+      rightHtml: row.right ? highlightCode(row.right, lang).html : "",
+    }));
   });
 
   function handleBackdropClick(e: MouseEvent) {
@@ -324,15 +366,22 @@
         {:else if errorMessage}
           <div class="px-4 py-6 text-[11px] text-[var(--color-error)]">{errorMessage}</div>
         {:else if mode === "view"}
-          <pre
-            class="m-0 whitespace-pre-wrap break-words px-4 py-3 font-mono text-[11px] leading-relaxed text-[var(--color-text-primary)]"
-            style="background: var(--color-code-bg);"
-          >{leftContent ?? ""}</pre>
-        {:else if diff}
+          {#if viewRendered}
+            <div
+              class="skill-content-preview full-skill-content px-4 py-3 hljs"
+              style="background: var(--color-code-bg); color: var(--color-text-primary);"
+            >
+              {@html viewRendered.html}
+            </div>
+          {:else}
+            <p class="px-4 py-6 text-[11px] text-[var(--color-text-muted)]">No content available</p>
+          {/if}
+        {:else if highlightedDiffRows && diff}
           {@const truncated = diff.summary.truncated}
           <table
-            class="w-full border-separate text-[11px] font-mono leading-snug"
+            class="hljs w-full border-separate text-[11px] font-mono leading-snug"
             style="background: var(--color-code-bg); border-spacing: 0;"
+            data-language={diffLanguage}
           >
             <colgroup>
               <col style="width: 32px;" />
@@ -343,7 +392,7 @@
               <col />
             </colgroup>
             <tbody>
-              {#each diff.rows as row, idx (idx)}
+              {#each highlightedDiffRows as row, idx (idx)}
                 <tr
                   class="align-top"
                   style="background: {row.kind === 'add'
@@ -365,9 +414,9 @@
                     {row.kind === "remove" ? "-" : row.kind === "add" ? "" : ""}
                   </td>
                   <td
-                    class="whitespace-pre-wrap break-words px-2 text-[var(--color-text-primary)]"
+                    class="diff-code-cell whitespace-pre-wrap break-words px-2"
                     style="border-right: 1px solid var(--color-border);"
-                  >{row.left}</td>
+                  >{@html row.leftHtml}</td>
 
                   <td
                     class="select-none px-2 text-right text-[9px] text-[var(--color-text-muted)]"
@@ -381,8 +430,9 @@
                   >
                     {row.kind === "add" ? "+" : row.kind === "remove" ? "" : ""}
                   </td>
-                  <td class="whitespace-pre-wrap break-words px-2 text-[var(--color-text-primary)]"
-                  >{row.right}</td>
+                  <td
+                    class="diff-code-cell whitespace-pre-wrap break-words px-2"
+                  >{@html row.rightHtml}</td>
                 </tr>
               {/each}
             </tbody>
