@@ -1,27 +1,28 @@
 // @agent-context: skills.sh marketplace provider (vercel-labs/skills, npx skills).
 //
-// Endpoint:  GET https://skills.sh/api/v1/skills/search?q=<query>&limit=<n>
+// Endpoint:  GET https://skills.sh/api/search?q=<query>&limit=<n>
 // Override base URL via env `SKILLS_API_URL`.
 //
-// Response shape (documented v1):
+// This is the SAME endpoint the official `npx skills find` CLI uses (see
+// vercel-labs/skills/src/find.ts), and it does NOT require an API key.
+// The newer `/api/v1/skills/search` route requires a `Bearer sk_live_...`
+// key, which is why we deliberately stay on `/api/search` here.
+//
+// Response shape (open route):
 // {
-//   "data": [
+//   "skills": [
 //     {
 //       "id": "owner/repo/slug",
-//       "slug": "slug",
 //       "name": "Display Name",
 //       "source": "owner/repo",
-//       "installs": 24531,
-//       "sourceType": "github",
-//       "installUrl": "https://github.com/owner/repo",
-//       "url": "https://skills.sh/owner/repo/slug"
+//       "installs": 24531
 //     }
-//   ],
-//   "query": "...",
-//   "searchType": "semantic",
-//   "count": 5,
-//   "durationMs": 142
+//   ]
 // }
+//
+// `source` is always "owner/repo" (the GitHub source), so we derive a
+// `sourceUrl` of `https://github.com/{source}` ourselves to keep the
+// "Open source" button in the UI working without needing the v1 route.
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::StatusCode;
@@ -46,7 +47,7 @@ fn base_url() -> String {
 #[serde(rename_all = "camelCase")]
 struct RawResponse {
     #[serde(default)]
-    data: Vec<RawSkill>,
+    skills: Vec<RawSkill>,
     #[serde(default)]
     query: Option<String>,
     #[serde(default)]
@@ -61,19 +62,13 @@ struct RawSkill {
     #[serde(default)]
     id: String,
     #[serde(default)]
-    slug: String,
+    slug: Option<String>,
     #[serde(default)]
     name: String,
     #[serde(default)]
     source: Option<String>,
     #[serde(default)]
     installs: Option<serde_json::Value>,
-    #[serde(default)]
-    source_type: Option<String>,
-    #[serde(default)]
-    install_url: Option<String>,
-    #[serde(default)]
-    url: Option<String>,
 }
 
 fn parse_installs(value: Option<&serde_json::Value>) -> u64 {
@@ -89,74 +84,74 @@ fn build_install_command(id: &str) -> String {
 }
 
 fn map_item(raw: RawSkill) -> Option<RegistryItem> {
-    let id = if !raw.id.trim().is_empty() {
-        raw.id.trim().to_string()
-    } else if !raw.source.as_deref().unwrap_or("").trim().is_empty()
-        && !raw.slug.trim().is_empty()
-    {
-        format!(
-            "{}/{}",
-            raw.source.as_deref().unwrap_or("").trim_end_matches('/'),
-            raw.slug.trim()
-        )
+    let trimmed_id = raw.id.trim();
+    let slug_trimmed = raw.slug.as_deref().unwrap_or("").trim();
+    let source_trimmed = raw.source.as_deref().unwrap_or("").trim();
+
+    // The open endpoint always returns a full `id` like "owner/repo/slug",
+    // but we tolerate the older split shape (source + slug) as a fallback so
+    // we don't break if Vercel ever switches the wire format.
+    let id = if !trimmed_id.is_empty() {
+        trimmed_id.to_string()
+    } else if !source_trimmed.is_empty() && !slug_trimmed.is_empty() {
+        format!("{}/{}", source_trimmed.trim_end_matches('/'), slug_trimmed)
     } else {
         return None;
     };
 
-    let name = if raw.name.trim().is_empty() {
+    let derived_slug = if !slug_trimmed.is_empty() {
+        slug_trimmed.to_string()
+    } else {
         id.rsplit('/').next().unwrap_or(&id).to_string()
+    };
+
+    let name = if raw.name.trim().is_empty() {
+        derived_slug.clone()
     } else {
         raw.name.trim().to_string()
     };
+
+    let author_handle = if !source_trimmed.is_empty() {
+        source_trimmed.split('/').next().map(|s| s.to_string())
+    } else {
+        // Fall back to the first segment of `id` so cards still attribute the
+        // author even when the API omits `source`.
+        id.split('/').next().map(|s| s.to_string())
+    };
+
+    // `source` (when present) is the GitHub repo path, so a deterministic
+    // sourceUrl gives us the "Open source" button without needing the v1
+    // installUrl field that requires auth.
+    let source_url = if !source_trimmed.is_empty() {
+        Some(format!("https://github.com/{}", source_trimmed))
+    } else {
+        None
+    };
+
+    let homepage_url = Some(format!("https://skills.sh/{}", id));
 
     Some(RegistryItem {
         id: id.clone(),
         provider: ProviderId::SkillsSh,
         kind: RegistryKind::Skill,
         name,
-        slug: raw.slug.trim().to_string(),
+        slug: derived_slug,
         install_command: build_install_command(&id),
-        author: raw
-            .source
-            .as_ref()
-            .and_then(|s| s.split('/').next())
-            .map(|s| s.to_string()),
-        author_handle: raw
-            .source
-            .as_ref()
-            .and_then(|s| s.split('/').next())
-            .map(|s| s.to_string()),
+        author: author_handle.clone(),
+        author_handle,
         author_avatar_url: None,
         description: None,
         version: None,
         installs: parse_installs(raw.installs.as_ref()),
-        source: raw
-            .source
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
-        source_url: raw
-            .install_url
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
-        homepage_url: raw
-            .url
-            .as_ref()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()),
+        source: if source_trimmed.is_empty() {
+            None
+        } else {
+            Some(source_trimmed.to_string())
+        },
+        source_url,
+        homepage_url,
         updated_at: None,
         score: None,
-    })
-    .map(|mut item| {
-        if let Some(st) = raw.source_type.as_deref() {
-            if st.eq_ignore_ascii_case("github") && item.source_url.is_none() {
-                if let Some(source) = &item.source {
-                    item.source_url = Some(format!("https://github.com/{}", source));
-                }
-            }
-        }
-        item
     })
 }
 
@@ -173,7 +168,7 @@ pub async fn search(query: &str, limit: usize) -> Result<MarketplaceSearchRespon
     }
 
     let normalized_limit = normalize_limit(limit);
-    let endpoint = format!("{}/api/v1/skills/search", base_url());
+    let endpoint = format!("{}/api/search", base_url());
 
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(5))
@@ -219,7 +214,7 @@ pub async fn search(query: &str, limit: usize) -> Result<MarketplaceSearchRespon
         .await
         .context("skills.sh returned invalid JSON")?;
 
-    let items: Vec<RegistryItem> = raw.data.into_iter().filter_map(map_item).collect();
+    let items: Vec<RegistryItem> = raw.skills.into_iter().filter_map(map_item).collect();
 
     Ok(MarketplaceSearchResponse {
         provider: ProviderId::SkillsSh,
@@ -262,16 +257,13 @@ mod tests {
     }
 
     #[test]
-    fn map_item_derives_github_source_url_when_missing() {
+    fn map_item_derives_github_source_url_from_source_field() {
         let raw = RawSkill {
             id: "owner/repo/skill".to_string(),
-            slug: "skill".to_string(),
+            slug: Some("skill".to_string()),
             name: "Skill".to_string(),
             source: Some("owner/repo".to_string()),
             installs: None,
-            source_type: Some("github".to_string()),
-            install_url: None,
-            url: None,
         };
 
         let item = map_item(raw).expect("item");
@@ -279,20 +271,36 @@ mod tests {
             item.source_url.as_deref(),
             Some("https://github.com/owner/repo")
         );
+        assert_eq!(
+            item.homepage_url.as_deref(),
+            Some("https://skills.sh/owner/repo/skill")
+        );
+        assert_eq!(item.author.as_deref(), Some("owner"));
     }
 
     #[test]
     fn map_item_skips_when_no_id_or_source_slug() {
         let raw = RawSkill {
             id: String::new(),
-            slug: String::new(),
+            slug: None,
             name: String::new(),
             source: None,
             installs: None,
-            source_type: None,
-            install_url: None,
-            url: None,
         };
         assert!(map_item(raw).is_none());
+    }
+
+    #[test]
+    fn map_item_falls_back_to_id_tail_for_name_when_blank() {
+        let raw = RawSkill {
+            id: "owner/repo/cool-skill".to_string(),
+            slug: None,
+            name: String::new(),
+            source: Some("owner/repo".to_string()),
+            installs: Some(serde_json::Value::Number(serde_json::Number::from(99u64))),
+        };
+        let item = map_item(raw).expect("item");
+        assert_eq!(item.name, "cool-skill");
+        assert_eq!(item.installs, 99);
     }
 }
