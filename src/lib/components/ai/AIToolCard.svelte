@@ -7,10 +7,15 @@
   result object and rendered "[object Object]".
 -->
 <script lang="ts">
-  import { formatToolCallArguments } from "$lib/stores/ai.svelte";
+  import {
+    formatToolCallArguments,
+    getToolCardExpanded,
+    setToolCardExpanded,
+  } from "$lib/stores/ai.svelte";
   import { highlightCode } from "$lib/utils/highlight";
 
   let {
+    cardKey,
     name,
     argumentsJson,
     status,
@@ -19,6 +24,7 @@
     errorMessage,
     initiallyExpanded = false,
   }: {
+    cardKey: string;
     name: string;
     argumentsJson: string;
     status: "running" | "success" | "error";
@@ -28,9 +34,14 @@
     initiallyExpanded?: boolean;
   } = $props();
 
-  // svelte-ignore state_referenced_locally
-  let expanded = $state(initiallyExpanded);
+  // Persisted to aiStore.toolCardExpansion so the user's open/close state
+  // survives unmounts caused by hiding the overlay window.
+  const expanded = $derived(getToolCardExpanded(cardKey, initiallyExpanded));
   let showRaw = $state(false);
+
+  function toggleExpanded() {
+    setToolCardExpanded(cardKey, !expanded);
+  }
 
   const argsObject = $derived.by(() => {
     if (!argumentsJson) return null;
@@ -197,7 +208,10 @@
 >
   <button
     class="tool-card-header"
-    onclick={() => (expanded = !expanded)}
+    class:is-collapsed={!expanded}
+    onclick={toggleExpanded}
+    aria-expanded={expanded}
+    aria-label="{expanded ? 'Collapse' : 'Expand'} tool call {name}"
   >
     <span class="left">
       <span
@@ -216,7 +230,7 @@
       <span class="status-tag">
         {status === "running" ? "running" : status === "error" ? "error" : "done"}
       </span>
-      <span class="chev">{expanded ? "−" : "+"}</span>
+      <span class="chev" aria-hidden="true">{expanded ? "Hide" : "View"} {expanded ? "▴" : "▾"}</span>
     </span>
   </button>
 
@@ -231,38 +245,41 @@
           {#if resultPreview.filters.length > 0}
             <span class="muted">filters: {resultPreview.filters.join(", ")}</span>
           {/if}
+          {#if resultPreview.skills.length > 6}
+            <span class="muted">scroll for more</span>
+          {/if}
         </div>
-        <ul class="skill-list">
-          {#each resultPreview.skills.slice(0, 12) as s, i (i)}
+        <ul class="skill-list scrollable">
+          {#each resultPreview.skills as s, i (i)}
             <li>
               <span class="row-name">{s.name ?? "(unnamed)"}</span>
               {#if s.agentId}
                 <span class="row-agent">{s.agentId}</span>
               {/if}
               {#if s.description}
-                <span class="row-desc">{s.description.slice(0, 140)}{s.description.length > 140 ? "…" : ""}</span>
+                <span class="row-desc">{s.description.slice(0, 220)}{s.description.length > 220 ? "…" : ""}</span>
               {/if}
               {#if s.tags && s.tags.length > 0}
                 <span class="row-tags">
-                  {#each s.tags.slice(0, 6) as t (t)}
+                  {#each s.tags.slice(0, 8) as t (t)}
                     <span class="tag">{t}</span>
                   {/each}
-                  {#if s.tags.length > 6}
-                    <span class="tag muted-tag">+{s.tags.length - 6}</span>
+                  {#if s.tags.length > 8}
+                    <span class="tag muted-tag">+{s.tags.length - 8}</span>
                   {/if}
                 </span>
               {/if}
             </li>
           {/each}
         </ul>
-        {#if resultPreview.skills.length > 12}
-          <div class="muted more">+{resultPreview.skills.length - 12} more skill(s) in raw view</div>
-        {/if}
       {:else if resultPreview.kind === "stats"}
         <div class="result-head">
           <span>group_by <strong>{resultPreview.groupBy}</strong> · total {resultPreview.total}</span>
+          {#if resultPreview.groups.length > 8}
+            <span class="muted">scroll for more</span>
+          {/if}
         </div>
-        <ol class="stats-list">
+        <ol class="stats-list scrollable">
           {#each resultPreview.groups as g, i (i)}
             <li>
               <span class="row-name">{g.key}</span>
@@ -285,7 +302,7 @@
             <span>intent: <em>“{resultPreview.intent}”</em></span>
           {/if}
         </div>
-        <ol class="workflow-list">
+        <ol class="workflow-list scrollable">
           {#each resultPreview.steps as step, i (i)}
             <li>
               <pre class="step-json">{JSON.stringify(step, null, 2)}</pre>
@@ -334,10 +351,20 @@
     background: transparent;
     border: none;
     cursor: pointer;
-    transition: background-color 150ms ease;
+    transition: background-color 150ms ease, box-shadow 150ms ease;
   }
   .tool-card-header:hover {
     background: var(--color-surface-2);
+  }
+  .tool-card-header.is-collapsed {
+    background: var(--color-surface-1);
+  }
+  .tool-card-header.is-collapsed:hover {
+    background: var(--color-surface-2);
+    box-shadow: inset 0 0 0 1px var(--color-border-hover, var(--color-border));
+  }
+  .tool-card-header.is-collapsed .chev {
+    color: var(--color-accent);
   }
   .left {
     display: flex;
@@ -373,9 +400,16 @@
     color: var(--color-text-muted);
   }
   .chev {
-    font-size: 14px;
-    color: var(--color-text-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
     margin-left: 2px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+  }
+  .tool-card-header:hover .chev {
+    background: var(--color-surface-3);
   }
   .tool-body {
     border-top: 1px solid var(--color-border);
@@ -407,6 +441,27 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+  .scrollable {
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface-1);
+  }
+  .scrollable::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scrollable::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollable::-webkit-scrollbar-thumb {
+    background: var(--color-surface-3);
+    border-radius: 4px;
+  }
+  .scrollable::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover, var(--color-border));
   }
   .skill-list li {
     display: grid;
@@ -531,9 +586,6 @@
   }
   .tool-pulse {
     animation: tool-pulse 1.1s ease-in-out infinite;
-  }
-  .more {
-    font-size: 10px;
   }
   @keyframes tool-pulse {
     0%, 100% { opacity: 0.4; transform: scale(0.85); }

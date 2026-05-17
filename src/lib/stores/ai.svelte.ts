@@ -58,6 +58,14 @@ class AIStore {
   lastError = $state<string | null>(null);
 
   detectedOllama = $state<DetectedOllama | null>(null);
+
+  /**
+   * Per-tool-card expand/collapse state lifted out of the component so it
+   * survives the AIPanel unmount that happens when the user hides the
+   * overlay via the tray. Keyed by `{sessionId}:{callId}` for persisted
+   * cards and `{pendingId}:{callId}` while streaming.
+   */
+  toolCardExpansion = $state<Record<string, boolean>>({});
 }
 
 export const aiStore = new AIStore();
@@ -339,6 +347,15 @@ export async function seedOllamaProvider(detected: DetectedOllama): Promise<void
       config.defaultModel ?? detected.models[0]?.id ?? null,
     );
   }
+}
+
+export function getToolCardExpanded(cardKey: string, fallback: boolean): boolean {
+  const v = aiStore.toolCardExpansion[cardKey];
+  return v === undefined ? fallback : v;
+}
+
+export function setToolCardExpanded(cardKey: string, expanded: boolean): void {
+  aiStore.toolCardExpansion = { ...aiStore.toolCardExpansion, [cardKey]: expanded };
 }
 
 export function formatToolCallArguments(args: string): string {

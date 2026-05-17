@@ -198,6 +198,7 @@
             <AIMessage message={item.message} />
           {:else}
             <AIToolCard
+              cardKey={item.key}
               name={item.name}
               argumentsJson={item.argumentsJson}
               status={item.status}
@@ -213,6 +214,7 @@
           <div class="pending">
             {#each aiStore.pending.toolCalls as call (call.callId)}
               <AIToolCard
+                cardKey={`${aiStore.pending.id}:${call.callId}`}
                 name={call.name}
                 argumentsJson={call.argumentsJson}
                 status={call.status}
