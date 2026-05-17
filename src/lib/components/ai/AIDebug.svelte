@@ -1,8 +1,8 @@
 <!--
   @agent-context: Diagnostics for the most recent agent turn — visible
   proof of what the agent did, why, how many tool calls fired, and how
-  long each took. Solves "the agent looks silent / lazy / dumb" by
-  exposing the actual loop.
+  long each took. The user keeps this tab so they can see when the agent
+  is lazy or silent.
 -->
 <script lang="ts">
   import { aiStore } from "$lib/stores/ai.svelte";
@@ -27,9 +27,7 @@
         <h3>Last turn</h3>
         <span class="badge">{tel.iterations} iter · {tel.toolDispatches.length} tool call(s)</span>
       </header>
-      <div class="user-quote">
-        “{tel.userText}”
-      </div>
+      <div class="user-quote">“{tel.userText}”</div>
       <dl>
         <div><dt>Total duration</dt><dd>{ms(tel.durationMs)}</dd></div>
         <div><dt>Iterations</dt><dd>{tel.iterations}</dd></div>
@@ -49,10 +47,8 @@
       </header>
       {#if tel.toolDispatches.length === 0}
         <div class="empty inset">
-          The model did not call any tool this turn. This is usually a sign
-          the model decided the question was conversational — or it
-          hallucinated an answer. Re-ask with a phrasing like
-          “search my skills for X” to nudge it.
+          The model did not call any tool this turn. Re-ask with phrasing like
+          "search my skills for X" to nudge it.
         </div>
       {:else}
         <ol class="dispatches">
@@ -154,25 +150,16 @@
     gap: 12px;
     font-size: 11px;
   }
-  dt {
-    color: var(--color-text-muted);
-  }
-  dd {
-    margin: 0;
-    color: var(--color-text-primary);
-    text-align: right;
-  }
+  dt { color: var(--color-text-muted); }
+  dd { margin: 0; color: var(--color-text-primary); text-align: right; }
   dd.mono {
     font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Consolas, monospace;
     font-size: 10.5px;
   }
-  .error-row dd {
-    color: var(--color-danger, #d97373);
-  }
+  .error-row dd { color: var(--color-danger, #d97373); }
   .dispatches {
     margin: 0;
     padding: 6px 12px 10px 28px;
-    counter-reset: dispatch;
   }
   .dispatches li {
     display: grid;
@@ -183,22 +170,10 @@
     border-bottom: 1px dashed var(--color-border);
     font-size: 11.5px;
   }
-  .dispatches li:last-child {
-    border-bottom: none;
-  }
-  .dot {
-    height: 6px;
-    width: 6px;
-    border-radius: 50%;
-    background: var(--color-accent);
-  }
-  .dispatches li.fail .dot {
-    background: var(--color-danger, #d97373);
-  }
-  .name {
-    font-weight: 600;
-    color: var(--color-text-primary);
-  }
+  .dispatches li:last-child { border-bottom: none; }
+  .dot { height: 6px; width: 6px; border-radius: 50%; background: var(--color-accent); }
+  .dispatches li.fail .dot { background: var(--color-danger, #d97373); }
+  .name { font-weight: 600; color: var(--color-text-primary); }
   .label {
     grid-column: 2 / 3;
     grid-row: 2;
@@ -206,15 +181,6 @@
     font-size: 10.5px;
     margin-top: 2px;
   }
-  .dur {
-    color: var(--color-text-muted);
-    font-size: 10.5px;
-    font-variant-numeric: tabular-nums;
-  }
-  .err {
-    grid-column: 1 / -1;
-    margin-top: 2px;
-    color: var(--color-danger, #d97373);
-    font-size: 10.5px;
-  }
+  .dur { color: var(--color-text-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .err { grid-column: 1 / -1; margin-top: 2px; color: var(--color-danger, #d97373); font-size: 10.5px; }
 </style>

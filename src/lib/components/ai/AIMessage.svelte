@@ -22,6 +22,46 @@
         ? "ai-bubble-assistant"
         : "ai-bubble-tool"
   );
+
+  let contentEl: HTMLDivElement | undefined = $state();
+
+  // After the markdown HTML lands, decorate any code block tagged `prompt`
+  // (the agent's suggested-next-prompts or quick-invocation snippets) with
+  // a click-to-copy button so the user can grab them without a manual
+  // select. We re-run on every html change because the assistant message
+  // may stream and grow.
+  $effect(() => {
+    html; // dependency
+    if (!contentEl) return;
+    const blocks = contentEl.querySelectorAll<HTMLPreElement>(
+      'pre.skill-code-block[data-language="prompt"]'
+    );
+    blocks.forEach((block) => {
+      if (block.dataset.copyAttached === "1") return;
+      block.dataset.copyAttached = "1";
+      block.classList.add("ai-prompt-block");
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ai-prompt-copy";
+      btn.textContent = "copy";
+      btn.setAttribute("aria-label", "Copy this prompt to the clipboard");
+      btn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const text = block.innerText.trim();
+        void navigator.clipboard.writeText(text);
+        const original = btn.textContent;
+        btn.textContent = "copied";
+        btn.classList.add("ai-prompt-copy-flash");
+        window.setTimeout(() => {
+          btn.textContent = original ?? "copy";
+          btn.classList.remove("ai-prompt-copy-flash");
+        }, 1200);
+      };
+      block.appendChild(btn);
+    });
+  });
 </script>
 
 <div class="ai-message {bubbleClass}">
@@ -30,7 +70,7 @@
   {:else if message.role === "assistant"}
     <span class="ai-role-tag">agent</span>
   {/if}
-  <div class="ai-content">{@html html}</div>
+  <div class="ai-content" bind:this={contentEl}>{@html html}</div>
 </div>
 
 <style>
@@ -99,4 +139,33 @@
   .ai-content :global(h1) { font-size: 14px; }
   .ai-content :global(h2) { font-size: 13px; }
   .ai-content :global(h3) { font-size: 12.5px; }
+  .ai-content :global(pre.ai-prompt-block) {
+    position: relative;
+    padding-right: 56px;
+    border: 1px solid var(--color-accent-muted, var(--color-border));
+  }
+  .ai-content :global(.ai-prompt-copy) {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-1);
+    color: var(--color-text-primary);
+    font-size: 10px;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .ai-content :global(.ai-prompt-copy:hover) {
+    background: var(--color-accent);
+    color: var(--color-surface-0);
+    border-color: transparent;
+  }
+  .ai-content :global(.ai-prompt-copy-flash) {
+    background: var(--color-accent) !important;
+    color: var(--color-surface-0) !important;
+    border-color: transparent !important;
+  }
 </style>

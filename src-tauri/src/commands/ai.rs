@@ -4,6 +4,7 @@
 // The command resolves the provider via the registry, runs `run_agent_turn`,
 // and streams events via `app_handle.emit("ai-agent-event", payload)`.
 
+use crate::ai::cancel::CancelRegistry;
 use crate::ai::{
     self, build_provider, AgentTurnRequest, AgentTurnResult, ProviderConfig,
     ProviderRegistrySnapshot,
@@ -198,6 +199,13 @@ pub async fn ai_chat_send(
         emit,
     )
     .await
+}
+
+#[tauri::command]
+pub fn ai_cancel_turn(session_id: String) -> Result<(), String> {
+    log::info!(target: "skill_deck::agent", "cancel requested session_id={}", session_id);
+    CancelRegistry::instance().cancel(&session_id);
+    Ok(())
 }
 
 #[tauri::command]

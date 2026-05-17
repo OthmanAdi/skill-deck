@@ -185,7 +185,6 @@ export async function sendMessage(text: string): Promise<void> {
   aiStore.lastError = null;
   aiStore.isStreaming = true;
 
-  // Append the user message optimistically.
   const sessionId = aiStore.activeSession?.id ?? null;
   appendUserMessage(trimmed);
 
@@ -202,15 +201,34 @@ export async function sendMessage(text: string): Promise<void> {
       providerId: aiStore.activeProvider,
       model: aiStore.activeModel,
     });
-    // Reload the persisted session so we have full message history including tool messages.
     await loadSession(result.sessionId);
     await refreshSessions();
     aiStore.pending = null;
   } catch (err: unknown) {
     aiStore.lastError = err instanceof Error ? err.message : String(err);
+    // Even on cancel, persist whatever the agent saved so the UI shows the partial transcript.
+    const idForReload = aiStore.activeSession?.id;
+    if (idForReload) {
+      try {
+        await loadSession(idForReload);
+        await refreshSessions();
+      } catch {
+        /* session may not exist yet — ignore */
+      }
+    }
     aiStore.pending = null;
   } finally {
     aiStore.isStreaming = false;
+  }
+}
+
+export async function cancelCurrentTurn(): Promise<void> {
+  const id = aiStore.activeSession?.id;
+  if (!id) return;
+  try {
+    await invoke<void>("ai_cancel_turn", { sessionId: id });
+  } catch (err: unknown) {
+    aiStore.lastError = err instanceof Error ? err.message : String(err);
   }
 }
 

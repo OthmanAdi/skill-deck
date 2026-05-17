@@ -103,6 +103,9 @@
             toggleOverlay();
             await appWindow.show().catch(() => undefined);
             await appWindow.setFocus().catch(() => undefined);
+            requestAnimationFrame(() => {
+              window.dispatchEvent(new Event("resize"));
+            });
           } else {
             toggleOverlay();
           }
@@ -134,6 +137,12 @@
       }
       await appWindow.show();
       await appWindow.setFocus();
+      // WebView2 occasionally stalls its paint after window.show() if the
+      // WebView was deprioritized while hidden during a streaming AI turn.
+      // A synthetic resize event flushes the layout/paint pipeline.
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
     } finally {
       showInFlight = false;
     }

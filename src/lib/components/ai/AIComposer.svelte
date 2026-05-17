@@ -3,7 +3,7 @@
   Enter sends, Shift+Enter newline, Esc closes panel.
 -->
 <script lang="ts">
-  import { aiStore, sendMessage } from "$lib/stores/ai.svelte";
+  import { aiStore, cancelCurrentTurn, sendMessage } from "$lib/stores/ai.svelte";
 
   let value = $state("");
   let textarea: HTMLTextAreaElement | undefined = $state();
@@ -57,15 +57,29 @@
     placeholder={placeholder}
     disabled={!aiStore.activeProvider}
   ></textarea>
-  <button
-    onclick={submit}
-    disabled={!canSend}
-    class="send-btn"
-    style="background: {canSend ? 'var(--color-accent)' : 'var(--color-surface-3)'}; color: {canSend ? 'var(--color-surface-0)' : 'var(--color-text-muted)'};"
-    aria-label="Send"
-  >
-    {aiStore.isStreaming ? "…" : "Send"}
-  </button>
+  {#if aiStore.isStreaming}
+    <button
+      type="button"
+      class="instant-tooltip send-btn"
+      style="background: var(--color-danger, #d97373); color: var(--color-surface-0);"
+      onclick={cancelCurrentTurn}
+      data-tooltip="Stop the agent and keep whatever has streamed so far"
+      aria-label="Stop the agent"
+    >
+      Stop
+    </button>
+  {:else}
+    <button
+      onclick={submit}
+      disabled={!canSend}
+      class="instant-tooltip send-btn"
+      style="background: {canSend ? 'var(--color-accent)' : 'var(--color-surface-3)'}; color: {canSend ? 'var(--color-surface-0)' : 'var(--color-text-muted)'};"
+      data-tooltip="Send the message to the agent (Enter)"
+      aria-label="Send"
+    >
+      Send
+    </button>
+  {/if}
 </div>
 {#if aiStore.lastError}
   <div class="composer-error">{aiStore.lastError}</div>

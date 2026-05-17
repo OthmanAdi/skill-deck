@@ -204,7 +204,7 @@
               label={item.label}
               data={item.data}
               errorMessage={item.errorMessage}
-              initiallyExpanded={true}
+              initiallyExpanded={false}
             />
           {/if}
         {/each}

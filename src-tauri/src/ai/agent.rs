@@ -11,6 +11,7 @@
 //        - else: append assistant message and return.
 //   5. Persist session + per-turn telemetry.
 
+use super::cancel::CancelRegistry;
 use super::provider::{
     ChatChunk, ChatMessage, ChatRequest, ChatRole, ChunkSink, LlmProvider, ToolCall,
 };
@@ -18,59 +19,73 @@ use super::session::{self, AiSession, AiSessionMessage, AgentTurnTelemetry, Tool
 use super::tools::{all_tools, dispatch_tool};
 use crate::models::Skill;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 const MAX_TOOL_ITERATIONS: usize = 8;
 const DEFAULT_TEMPERATURE: f32 = 0.2;
 
-const DEFAULT_SYSTEM_PROMPT_BASE: &str = r#"You are Skill Deck's resident AI engineer. Your job is to help the user discover, understand, and combine the AI "skills" installed on their local machine (markdown files that drive coding agents like Claude Code, Codex, Cursor, Gemini CLI, etc.), and to translate plain intent into ready-to-paste prompts for the user's coding agent of choice.
+const DEFAULT_SYSTEM_PROMPT_BASE: &str = r##"You are Skill Deck's resident agent. You help the user discover, understand, and combine the "skills" (markdown files driving coding agents like Claude Code, Codex, Cursor) installed on their local machine, and you turn plain intent into ready-to-paste prompts.
 
-## Hard rules (non-negotiable)
+## Hard rules
 
-1. You have NO independent knowledge of the user's installed skills. EVERY claim about what they have, do not have, by name / tag / date / scope / language / author MUST come from a tool call. If you have not called a tool yet for this turn, you are not allowed to answer factually about their skills.
+1. You have NO knowledge of the user's installed skills outside of tool results. EVERY factual claim about what they have / do not have / when installed / which tags / which agent MUST come from a tool you called THIS turn. Without a tool call you may only answer pure conversational questions.
 
-2. NEVER reply with "you haven't installed any skills" or "I don't have access" or "I don't know what you have." Call tools instead. If a tool returns zero results, broaden the query (different keywords, more fields, wider time window) at least once before concluding the answer is zero.
+2. NEVER answer "you have no skills" or "I don't have access" or guess from memory. Always call a tool first. If a tool returns 0 or very few results, call ANOTHER tool with a broader query before concluding.
 
-3. Be thorough. Chain multiple tool calls when the question is investigative. Typical good chains:
-   - "what skills do I have for X" → search_skills(X) → list_skills(tag=X) if low results → answer.
-   - "what did I install today" → list_skills(installed_since_unix=<computed>) → get_skill_stats(group_by=agent_id) for context → answer.
-   - "make me a prompt for X using Y and Z" → search_skills(Y) + search_skills(Z) → get_skill_detail for any you need → combine_skills_workflow → render_prompt_for_coding_agent → quote final prompt.
-   - "summarize what I have" → get_skill_stats(group_by=agent_id) + get_skill_stats(group_by=tag, top_n=12) → answer.
+3. Use the named time constants below — DO NOT compute timestamps yourself, you will get them wrong. Pass them verbatim as `installed_since_unix` or `updated_since_unix`.
 
-4. Date math. `current_time_unix` is provided to you below. Compute time windows from it. Examples (assume now=NOW): today = NOW - 86400, yesterday window = (NOW - 172800, NOW - 86400), 7 days = NOW - 604800, 30 days = NOW - 2592000.
+4. Never invent skill ids, names, slash commands. Only use values present in a tool result from this turn.
 
-5. Never invent skill ids, names, slash commands, or repository URLs. Only use values that appear in a tool result you have already received this turn.
+## Tool selection cheat-sheet
 
-## Mandatory output template (final assistant reply)
+| User intent | Call sequence |
+|---|---|
+| "what skills do I have for X" | search_skills(query=X) → if <3 results, list_skills(tag=X) |
+| "skills installed today / this week" | list_skills(installed_since_unix=<constant>) |
+| "skills updated recently" | list_skills(updated_since_unix=<constant>) |
+| "how many skills per agent / tag" | get_skill_stats(group_by=...) |
+| "show me skill X in detail" | get_skill_detail(skill_id=...) |
+| "make me a prompt using X and Y" | search_skills(X) + search_skills(Y) → combine_skills_workflow → render_prompt_for_coding_agent |
+| "summarize my registry" | get_skill_stats(group_by=agent_id) + get_skill_stats(group_by=tag, top_n=10) |
 
-Every FINAL assistant reply (the one without tool_calls) must follow this template exactly, in markdown:
+If your first call returns nothing or feels thin, your NEXT message must be another tool call (different field, broader keyword, wider time window) — not a final answer.
 
-### Summary
-One sentence: the headline answer.
+## Final-reply format (mandatory)
 
-### Detail
-Comprehensive answer with bullet points, a short table, or numbered list. Reference specific skills by name AND id from your tool results. If you produced a prompt, embed it here in a fenced code block tagged `prompt`.
+Your final assistant message (the one with no tool_calls) MUST end with a section headed by three hash marks followed by the words Suggested next prompts. That section must contain 2–4 fenced code blocks tagged `prompt`. Each block is a concrete prompt the user can paste back into this chat, written from the user's perspective, using their real skill names.
+
+Open the message with a one-sentence answer. Then bullet the specifics. Skill names in **bold**. Keep it tight — tool result cards are visible to the user next to your reply, so don't paste raw JSON.
+
+## Few-shot example
+
+User: "list skills i installed in the last week"
+
+Assistant (turn 1 — tool call):
+{"name":"list_skills","arguments":{"installed_since_unix":1778438400,"limit":40}}
+
+Assistant (turn 2 — final reply):
+You installed 6 skills in the last week.
+
+- **caveman** (claude-code) — ultra-compressed communication mode, plugin tag.
+- **caveman-commit** (claude-code) — compressed conventional commit messages.
+- **ast-grep** (claude-code) — structural AST code search.
+- **balanced-coupling** (claude-code) — DDD coupling framework.
+- **brainstorming** (claude-code) — must-use creative-work skill.
+- **claude-code-third-party-routing** (claude-code) — route Claude Code to non-Anthropic providers.
 
 ### Suggested next prompts
-2 to 4 concrete prompts the user can paste back into this chat to go deeper. Each prompt in its own fenced code block tagged `prompt`. Each should be specific and actionable, using the user's real skill names where relevant. Examples of good suggested prompts:
-- "Show me the body of the rust-testing skill"
-- "Combine humanizer and pr-perfect into a release-notes workflow"
-- "Build me a Claude Code prompt that refactors api.rs using rust-testing and code-review-quality"
-
-If the user's question was conversational small-talk that doesn't touch their skills, you may skip the Suggested next prompts section, but Summary + Detail are still required.
-
-## Tool-call discipline
-
-- Prefer search_skills for keyword / natural-language questions.
-- Use list_skills with filters for structured asks ("which Cursor skills", "starred only", "installed today").
-- Use get_skill_stats for counts and analytics — it's cheap and returns no bodies.
-- Use get_skill_detail only after you've narrowed to specific skills.
-- Combine_skills_workflow + render_prompt_for_coding_agent are for prompt-building requests.
-- If a tool returns zero or thin results, your next message should be ANOTHER tool call with a broader query — NOT a final answer.
-
-Stay concise in the Detail section. Tool results are visible to the user as expandable cards next to your reply, so don't repeat their full JSON.
-"#;
+```prompt
+Show me the body of the caveman skill
+```
+```prompt
+Combine caveman and caveman-commit for compressed PR descriptions
+```
+```prompt
+Build a Claude Code prompt using brainstorming + balanced-coupling to redesign my auth module
+```
+"##;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -175,6 +190,8 @@ pub async fn run_agent_turn(
         truncate(&req.user_text, 160)
     );
 
+    let cancel_flag = CancelRegistry::instance().reset(&session_id);
+
     let system_prompt = build_system_prompt(&skills);
     let tools = all_tools();
     let mut tool_calls_made = 0usize;
@@ -182,6 +199,19 @@ pub async fn run_agent_turn(
     let mut telemetry = AgentTurnTelemetry::new(req.user_text.clone());
 
     for iteration in 0..MAX_TOOL_ITERATIONS {
+        if cancel_flag.load(Ordering::SeqCst) {
+            let msg = "cancelled by user".to_string();
+            log::info!(target: "skill_deck::agent", "{} session_id={}", msg, session_id);
+            emit(AgentEvent::Error {
+                session_id: session_id.clone(),
+                message: msg.clone(),
+            });
+            telemetry.error = Some(msg.clone());
+            telemetry.duration_ms = turn_start.elapsed().as_millis() as u64;
+            session.last_telemetry = Some(telemetry);
+            let _ = session::save(&session);
+            return Err(msg);
+        }
         let mut messages: Vec<ChatMessage> = Vec::with_capacity(session.messages.len() + 1);
         messages.push(ChatMessage {
             role: ChatRole::System,
@@ -525,13 +555,41 @@ fn truncate(s: &str, n: usize) -> String {
 
 fn build_system_prompt(skills: &[Skill]) -> String {
     use std::fmt::Write;
-    let now = session::now_secs();
+    let now = session::now_secs() as i64;
+    let today_start = today_midnight_utc(now);
+    let yesterday_start = today_start - 86_400;
+    let seven_days_ago = now - 7 * 86_400;
+    let thirty_days_ago = now - 30 * 86_400;
+    let ninety_days_ago = now - 90 * 86_400;
+    let year_ago = now - 365 * 86_400;
+
     let mut header = String::new();
     let _ = writeln!(&mut header, "current_time_unix: {}", now);
-    let _ = writeln!(&mut header, "current_time_iso: {}", chrono::Utc.timestamp_opt(now as i64, 0).single().map(|d| d.to_rfc3339()).unwrap_or_default());
     let _ = writeln!(
         &mut header,
-        "skill_registry_size: {} skill(s) across {} agent(s)",
+        "current_time_iso: {}",
+        chrono::Utc
+            .timestamp_opt(now, 0)
+            .single()
+            .map(|d| d.to_rfc3339())
+            .unwrap_or_default()
+    );
+    let _ = writeln!(&mut header, "");
+    let _ = writeln!(&mut header, "## Named time constants (use these values verbatim)");
+    let _ = writeln!(&mut header, "today_start_unix:    {}", today_start);
+    let _ = writeln!(&mut header, "yesterday_start_unix:{}", yesterday_start);
+    let _ = writeln!(&mut header, "seven_days_ago_unix: {}", seven_days_ago);
+    let _ = writeln!(&mut header, "thirty_days_ago_unix:{}", thirty_days_ago);
+    let _ = writeln!(&mut header, "ninety_days_ago_unix:{}", ninety_days_ago);
+    let _ = writeln!(&mut header, "year_ago_unix:       {}", year_ago);
+    let _ = writeln!(
+        &mut header,
+        "\nIf the user says 'today' use today_start_unix. 'yesterday' = yesterday_start_unix. 'this week' / 'last 7 days' / 'recently' = seven_days_ago_unix. 'this month' / 'last 30 days' = thirty_days_ago_unix. 'this quarter' = ninety_days_ago_unix. 'this year' = year_ago_unix."
+    );
+
+    let _ = writeln!(
+        &mut header,
+        "\nskill_registry_size: {} skill(s) across {} agent(s)",
         skills.len(),
         skills
             .iter()
@@ -562,6 +620,20 @@ fn build_system_prompt(skills: &[Skill]) -> String {
         header = header,
         preview = preview
     )
+}
+
+/// Unix seconds for 00:00:00 UTC of the day containing `now`.
+fn today_midnight_utc(now: i64) -> i64 {
+    let dt = chrono::Utc.timestamp_opt(now, 0).single();
+    match dt {
+        Some(d) => {
+            let day = d.date_naive().and_hms_opt(0, 0, 0);
+            day.and_then(|nd| nd.and_local_timezone(chrono::Utc).single())
+                .map(|d| d.timestamp())
+                .unwrap_or(now - (now % 86_400))
+        }
+        None => now - (now % 86_400),
+    }
 }
 
 use chrono::TimeZone;

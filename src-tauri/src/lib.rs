@@ -90,6 +90,7 @@ pub fn run() {
             commands::ai_health,
             commands::ai_list_models,
             commands::ai_chat_send,
+            commands::ai_cancel_turn,
             commands::ai_list_sessions,
             commands::ai_get_session,
             commands::ai_delete_session,

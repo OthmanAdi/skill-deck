@@ -20,6 +20,7 @@
 
 pub mod agent;
 pub mod azure_foundry;
+pub mod cancel;
 pub mod ollama;
 pub mod provider;
 pub mod registry;
