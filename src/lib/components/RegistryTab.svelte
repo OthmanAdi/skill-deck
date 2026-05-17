@@ -73,6 +73,8 @@
       starred: false,
       updateAvailable: false,
       installedAt: null,
+      lastModifiedAt: null,
+      archiveCount: 0,
       parentId: null,
       children: [],
     };

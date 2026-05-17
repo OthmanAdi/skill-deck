@@ -25,11 +25,19 @@ export interface Skill {
   starred: boolean;
   updateAvailable: boolean;
   installedAt: number | null;
+  lastModifiedAt: number | null;
+  archiveCount: number;
   parentId: string | null;
   children: Skill[];
 }
 
-export type SkillSortMode = "default" | "installed-newest" | "installed-oldest";
+export type SkillSortMode =
+  | "default"
+  | "installed-newest"
+  | "installed-oldest"
+  | "updated-newest"
+  | "archived-most"
+  | "archived-recent";
 
 /** Marketplace / registry provider identifiers — match Rust ProviderId. */
 export type RegistryProviderId = "skills-sh" | "claw-hub";
@@ -211,6 +219,22 @@ export interface SkillHistoryResponse {
 export interface RestoreSkillVersionResult {
   restored: boolean;
   versionId: string;
+}
+
+export interface DeleteSkillVersionResult {
+  deleted: boolean;
+  versionId: string;
+  remainingEntries: SkillVersionEntry[];
+}
+
+export interface SkillSnapshotContentResponse {
+  versionId: string;
+  skillId: string;
+  createdAt: number;
+  reason: string;
+  content: string;
+  sourceRepoUrl: string | null;
+  remoteRef: string | null;
 }
 
 /** Agent info for the filter tabs */

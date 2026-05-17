@@ -183,6 +183,33 @@ body {
   -webkit-user-select: none;
 }
 
+/* The overlay shell hosts the entire UI. When the user picks a larger font
+ * scale (CSS `zoom`), the content can exceed the OS window's viewport. We
+ * allow horizontal scroll as a safety valve so action buttons on the right
+ * edge stay reachable instead of clipping out of frame. Vertical scroll stays
+ * inside `.skill-list` to keep the sticky title bar / context bar in place. */
+.overlay-shell {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.overlay-shell::-webkit-scrollbar {
+  height: 6px;
+}
+
+.overlay-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overlay-shell::-webkit-scrollbar-thumb {
+  background: rgba(247, 248, 248, 0.18);
+  border-radius: 4px;
+}
+
+.overlay-shell::-webkit-scrollbar-thumb:hover {
+  background: rgba(247, 248, 248, 0.3);
+}
+
 .skill-list::-webkit-scrollbar {
   width: 4px;
 }

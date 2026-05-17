@@ -30,6 +30,8 @@ import type {
   SkillHistoryResponse,
   SkillVersionEntry,
   RestoreSkillVersionResult,
+  DeleteSkillVersionResult,
+  SkillSnapshotContentResponse,
 } from "$lib/types";
 import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
@@ -41,11 +43,23 @@ export const skillSortOptions: { id: SkillSortMode; label: string }[] = [
   { id: "default", label: "Default" },
   { id: "installed-newest", label: "Recently installed" },
   { id: "installed-oldest", label: "Oldest installed" },
+  { id: "updated-newest", label: "Recently updated" },
+  { id: "archived-most", label: "Most archived" },
+  { id: "archived-recent", label: "Recently archived" },
 ];
 
+const VALID_SKILL_SORT_MODES: ReadonlySet<SkillSortMode> = new Set<SkillSortMode>([
+  "default",
+  "installed-newest",
+  "installed-oldest",
+  "updated-newest",
+  "archived-most",
+  "archived-recent",
+]);
+
 function normalizeSkillSortMode(value: string | null | undefined): SkillSortMode {
-  if (value === "installed-newest" || value === "installed-oldest") {
-    return value;
+  if (value && VALID_SKILL_SORT_MODES.has(value as SkillSortMode)) {
+    return value as SkillSortMode;
   }
   return "default";
 }
@@ -172,6 +186,12 @@ class SkillStore {
   fullSkillModalLoading = $state(false);
   fullSkillModalError = $state<string | null>(null);
 
+  /** Diff / view dialog state for archived versions */
+  diffModalOpen = $state(false);
+  diffModalMode = $state<"view" | "compare">("view");
+  diffModalSkill = $state<Skill | null>(null);
+  diffModalVersionId = $state<string | null>(null);
+
   /** Cache full skill file content by skill id */
   fullSkillContentCache = new Map<string, string>();
 
@@ -224,7 +244,47 @@ class SkillStore {
       });
     }
 
+    if (this.skillSortMode === "updated-newest") {
+      return items.sort((a, b) => {
+        const aTs = a.lastModifiedAt ?? a.installedAt ?? 0;
+        const bTs = b.lastModifiedAt ?? b.installedAt ?? 0;
+        if (aTs !== bTs) return bTs - aTs;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    if (this.skillSortMode === "archived-most") {
+      return items.sort((a, b) => {
+        if (a.archiveCount !== b.archiveCount) return b.archiveCount - a.archiveCount;
+        const aTs = this.latestArchiveTimestamp(a.id);
+        const bTs = this.latestArchiveTimestamp(b.id);
+        if (aTs !== bTs) return bTs - aTs;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
+    if (this.skillSortMode === "archived-recent") {
+      return items.sort((a, b) => {
+        const aTs = this.latestArchiveTimestamp(a.id);
+        const bTs = this.latestArchiveTimestamp(b.id);
+        if (aTs !== bTs) return bTs - aTs;
+        if (a.archiveCount !== b.archiveCount) return b.archiveCount - a.archiveCount;
+        return a.name.localeCompare(b.name);
+      });
+    }
+
     return items;
+  }
+
+  /** Newest archive timestamp the store knows about for a skill — 0 if none. */
+  latestArchiveTimestamp(skillId: string): number {
+    const entries = this.versionHistory[skillId];
+    if (!entries || entries.length === 0) return 0;
+    let latest = 0;
+    for (const entry of entries) {
+      if (entry.createdAt > latest) latest = entry.createdAt;
+    }
+    return latest;
   }
 
   /** Backward-compatible boolean toggle used by existing components */
@@ -375,11 +435,21 @@ class SkillStore {
         const installedValues = skills
           .map((skill) => skill.installedAt)
           .filter((value): value is number => typeof value === "number");
+        const modifiedValues = skills
+          .map((skill) => skill.lastModifiedAt ?? skill.installedAt)
+          .filter((value): value is number => typeof value === "number");
+        const archiveCounts = skills.map((s) => s.archiveCount ?? 0);
+        const archiveTimestamps = skills.map((s) => this.latestArchiveTimestamp(s.id));
 
         const newestInstalledAt =
           installedValues.length > 0 ? Math.max(...installedValues) : Number.NEGATIVE_INFINITY;
         const oldestInstalledAt =
           installedValues.length > 0 ? Math.min(...installedValues) : Number.POSITIVE_INFINITY;
+        const newestModifiedAt =
+          modifiedValues.length > 0 ? Math.max(...modifiedValues) : Number.NEGATIVE_INFINITY;
+        const totalArchives = archiveCounts.reduce((sum, n) => sum + n, 0);
+        const newestArchiveAt =
+          archiveTimestamps.length > 0 ? Math.max(...archiveTimestamps) : 0;
 
         return {
           agentId,
@@ -388,6 +458,9 @@ class SkillStore {
           count: skills.length,
           newestInstalledAt,
           oldestInstalledAt,
+          newestModifiedAt,
+          totalArchives,
+          newestArchiveAt,
           startIndex: 0, // filled below
         };
       })
@@ -402,6 +475,27 @@ class SkillStore {
         if (this.skillSortMode === "installed-oldest") {
           if (a.oldestInstalledAt !== b.oldestInstalledAt) {
             return a.oldestInstalledAt - b.oldestInstalledAt;
+          }
+          return a.agentName.localeCompare(b.agentName);
+        }
+
+        if (this.skillSortMode === "updated-newest") {
+          if (a.newestModifiedAt !== b.newestModifiedAt) {
+            return b.newestModifiedAt - a.newestModifiedAt;
+          }
+          return a.agentName.localeCompare(b.agentName);
+        }
+
+        if (this.skillSortMode === "archived-most") {
+          if (a.totalArchives !== b.totalArchives) {
+            return b.totalArchives - a.totalArchives;
+          }
+          return a.agentName.localeCompare(b.agentName);
+        }
+
+        if (this.skillSortMode === "archived-recent") {
+          if (a.newestArchiveAt !== b.newestArchiveAt) {
+            return b.newestArchiveAt - a.newestArchiveAt;
           }
           return a.agentName.localeCompare(b.agentName);
         }
@@ -975,6 +1069,55 @@ export async function loadSkillVersionHistory(skillId: string): Promise<SkillVer
   }
 }
 
+/** Permanently delete one archived version. Refreshes local store on success. */
+export async function deleteSkillVersion(skill: Skill, versionId: string): Promise<boolean> {
+  try {
+    const result: DeleteSkillVersionResult = await invoke("delete_skill_version", {
+      skillId: skill.id,
+      versionId,
+    });
+    if (!result.deleted) {
+      showToast("Delete failed");
+      return false;
+    }
+
+    store.versionHistory = {
+      ...store.versionHistory,
+      [skill.id]: result.remainingEntries,
+    };
+
+    // Reflect the new archive count on the matching skill record so cards /
+    // rows pick it up immediately without a full rescan.
+    store.skills = store.skills.map((s) =>
+      s.id === skill.id || s.legacyIds.includes(skill.id)
+        ? { ...s, archiveCount: result.remainingEntries.length }
+        : s
+    );
+
+    showToast("Archive removed");
+    return true;
+  } catch (e) {
+    showToast(`Delete failed: ${e}`);
+    return false;
+  }
+}
+
+/** Read one archived snapshot's full content from disk via the backend. */
+export async function readSkillSnapshot(
+  skill: Skill,
+  versionId: string,
+): Promise<SkillSnapshotContentResponse | null> {
+  try {
+    return await invoke<SkillSnapshotContentResponse>("read_skill_snapshot", {
+      skillId: skill.id,
+      versionId,
+    });
+  } catch (e) {
+    showToast(`Snapshot read failed: ${e}`);
+    return null;
+  }
+}
+
 /** Restore a specific version snapshot for a skill */
 export async function restoreSkillVersion(skill: Skill, versionId: string): Promise<boolean> {
   try {
@@ -1098,4 +1241,22 @@ export function closeFullSkillModal() {
   store.fullSkillModalContent = null;
   store.fullSkillModalLoading = false;
   store.fullSkillModalError = null;
+}
+
+export function openDiffModal(
+  skill: Skill,
+  versionId: string,
+  mode: "view" | "compare" = "view",
+) {
+  store.diffModalSkill = skill;
+  store.diffModalVersionId = versionId;
+  store.diffModalMode = mode;
+  store.diffModalOpen = true;
+}
+
+export function closeDiffModal() {
+  store.diffModalOpen = false;
+  store.diffModalSkill = null;
+  store.diffModalVersionId = null;
+  store.diffModalMode = "view";
 }
