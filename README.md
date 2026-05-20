@@ -80,8 +80,9 @@ Adding a sixteenth agent is one struct entry in `registry.rs`. See [Adding a New
 | **Update detection** | Auto-discovers the GitHub source for each skill and checks for upstream commits behind the GitHub API. |
 | **Snapshot + restore** | Every update writes a content-hashed snapshot. Diff against the prior version side-by-side. Restore in one click. |
 | **Starred + history pills** | Pin the skills you actually use. See installed-since / updated-since timestamps on every card. |
-| **Themes** | System / Dark / Light, all with proper contrast. Font scale slider. |
-| **Hotkey + tray + auto-hide** | Configurable global hotkey, system tray with mode toggles, auto-hide on focus loss. |
+| **Themes** | System / Dark / Light, all with proper contrast. |
+| **Hotkey + tray + auto-hide** | Global hotkey rebindable from a press-to-capture field (click, press your keys, auto-saves on the main key — supports modifiers + letters / digits / F1-F24 / arrows / Space / Esc / common punctuation). System tray with mode toggles. Auto-hide on focus loss. |
+| **Tooltips that always show** | Badges and chips portal to `document.body` so the overlay's `overflow: hidden` chrome can no longer clip them. |
 
 ## under the hood
 
