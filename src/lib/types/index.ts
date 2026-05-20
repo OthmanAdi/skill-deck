@@ -280,7 +280,6 @@ export interface AppConfig {
   maxSkillHistoryEntries?: number;
   collapsedAgents?: string[];
   collapsedTreeNodes?: string[];
-  fontScale?: number;
 }
 
 /** Cached update check result */

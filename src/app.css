@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Chat-edition typography: bundled locally, no CDN, no CSP grief. */
+@import "@fontsource-variable/geist-mono/wght.css";
+@import "@fontsource/maple-mono/400.css";
+@import "@fontsource/maple-mono/500.css";
+@import "@fontsource/maple-mono/600.css";
+
 /*
  * @agent-context: Skill Deck unified theme system.
  * Theme modes: system, dark, light.
@@ -162,6 +168,10 @@
   -moz-osx-font-smoothing: grayscale;
   font-size: 13px;
 
+  /* Chat-edition fonts. Geist Mono for body / replies; Maple Mono for display + composer. */
+  --font-chat-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-chat-display: "Maple Mono", "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -179,8 +189,29 @@ body {
   padding: 0;
   overflow: hidden;
   background: transparent;
+}
+
+/* Chrome (toolbars, tabs, buttons, badges) stays unselectable so drag + click
+ * feels native. Chat content (bubbles, tool cards, composer) re-enables
+ * selection via .selectable. */
+.skill-list,
+.search-overlay,
+.topbar,
+.chat-header,
+.tabs,
+.session-row,
+button,
+.badge,
+[role="button"] {
   user-select: none;
   -webkit-user-select: none;
+}
+
+.selectable,
+.selectable * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  cursor: text;
 }
 
 
@@ -385,57 +416,15 @@ body {
   border-top: 1px solid var(--color-border);
 }
 
+/* `.instant-tooltip` is kept as a no-op marker class so existing markup
+ * (cards, rows, badges) doesn't have to change. The old CSS pseudo-element
+ * tooltip was clipped by `overflow: hidden` ancestors (every overlay panel,
+ * modal, and chat shell), so we removed it. The actual tooltip is now
+ * rendered as a body-portaled element by `src/lib/actions/tooltip.ts` via
+ * event delegation on `[data-tooltip]`. Position stays relative so any
+ * existing absolute-positioned children keep their anchor. */
 .instant-tooltip {
   position: relative;
-}
-
-.instant-tooltip::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 8px);
-  transform: translateX(-50%) translateY(-2px);
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 70;
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-hover);
-  background: var(--color-surface-2);
-  color: var(--color-text-secondary);
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.2;
-  box-shadow: 0 12px 24px -12px var(--color-overlay-shadow);
-  transition: opacity 60ms linear, transform 80ms var(--motion-ease-standard);
-}
-
-.instant-tooltip::before {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 2px);
-  transform: translateX(-50%);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 69;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 6px solid var(--color-surface-2);
-  transition: opacity 60ms linear;
-}
-
-.instant-tooltip:hover::after,
-.instant-tooltip:hover::before,
-.instant-tooltip:focus-visible::after,
-.instant-tooltip:focus-visible::before {
-  opacity: 1;
-}
-
-.instant-tooltip:hover::after,
-.instant-tooltip:focus-visible::after {
-  transform: translateX(-50%) translateY(0);
 }
 
 .skill-content-preview .skill-line {

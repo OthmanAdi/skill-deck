@@ -14,7 +14,7 @@
     type OverlayMode,
   } from "$lib/stores/skills.svelte";
   import { initTheme } from "$lib/stores/theme.svelte";
-  import { initFontScale } from "$lib/stores/fontScale.svelte";
+  import { installGlobalTooltips } from "$lib/actions/tooltip";
   import type { AppConfig } from "$lib/types";
 
   const appWindow = getCurrentWindow();
@@ -45,7 +45,7 @@
 
     const init = async () => {
       await initTheme();
-      await initFontScale();
+      installGlobalTooltips();
       await setupHotkeyBridge();
       setupEscapeKey();
 
