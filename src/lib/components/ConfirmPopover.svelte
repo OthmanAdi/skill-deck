@@ -42,6 +42,8 @@
   const SIDE_PADDING = 8;
 
   let popoverEl: HTMLDivElement | undefined = $state();
+  let cancelButtonEl: HTMLButtonElement | undefined = $state();
+  let previousFocusEl: HTMLElement | null = null;
   let confirming = $state(false);
 
   function position(): { left: number; top: number; placement: "above" | "below" } {
@@ -108,14 +110,22 @@
     }
   }
 
-  // Listen globally only while open.
+  // Listen globally only while open, and manage focus for a destructive dialog
+  // (UI-07): move focus to Cancel (the safe default) on open and restore it to
+  // whatever was focused before — usually the trigger — on close.
   $effect(() => {
     if (!open) return;
+    previousFocusEl =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.addEventListener("mousedown", handleOutsideClick, true);
     document.addEventListener("keydown", handleKeydown, true);
+    const raf = requestAnimationFrame(() => cancelButtonEl?.focus());
     return () => {
+      cancelAnimationFrame(raf);
       document.removeEventListener("mousedown", handleOutsideClick, true);
       document.removeEventListener("keydown", handleKeydown, true);
+      previousFocusEl?.focus?.();
+      previousFocusEl = null;
     };
   });
 </script>
@@ -126,6 +136,7 @@
     role="dialog"
     aria-modal="false"
     aria-label={title}
+    aria-describedby={message ? "confirm-popover-message" : undefined}
     class="fixed z-[220] rounded-md border shadow-lg"
     style="
       left: {pos.left}px;
@@ -139,12 +150,13 @@
     <div class="px-3 py-2.5">
       <p class="text-[11px] font-semibold text-[var(--color-text-primary)]">{title}</p>
       {#if message}
-        <p class="mt-1 text-[10px] leading-relaxed text-[var(--color-text-secondary)]">{message}</p>
+        <p id="confirm-popover-message" class="mt-1 text-[10px] leading-relaxed text-[var(--color-text-secondary)]">{message}</p>
       {/if}
 
       <div class="mt-2.5 flex items-center justify-end gap-1.5">
         <button
           type="button"
+          bind:this={cancelButtonEl}
           class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150
             hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)]"
           style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"

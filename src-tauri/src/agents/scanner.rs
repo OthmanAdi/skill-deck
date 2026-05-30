@@ -11,7 +11,7 @@
 // Typical scan of ~100 skills across 5 agents completes in <50ms.
 
 use anyhow::Result;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use walkdir::WalkDir;
@@ -23,37 +23,57 @@ use crate::models::{
 use crate::parsers::{claude_hooks::parse_claude_hooks, parse_frontmatter, skill_md::parse_skill_md};
 use crate::parsers::frontmatter::{yaml_bool, yaml_str, yaml_string_array, yaml_string_list};
 
-/// Scan all known agent directories for skills.
+/// Scan all known agent global directories for skills.
 ///
+/// Equivalent to [`scan_all_skills_with_roots`] with no project roots. Kept as
+/// the zero-arg entry point for callers and tests that only care about
+/// user-level (global) skills.
 pub fn scan_all_skills() -> ScanResult {
+    scan_all_skills_with_roots(&[])
+}
+
+/// Scan global agent directories plus the project-scoped paths of every
+/// `project_root` supplied by the caller.
+///
+/// PERF (SCAN-02): the registry lists the same shared store
+/// (`$HOME/.agents/skills/**/SKILL.md`, `$HOME/.config/agents/skills/**/SKILL.md`)
+/// under ~14 agents. Scanning per-agent would glob + parse that whole tree once
+/// per agent. Instead we collapse identical `(resolved_pattern, format)` pairs
+/// across agents, scan each unique pattern exactly once, and attribute the
+/// result to every agent that declared it — `dedupe_skills_by_source` then
+/// merges the lightweight per-agent records. I/O is paid once per directory.
+///
+/// PROJECT (SCAN-01): without a `project_root` the entire `project_paths`
+/// registry is dead and three agents whose only paths are project-scoped
+/// (AGENTS.md/Universal, Amazon Q, JetBrains AI) can never surface a skill.
+/// Given a root we resolve `$PROJECT` the same way `$HOME` is resolved and scan
+/// those paths with `SkillScope::Project`.
+pub fn scan_all_skills_with_roots(project_roots: &[String]) -> ScanResult {
     let start = Instant::now();
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let home_str = home.to_string_lossy().to_string();
     let registry = get_agent_registry();
 
     let mut all_skills: Vec<Skill> = Vec::new();
     let mut all_errors: Vec<ScanError> = Vec::new();
+
+    // --- GLOBAL scan (deduped across agents) ---
+    let mut order: Vec<(String, SkillFormat)> = Vec::new();
+    let mut groups: HashMap<(String, SkillFormat), Vec<AgentId>> = HashMap::new();
 
     for agent in &registry {
         if !should_scan_agent(agent, &home) {
             continue;
         }
 
-        // Scan global paths
-        for pattern in &agent.global_paths {
-            let resolved = pattern.replace("$HOME", &home.to_string_lossy());
-            match scan_glob_pattern(&resolved, agent, SkillScope::Global) {
-                Ok((skills, errors)) => {
-                    all_skills.extend(skills);
-                    all_errors.extend(errors);
-                }
-                Err(e) => {
-                    all_errors.push(ScanError {
-                        file_path: resolved,
-                        message: e.to_string(),
-                    });
-                }
-            }
-        }
+        add_pattern_group(
+            &agent.global_paths,
+            &agent.id,
+            &agent.format,
+            |p| p.replace("$HOME", &home_str),
+            &mut order,
+            &mut groups,
+        );
 
         // Claude Code plugins live under `~/.claude/plugins/cache/...`, which
         // is not reachable from a static glob: each plugin install pins its
@@ -66,7 +86,33 @@ pub fn scan_all_skills() -> ScanResult {
             all_skills.extend(plugin_skills);
             all_errors.extend(plugin_errors);
         }
+    }
 
+    scan_pattern_groups(&order, &groups, SkillScope::Global, &mut all_skills, &mut all_errors);
+
+    // --- PROJECT scan (per resolved root, deduped across agents) ---
+    for root in resolve_project_roots(project_roots) {
+        let mut proj_order: Vec<(String, SkillFormat)> = Vec::new();
+        let mut proj_groups: HashMap<(String, SkillFormat), Vec<AgentId>> = HashMap::new();
+
+        for agent in &registry {
+            add_pattern_group(
+                &agent.project_paths,
+                &agent.id,
+                &agent.format,
+                |p| p.replace("$PROJECT", &root).replace("$HOME", &home_str),
+                &mut proj_order,
+                &mut proj_groups,
+            );
+        }
+
+        scan_pattern_groups(
+            &proj_order,
+            &proj_groups,
+            SkillScope::Project,
+            &mut all_skills,
+            &mut all_errors,
+        );
     }
 
     crate::detection::skill_identity::dedupe_skills_by_source(&mut all_skills);
@@ -78,6 +124,148 @@ pub fn scan_all_skills() -> ScanResult {
         skills: all_skills,
         errors: all_errors,
         scan_duration_ms: start.elapsed().as_millis() as u64,
+    }
+}
+
+/// Add an agent's declared patterns to the dedup map, recording first-seen
+/// order so the scan stays deterministic across runs.
+fn add_pattern_group(
+    patterns: &[String],
+    agent_id: &AgentId,
+    format: &SkillFormat,
+    resolve: impl Fn(&str) -> String,
+    order: &mut Vec<(String, SkillFormat)>,
+    groups: &mut HashMap<(String, SkillFormat), Vec<AgentId>>,
+) {
+    for pattern in patterns {
+        let key = (resolve(pattern), format.clone());
+        let agents = groups.entry(key.clone()).or_insert_with(|| {
+            order.push(key.clone());
+            Vec::new()
+        });
+        if !agents.contains(agent_id) {
+            agents.push(agent_id.clone());
+        }
+    }
+}
+
+/// Scan each unique pattern once and replicate the parsed records across every
+/// agent that declared the pattern.
+fn scan_pattern_groups(
+    order: &[(String, SkillFormat)],
+    groups: &HashMap<(String, SkillFormat), Vec<AgentId>>,
+    scope: SkillScope,
+    all_skills: &mut Vec<Skill>,
+    all_errors: &mut Vec<ScanError>,
+) {
+    for key in order {
+        let Some(agent_ids) = groups.get(key) else {
+            continue;
+        };
+        let (skills, errors) = scan_pattern_group(&key.0, &key.1, agent_ids, scope.clone());
+        all_skills.extend(skills);
+        all_errors.extend(errors);
+    }
+}
+
+/// Parse every file matched by one resolved pattern a single time, then emit a
+/// per-agent copy so downstream dedup can merge them into a single card whose
+/// `source_agents` lists all declaring agents.
+fn scan_pattern_group(
+    resolved: &str,
+    format: &SkillFormat,
+    agent_ids: &[AgentId],
+    scope: SkillScope,
+) -> (Vec<Skill>, Vec<ScanError>) {
+    let primary_id = agent_ids.first().cloned().unwrap_or(AgentId::Universal);
+    let representative = AgentInfo {
+        id: primary_id,
+        display_name: String::new(),
+        description: String::new(),
+        color: String::new(),
+        installed: true,
+        skill_count: 0,
+        global_paths: Vec::new(),
+        global_detection_paths: Vec::new(),
+        project_paths: Vec::new(),
+        format: format.clone(),
+    };
+
+    // Parse the matched files once as the representative agent, then re-stamp a
+    // copy for every agent that declared this pattern.
+    let (parsed, errors) = match scan_glob_pattern(resolved, &representative, scope) {
+        Ok(out) => out,
+        Err(e) => (
+            Vec::new(),
+            vec![ScanError {
+                file_path: resolved.to_string(),
+                message: e.to_string(),
+            }],
+        ),
+    };
+
+    let mut skills = Vec::with_capacity(parsed.len() * agent_ids.len().max(1));
+    for base in parsed {
+        for agent_id in agent_ids {
+            skills.push(reassign_skill_agent(base.clone(), agent_id));
+        }
+    }
+
+    (skills, errors)
+}
+
+/// Re-stamp a parsed skill for a specific agent. The raw `agent:stem` id is
+/// preserved per agent so it lands in `legacy_ids` for config migration.
+fn reassign_skill_agent(mut skill: Skill, agent_id: &AgentId) -> Skill {
+    let stem = skill
+        .id
+        .split_once(':')
+        .map(|(_, rest)| rest.to_string())
+        .unwrap_or_else(|| skill.id.clone());
+    let agent_str = serde_json::to_string(agent_id)
+        .unwrap_or_default()
+        .trim_matches('"')
+        .to_string();
+    skill.id = format!("{}:{}", agent_str, stem);
+    skill.agent_id = agent_id.clone();
+    skill.source_agents = vec![agent_id.clone()];
+    skill
+}
+
+/// Resolve the project roots to scan: configured roots that still exist, plus
+/// the current working directory when it is a git repository (so launching the
+/// overlay from inside a project surfaces that project's CLAUDE.md / AGENTS.md
+/// / .cursorrules without any configuration).
+fn resolve_project_roots(configured: &[String]) -> Vec<String> {
+    let mut roots: Vec<String> = Vec::new();
+
+    for raw in configured {
+        let trimmed = raw.trim();
+        if !trimmed.is_empty() {
+            push_existing_dir(Path::new(trimmed), &mut roots);
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if cwd.join(".git").exists() {
+            push_existing_dir(&cwd, &mut roots);
+        }
+    }
+
+    roots
+}
+
+fn push_existing_dir(path: &Path, roots: &mut Vec<String>) {
+    if !path.is_dir() {
+        return;
+    }
+    let normalized = path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string();
+    if !normalized.is_empty() && !roots.contains(&normalized) {
+        roots.push(normalized);
     }
 }
 
@@ -362,10 +550,15 @@ fn collect_candidate_paths(pattern: &str) -> Result<Vec<PathBuf>> {
         }
     }
 
-    let fallback = collect_with_walkdir(pattern);
-    for path in fallback {
-        if seen.insert(path.clone()) {
-            out.push(path);
+    // The WalkDir pass (which follows symlinks) only adds value when glob found
+    // nothing — e.g. a symlinked skills root that glob will not traverse. When
+    // glob already matched files, walking the whole subtree again is pure
+    // redundant I/O, so skip it (SCAN-02).
+    if out.is_empty() {
+        for path in collect_with_walkdir(pattern) {
+            if seen.insert(path.clone()) {
+                out.push(path);
+            }
         }
     }
 
@@ -678,9 +871,25 @@ pub fn detect_installed_agents() -> Vec<AgentInfo> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let mut registry = get_agent_registry();
 
+    // API-01: report a real per-agent skill_count instead of a hardcoded 0.
+    // Count each discovered skill once for every agent that sources it (a skill
+    // in the shared store is attributed to all agents that declare that store).
+    let scan = scan_all_skills();
+    let mut counts: HashMap<AgentId, usize> = HashMap::new();
+    for skill in &scan.skills {
+        let agents = if skill.source_agents.is_empty() {
+            std::slice::from_ref(&skill.agent_id)
+        } else {
+            skill.source_agents.as_slice()
+        };
+        for agent in agents {
+            *counts.entry(agent.clone()).or_insert(0) += 1;
+        }
+    }
+
     for agent in &mut registry {
         agent.installed = should_scan_agent(agent, &home);
-        agent.skill_count = 0;
+        agent.skill_count = counts.get(&agent.id).copied().unwrap_or(0);
     }
 
     registry
@@ -875,4 +1084,57 @@ mod tests {
         assert_eq!(parsed[0].metadata.slash_command.as_deref(), Some("/review"));
     }
 
+    #[test]
+    fn reassign_skill_agent_restamps_id_and_agents() {
+        let base = make_skill("claude-code:foo", "/x/foo/SKILL.md");
+        let out = reassign_skill_agent(base, &AgentId::Codex);
+        assert_eq!(out.id, "codex:foo");
+        assert_eq!(out.agent_id, AgentId::Codex);
+        assert_eq!(out.source_agents, vec![AgentId::Codex]);
+    }
+
+    #[test]
+    fn resolve_project_roots_keeps_existing_drops_missing() {
+        let temp = tempfile::tempdir().unwrap();
+        let existing = temp.path().to_string_lossy().to_string();
+        let roots = resolve_project_roots(&[
+            existing.clone(),
+            "Q:/definitely/not/here".to_string(),
+            "   ".to_string(),
+        ]);
+        let norm = existing.replace('\\', "/").trim_end_matches('/').to_string();
+        assert!(roots.contains(&norm), "expected configured root in {:?}", roots);
+        assert!(!roots.iter().any(|r| r.contains("definitely/not/here")));
+    }
+
+    #[test]
+    fn scan_pattern_group_replicates_across_agents() {
+        // SCAN-02: one parse, one record per declaring agent. dedup later folds
+        // them into a single card whose source_agents lists both.
+        let temp = tempfile::tempdir().unwrap();
+        let skill_dir = temp.path().join("demo");
+        fs::create_dir_all(&skill_dir).unwrap();
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: Demo\ndescription: d\n---\nbody",
+        )
+        .unwrap();
+
+        let pattern = format!(
+            "{}/**/SKILL.md",
+            temp.path().to_string_lossy().replace('\\', "/")
+        );
+        let (skills, errors) = scan_pattern_group(
+            &pattern,
+            &SkillFormat::SkillMd,
+            &[AgentId::ClaudeCode, AgentId::Codex],
+            SkillScope::Global,
+        );
+
+        assert!(errors.is_empty(), "unexpected errors: {:?}", errors);
+        assert_eq!(skills.len(), 2);
+        let agents: Vec<_> = skills.iter().map(|s| s.agent_id.clone()).collect();
+        assert!(agents.contains(&AgentId::ClaudeCode));
+        assert!(agents.contains(&AgentId::Codex));
+    }
 }

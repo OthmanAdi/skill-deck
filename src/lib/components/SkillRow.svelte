@@ -412,7 +412,7 @@
               href={repoUrlDisplay}
               target="_blank"
               rel="noopener noreferrer"
-              class="truncate text-[9px] text-[var(--color-accent)] hover:underline"
+              class="truncate text-[9px] text-[var(--color-accent-text)] hover:underline"
               onclick={(e) => e.stopPropagation()}
             >
               {repoUrlDisplay.replace(/^https?:\/\//, "")}

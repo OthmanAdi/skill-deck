@@ -46,6 +46,7 @@
     style="min-height: 30px;"
     onclick={() => toggleAgentCollapse(agentId)}
     aria-expanded={!isCollapsed}
+    aria-controls={`agent-group-body-${agentId}`}
   >
     <!-- Chevron -->
     <svg
@@ -78,6 +79,9 @@
   <!-- Skills list (collapsible) -->
   {#if !isCollapsed}
     <div
+      id={`agent-group-body-${agentId}`}
+      role="region"
+      aria-label={`${name} skills`}
       class="ml-[8px] border-l border-[var(--color-border)] pl-2 pb-0.5"
       transition:slide={{ duration: 200, easing: cubicOut }}
     >

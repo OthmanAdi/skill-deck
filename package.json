@@ -1,7 +1,7 @@
 {
   "name": "skill-deck",
-  "version": "0.1.5",
-  "description": "Universal coding agent skill browser — a beautiful desktop overlay for browsing, searching, and managing skills across Claude Code, Cursor, Copilot, Codex, and 20+ AI coding agents.",
+  "version": "0.1.6",
+  "description": "Universal coding agent skill browser — a desktop overlay for browsing, searching, and managing skills across Claude Code, Cursor, Copilot, Codex, and 50+ AI coding agents.",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -14,7 +14,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/othmanadi/skill-deck"
+    "url": "https://github.com/OthmanAdi/skill-deck"
   },
   "keywords": [
     "skill-deck",

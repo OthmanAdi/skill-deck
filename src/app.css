@@ -26,6 +26,11 @@
   --color-accent-hover: var(--t-accent-hover);
   --color-accent-muted: var(--t-accent-muted);
   --color-accent-subtle: var(--t-accent-subtle);
+  /* AA-contrast accent for small (<18px) TEXT — links, pills, active labels.
+     The fill/border/focus accent (#5e6ad2) is only ~4.05:1 and fails WCAG AA
+     for normal-size text, so text uses this lighter (dark) / darker (light)
+     variant instead. */
+  --color-accent-text: var(--t-accent-text);
 
   --color-border: var(--t-border);
   --color-border-hover: var(--t-border-hover);
@@ -69,6 +74,7 @@
   --t-accent-hover: #828fff;
   --t-accent-muted: #7a7fad;
   --t-accent-subtle: rgba(94, 106, 210, 0.16);
+  --t-accent-text: #828fff;
 
   --t-border: #23252a;
   --t-border-hover: #34343a;
@@ -111,6 +117,7 @@
   --t-accent-hover: #4d58bc;
   --t-accent-muted: #5e69d1;
   --t-accent-subtle: rgba(94, 106, 210, 0.12);
+  --t-accent-text: #4d58bc;
 
   --t-border: #d6d9df;
   --t-border-hover: #c6cbd3;
@@ -151,6 +158,7 @@
     --t-accent-hover: #4d58bc;
     --t-accent-muted: #5e69d1;
     --t-accent-subtle: rgba(94, 106, 210, 0.12);
+    --t-accent-text: #4d58bc;
     --t-border: #d6d9df;
     --t-border-hover: #c6cbd3;
     --t-border-active: rgba(94, 105, 209, 0.42);
@@ -472,7 +480,7 @@ button,
 
 .skill-content-preview .skill-heading,
 .skill-content-preview .md-heading {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   font-weight: 600;
 }
 
@@ -593,7 +601,7 @@ button,
 .hljs-name,
 .hljs-selector-id,
 .hljs-selector-class {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   font-weight: 600;
 }
 
@@ -658,7 +666,7 @@ button,
 }
 
 .skill-md-link {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   text-decoration: underline;
   text-underline-offset: 2px;
 }

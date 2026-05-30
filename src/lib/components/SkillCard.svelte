@@ -630,7 +630,7 @@
                   href={repoUrlDisplay}
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="flex min-w-0 items-center gap-1.5 text-[var(--color-accent)] hover:underline"
+                  class="flex min-w-0 items-center gap-1.5 text-[var(--color-accent-text)] hover:underline"
                   onclick={(e) => e.stopPropagation()}
                 >
                   <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -767,7 +767,7 @@
                 />
                 <button
                   class="shrink-0 rounded px-2 py-1 text-[9px] font-medium transition-colors
-                    bg-[var(--color-accent-subtle)] text-[var(--color-accent)]
+                    bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]
                     hover:bg-[var(--color-accent-muted)] hover:text-white"
                   onclick={handleSaveRepo}
                 >save</button>

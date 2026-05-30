@@ -40,9 +40,27 @@
       + store.selectedArtifactTypes.length
   );
 
-  // Reset focus index when filtered skills change
+  // Reset keyboard focus only when the visible set MEANINGFULLY changes (tab,
+  // view, search, active filters, or result count) — not on every array
+  // reassignment. filteredSkills returns a fresh array on each read, so the
+  // 30s background rescan used to wipe the user's arrow-key position even when
+  // it returned identical skills (UI-02). This signal is a value-compared
+  // string: an unchanged result set produces an unchanged signal, so the
+  // effect does not re-run.
+  const focusResetSignal = $derived(
+    [
+      store.activeTab,
+      store.viewMode,
+      store.searchQuery.trim(),
+      store.selectedTags.join(","),
+      store.selectedUseCases.join(","),
+      store.selectedArtifactTypes.join(","),
+      store.filteredSkills.length,
+    ].join("|"),
+  );
+
   $effect(() => {
-    store.filteredSkills; // track dependency
+    focusResetSignal; // track the value-compared signal, not array identity
     focusedIndex = -1;
   });
 
@@ -133,7 +151,9 @@
   function scrollToFocused() {
     requestAnimationFrame(() => {
       const row = listEl?.querySelector<HTMLElement>(`[data-index="${focusedIndex}"]`);
-      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      // Instant scroll, not smooth: holding an arrow key used to queue
+      // overlapping smooth-scroll animations, which read as jank (UI-04).
+      row?.scrollIntoView({ block: "nearest", behavior: "auto" });
       row?.focus();
     });
   }
@@ -221,7 +241,7 @@
             <button
               class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
                 {store.viewMode === 'grouped'
-                  ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
+                  ? 'text-[var(--color-accent-text)] bg-[var(--color-surface-3)]'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
               onclick={() => (store.viewMode = "grouped")}
               data-tooltip="Grouped by coding agent"
@@ -236,7 +256,7 @@
             <button
               class="instant-tooltip flex h-6 items-center gap-1.5 rounded px-2 text-[10px] font-medium transition-all duration-150
                 {store.viewMode === 'tree'
-                  ? 'text-[var(--color-accent)] bg-[var(--color-surface-3)]'
+                  ? 'text-[var(--color-accent-text)] bg-[var(--color-surface-3)]'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}"
               onclick={() => (store.viewMode = "tree")}
               data-tooltip="Parent child relation cards"
@@ -413,7 +433,7 @@
           <p class="mt-1 max-w-[220px] text-[10px] leading-relaxed text-[var(--color-text-muted)]">
             {store.searchQuery
               ? "Try a different search or clear active filters"
-              : "Install a coding agent or add skills to ~/.claude/skills/"}
+              : "Install a supported coding agent, or add skills to its skills/ or commands/ folder."}
           </p>
         </div>
 

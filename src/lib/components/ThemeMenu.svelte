@@ -433,7 +433,7 @@
             </span>
           {/each}
           {#if recording && liveLabels().length === 0}
-            <span class="text-[10px] italic text-[var(--color-accent)] animate-pulse">
+            <span class="text-[10px] italic text-[var(--color-accent-text)] animate-pulse">
               Hold Ctrl, Alt or Shift…
             </span>
           {/if}

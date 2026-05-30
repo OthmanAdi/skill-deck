@@ -61,7 +61,7 @@
       {tab.label}
       <span class="ml-1 tabular-nums text-[9px]
         transition-colors duration-[120ms]
-        {isActive ? 'text-[var(--color-accent)]' : 'opacity-35'}">
+        {isActive ? 'text-[var(--color-accent-text)]' : 'opacity-35'}">
         {count}
       </span>
     </button>

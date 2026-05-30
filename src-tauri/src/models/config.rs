@@ -43,6 +43,15 @@ pub struct AppConfig {
     /// Additional directories to scan for skills (beyond auto-detected agent paths)
     pub custom_scan_paths: Vec<String>,
 
+    /// Project root directories whose project-scoped skills should be scanned.
+    /// `$PROJECT` in the agent registry resolves to each of these. Empty by
+    /// default; the current working directory is auto-included at scan time
+    /// when it is a git repository, so running the overlay from inside a repo
+    /// surfaces that project's CLAUDE.md / AGENTS.md / .cursorrules with no
+    /// configuration.
+    #[serde(default)]
+    pub project_roots: Vec<String>,
+
     /// Whether to check for skill updates in the background
     pub check_updates: bool,
 
@@ -174,6 +183,7 @@ impl Default for AppConfig {
             starred_skills: HashSet::new(),
             skill_icons: std::collections::HashMap::new(),
             custom_scan_paths: Vec::new(),
+            project_roots: Vec::new(),
             check_updates: true,
             theme: "system".to_string(),
             overlay_position: OverlayPosition::BottomRight,

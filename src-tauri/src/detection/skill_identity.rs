@@ -48,7 +48,37 @@ fn short_hash_bytes(bytes: &[u8]) -> String {
     full[..16].to_string()
 }
 
+// Identity is the canonical file PATH, never file content. Two genuinely
+// different skills that happen to be byte-identical (empty stubs, shared
+// boilerplate, a "TODO" placeholder) must NOT collapse into one card, and a
+// global copy must never merge with a project copy (they live at different
+// paths). The same physical file discovered through several agents' globs —
+// the real source of duplicates, e.g. the shared ~/.agents/skills store listed
+// under ~14 agents — resolves to a single canonical path and merges correctly.
+// Hooks are the exception: many distinct hooks live in one settings.json, so
+// they keep an event/matcher/command discriminator on top of the path.
 fn skill_dedupe_key(skill: &Skill) -> String {
+    let canonical_path = canonical_or_normalized_path(&skill.file_path);
+
+    if skill.artifact_type == ArtifactType::Hook {
+        return format!(
+            "{}|{}|{}|{}|{}",
+            artifact_token(skill),
+            normalize_token(skill.metadata.hook_event.as_deref()),
+            normalize_token(skill.metadata.hook_matcher.as_deref()),
+            normalize_token(skill.metadata.hook_command.as_deref()),
+            canonical_path
+        );
+    }
+
+    format!("{}|{}", artifact_token(skill), canonical_path)
+}
+
+// Reproduces the pre-0.1.6 content-hash dedupe key so the artifact id it
+// produced can be recorded as a legacy id. That keeps a user's starred skills,
+// custom icons, repo/install overrides, and version history pointing at the
+// right card after the identity model switched from content to path.
+fn legacy_content_dedupe_key(skill: &Skill) -> String {
     let canonical_path = canonical_or_normalized_path(&skill.file_path);
     let source_fingerprint = file_content_hash(&skill.file_path).unwrap_or(canonical_path);
 
@@ -69,6 +99,10 @@ fn skill_dedupe_key(skill: &Skill) -> String {
         normalize_token(skill.metadata.slash_command.as_deref()),
         source_fingerprint
     )
+}
+
+fn legacy_content_id(skill: &Skill) -> String {
+    canonical_skill_id(&legacy_content_dedupe_key(skill))
 }
 
 pub struct ConfigIdCollections<'a> {
@@ -247,6 +281,15 @@ pub fn dedupe_skills_by_source(skills: &mut Vec<Skill>) {
             legacy_ids.push(primary.id.clone());
         }
 
+        // Record the pre-0.1.6 content-hash artifact id so config keyed on the
+        // old identity migrates to the new path-based id. Every member of this
+        // group shares one canonical path (the grouping key), so they share one
+        // legacy content id — computing it once for the primary is enough.
+        let legacy_content = legacy_content_id(&primary);
+        if !legacy_ids.iter().any(|id| id == &legacy_content) {
+            legacy_ids.push(legacy_content);
+        }
+
         for candidate in group {
             if should_replace_primary(&primary, &candidate) {
                 primary = candidate.clone();
@@ -366,7 +409,10 @@ mod tests {
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].source_paths.len(), 1);
         assert_eq!(skills[0].source_agents.len(), 2);
-        assert_eq!(skills[0].legacy_ids.len(), 2);
+        // Both raw per-agent ids plus the pre-0.1.6 content-hash migration id.
+        assert!(skills[0].legacy_ids.contains(&"claude-code:session-handoff".to_string()));
+        assert!(skills[0].legacy_ids.contains(&"codex:session-handoff".to_string()));
+        assert_eq!(skills[0].legacy_ids.len(), 3);
     }
 
     #[test]
@@ -414,7 +460,11 @@ mod tests {
     }
 
     #[test]
-    fn merges_identical_content_across_different_locations() {
+    fn keeps_distinct_skills_with_identical_content() {
+        // Two DIFFERENT files (different paths) that happen to be byte-identical
+        // are two distinct skills and must stay separate. Identity is the path,
+        // not the content — a shared "TODO" stub or boilerplate header must not
+        // silently fuse unrelated skills into one card.
         let temp = tempfile::tempdir().expect("temp dir");
         let path_a = temp.path().join("a").join("SKILL.md");
         let path_b = temp.path().join("b").join("SKILL.md");
@@ -437,7 +487,26 @@ mod tests {
         ];
 
         dedupe_skills_by_source(&mut skills);
+        assert_eq!(skills.len(), 2, "byte-identical files at different paths stay distinct");
+    }
+
+    #[test]
+    fn merges_same_canonical_path_regardless_of_content_drift() {
+        // The same physical file discovered by two agents (shared store) merges
+        // into one card even though we no longer hash content — the canonical
+        // path is identical, which is the whole point of path-based identity.
+        let temp = tempfile::tempdir().expect("temp dir");
+        let path = temp.path().join("shared").join("SKILL.md");
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+        std::fs::write(&path, "# shared\nbody").expect("write");
+
+        let mut skills = vec![
+            make_skill("claude-code:shared", path.to_string_lossy().as_ref(), AgentId::ClaudeCode),
+            make_skill("codex:shared", path.to_string_lossy().as_ref(), AgentId::Codex),
+        ];
+
+        dedupe_skills_by_source(&mut skills);
         assert_eq!(skills.len(), 1);
-        assert_eq!(skills[0].source_paths.len(), 2);
+        assert_eq!(skills[0].source_agents.len(), 2);
     }
 }

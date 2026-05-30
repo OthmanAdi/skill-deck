@@ -48,7 +48,7 @@ pub struct AgentInfo {
 }
 
 /// What file format an agent uses for its skills/rules
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum SkillFormat {
     /// SKILL.md with YAML frontmatter (Claude Code, Codex)

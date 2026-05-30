@@ -1,7 +1,7 @@
 // @agent-context: Skill scanning commands exposed to the frontend.
 // These are the primary data-fetching commands the UI calls on startup and refresh.
 
-use crate::agents::{detect_installed_agents, scan_all_skills, scan_custom_paths};
+use crate::agents::{detect_installed_agents, scan_all_skills_with_roots, scan_custom_paths};
 use crate::commands::preferences::ConfigState;
 use crate::detection::skill_identity::{
     dedupe_skills_by_source, remap_config_ids_for_skills, ConfigIdCollections,
@@ -88,7 +88,7 @@ fn infer_install_timestamp(skill: &Skill, current_time: u64) -> u64 {
 
 /// Shared scan pipeline used by commands that need the exact same skill IDs as the UI.
 pub(crate) fn scan_with_config(config: &mut AppConfig) -> (ScanResult, bool) {
-    let mut result = scan_all_skills();
+    let mut result = scan_all_skills_with_roots(&config.project_roots);
     let mut config_changed = false;
 
     let (custom_skills, custom_errors) = scan_custom_paths(&config.custom_scan_paths);

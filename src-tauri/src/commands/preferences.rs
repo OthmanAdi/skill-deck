@@ -381,6 +381,28 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
     }
 }
 
+/// Replace the set of project roots scanned for project-scoped skills.
+/// Blank entries are dropped; the list is de-duplicated while preserving order.
+#[tauri::command]
+pub fn set_project_roots(state: State<ConfigState>, roots: Vec<String>) -> Result<Vec<String>, String> {
+    let mut cleaned: Vec<String> = Vec::new();
+    for raw in roots {
+        let trimmed = raw.trim().replace('\\', "/");
+        let trimmed = trimmed.trim_end_matches('/').to_string();
+        if !trimmed.is_empty() && !cleaned.contains(&trimmed) {
+            cleaned.push(trimmed);
+        }
+    }
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+    config.project_roots = cleaned.clone();
+    save_config(&config)?;
+    Ok(cleaned)
+}
+
 /// Set overlay interaction mode ("pinned" or "auto-hide")
 #[tauri::command]
 pub fn set_overlay_mode<R: Runtime>(

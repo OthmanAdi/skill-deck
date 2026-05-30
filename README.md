@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Tauri-v2-24C8D8?style=flat-square&logo=tauri&logoColor=white" alt="Tauri">
   <img src="https://img.shields.io/badge/Rust-1.90-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust">
   <img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte">
-  <img src="https://img.shields.io/badge/agents-15+-6366f1?style=flat-square" alt="Agents">
+  <img src="https://img.shields.io/badge/agents-50+-6366f1?style=flat-square" alt="Agents">
   <img src="https://img.shields.io/badge/platforms-win%20%7C%20mac%20%7C%20linux-2c2e3a?style=flat-square" alt="Platforms">
   <img src="https://img.shields.io/badge/license-MIT-6366f1?style=flat-square" alt="License">
 </p>
@@ -57,22 +57,22 @@ Skill Deck reads from every agent below through one adapter pipeline. The fronte
 |---|---|
 | Claude Code | SKILL.md, slash commands, settings hooks, agents, plugins |
 | Codex | SKILL.md, AGENTS.md |
-| Cursor | .mdc rules |
+| Cursor | SKILL.md, .mdc rules, .cursorrules |
 | GitHub Copilot | .prompt.md, .instructions.md, copilot-instructions.md |
-| Windsurf | .windsurfrules |
-| Gemini CLI | GEMINI.md, command files |
-| Cline | .clinerules |
-| Roo Code | .roomodes, custom prompts |
-| Continue, Aider, Amazon Q, JetBrains AI, Tabnine, Augment | per-agent skill + rule files |
+| Windsurf | SKILL.md, .windsurf/rules, .windsurfrules |
+| Gemini CLI | SKILL.md, GEMINI.md |
+| Cline, Roo Code, Continue | SKILL.md, rules dirs, .clinerules / .roorules |
+| Aider, Amazon Q, JetBrains AI, Tabnine, Augment | per-agent skill + rule files |
+| OpenCode, Crush, Amp, Antigravity, Goose, Kilo, Qwen, Kimi, Droid, Warp, Zencoder, +35 more | SKILL.md under each agent's store and the shared `~/.agents/skills` |
 | Universal | AGENTS.md |
 
-Adding a sixteenth agent is one struct entry in `registry.rs`. See [Adding a New Agent](#adding-a-new-agent).
+**56 coding agents** plus the universal `AGENTS.md` format, all wired in `registry.rs`. Adding the next one is a single struct entry. See [Adding a New Agent](#adding-a-new-agent).
 
 ## features
 
 | | What it does |
 |---|---|
-| **Universal scan** | One pass across all 15+ agents, normalized into a single skill list. |
+| **Universal scan** | One pass across all 50+ agents, normalized into a single skill list. |
 | **Live search + facets** | Filter by name, description, tag, intent, language, slash command, hook event. |
 | **On-demand finder** | `Ctrl+F` opens a focused filter panel. State persists per session. |
 | **Tree + grouped views** | Card hierarchies for nested skills, grouped lists by agent with brand colors. |
