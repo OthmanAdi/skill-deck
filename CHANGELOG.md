@@ -6,6 +6,42 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-05-30
+
+### Added
+- Project-scope scanning. `project_paths` now resolve against configured project roots and an auto-detected git working directory, so AGENTS.md, Amazon Q, JetBrains AI, and every project-scoped artifact can finally appear (previously the entire project registry was dead). New `set_project_roots` command.
+- Press-to-capture global shortcut editor with live key chips that auto-saves on the main key.
+
+### Changed
+- Skill identity is keyed on the canonical file path instead of file content, so byte-identical but unrelated skills no longer false-merge and a global copy never collapses with a project copy. The prior content-based id is recorded as a legacy id so stars, icons, and overrides migrate.
+- Scan patterns shared across agents (the `~/.agents/skills` store, declared by roughly 14 agents) are walked once per refresh instead of once per agent, and the redundant directory walk is skipped when the glob already matched.
+- Per-agent `skillCount` now reports a real count instead of zero.
+- README and package metadata now state the real agent count (56 coding agents plus the universal AGENTS.md format) rather than "15+".
+- Removed the font-scale feature in favor of native window sizing.
+
+### Fixed
+- Keyboard focus is no longer reset by the 30 second background rescan, so arrow-key navigation survives a refresh.
+- The lavender accent now uses an AA-contrast variant for small text on links, pills, and active labels.
+- Corrected Replit, Amp, Kimi, and Trae CN detection against their real skill store paths.
+- Agent-agnostic empty-state hint, AgentGroup `aria-controls`, ConfirmPopover focus management, and instant (non-janky) list scrolling.
+- Canonical repository URL casing in package metadata.
+
+### Security
+- The public release workflow refuses to build or publish when premium (pro) source is present or the tag ends with `-pro`.
+
+## [0.1.5] - 2026-05-20
+
+### Added
+- Marketplace registry. Search public skills across skills.sh and ClawHub behind one fan-out query, copy the `npx skills add` command, and browse via a rebuilt Registry tab with a provider selector.
+- Archive history. Every update writes a content-hashed snapshot, with a side-by-side diff (markdown plus per-line syntax highlighting) and one-click restore.
+- Claude Code plugin discovery, including plugin manifest hooks and `hooks.json` sidecars.
+- Installed and updated timestamp pills, an archive indicator, and history actions on cards and rows.
+- Body-portaled instant tooltips that survive overflow-hidden ancestors.
+
+### Fixed
+- GitHub sponsor and reserved site paths are ignored during repo detection so update checks stop returning 404.
+- Reverted the skills.sh client to the open `/api/search` route used by `npx skills`.
+
 ## [0.1.4] - 2026-05-03
 
 ### Added

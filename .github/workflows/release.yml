@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-pro" # premium (pro) tags never trigger the public release
   workflow_dispatch:
 
 permissions:
@@ -15,6 +16,22 @@ jobs:
     name: Test
     steps:
       - uses: actions/checkout@v4
+
+      # Edition guard: the public skill-deck repo ships the FREE edition only.
+      # Refuse to build/publish if premium (pro) source is present or the tag is
+      # a -pro tag. `build` needs `test`, so a failure here blocks the release.
+      - name: Guard against premium source on a public release
+        shell: bash
+        run: |
+          if [ -d src-tauri/src/harness ] || [ -f src-tauri/src/bin/harness_cli.rs ] || [ -d src/lib/components/chat ]; then
+            echo "::error::Premium (pro) source detected on a public release tag. The public repo must never build or publish the harness/chat edition."
+            exit 1
+          fi
+          if [[ "${GITHUB_REF_NAME}" == *-pro ]]; then
+            echo "::error::'-pro' tags are private-edition only and must never run the public release workflow."
+            exit 1
+          fi
+          echo "OK: free edition on public tag '${GITHUB_REF_NAME}'."
 
       - uses: dtolnay/rust-toolchain@stable
 

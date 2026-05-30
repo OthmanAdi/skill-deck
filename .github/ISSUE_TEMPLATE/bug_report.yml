@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in Skill Deck behaves incorrectly
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the bug and what you expected instead.
+      placeholder: I pressed Ctrl+Shift+K and the overlay opened empty, even though I have skills under ~/.claude/skills.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Launch Skill Deck
+        2. Press the global hotkey
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Skill Deck version
+      placeholder: 0.1.6 (see the title bar or the release you installed)
+    validations:
+      required: true
+  - type: textarea
+    id: agents
+    attributes:
+      label: Which agents are installed
+      description: Which coding agents do you have set up (Claude Code, Cursor, Copilot, ...)? This helps reproduce scan and dedup issues.
+    validations:
+      required: false

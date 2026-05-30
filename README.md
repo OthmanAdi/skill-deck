@@ -132,6 +132,15 @@ pnpm tauri build
 # binaries under src-tauri/target/release/
 ```
 
+## signing and updates
+
+The prebuilt installers are not yet code-signed, so the first launch shows a warning:
+
+- **Windows**: SmartScreen says "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **macOS**: Gatekeeper may say the app cannot be opened. Right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Skill Deck.app"`.
+
+There is no in-app auto-updater yet. The "Update detection" feature checks your installed *skills* against their GitHub sources; it does not update the app itself. To move to a newer Skill Deck, grab the latest installer from [Releases](https://github.com/OthmanAdi/skill-deck/releases/latest).
+
 ## platform support
 
 | Capability | Windows | macOS | Linux |
