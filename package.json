@@ -1,6 +1,6 @@
 {
   "name": "skill-deck",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Universal coding agent skill browser — a desktop overlay for browsing, searching, and managing skills across Claude Code, Cursor, Copilot, Codex, and 50+ AI coding agents.",
   "type": "module",
   "scripts": {
@@ -31,6 +31,8 @@
   ],
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
+    "@fontsource-variable/geist-mono": "^5.2.8",
+    "@fontsource/maple-mono": "^5.2.6",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "emoji-mart": "^5.6.0",
