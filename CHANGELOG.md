@@ -46,7 +46,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ### Added
 - Added structured release planning docs: `RELEASE_PLAN.md`, `CHANGELOG_PLAN.md`, and `FUTURE_IMPLEMENTATION_PLAN.md`.
-- Added production readiness audit reference document: `PRODUCTION_READINESS_AUDIT.md`.
+- Added an internal production readiness audit (kept local, not shipped).
 - Added support for scanning `customScanPaths` from config in backend scanner flow.
 - Added repo override application in scan output pipeline.
 - Added update-check provider guard for GitHub-only support path.

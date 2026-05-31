@@ -1,7 +1,7 @@
 # Theme Redesign Trace
 
 Date: 2026-05-02
-Source design: `DESIGN.md` (imported from `C:\Users\oasrvadmin\Downloads\DESIGN-linear.app.md`)
+Source design: `DESIGN.md` (imported from a local Linear-inspired design reference)
 
 ## Goal
 

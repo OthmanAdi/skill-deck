@@ -41,6 +41,10 @@ AGENT_SUPPORT_*.md
 notes.md
 SESSION_MEMORY.md
 llm.txt
+plan.html
+
+# Local token-dump / contrast scratch scripts (never publish)
+.tmp-tokens/
 
 # IDE
 .idea/
