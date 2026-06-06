@@ -6,6 +6,13 @@
 use anyhow::{Context, Result};
 use serde_yaml::Value as YamlValue;
 
+/// Maximum input size accepted by the frontmatter parser (1 MB).
+/// Files larger than this are treated as body-only (no frontmatter extraction).
+const MAX_CONTENT_SIZE: usize = 1_048_576;
+
+/// Maximum length of an individual string field extracted from frontmatter (64 KB).
+const MAX_FIELD_LEN: usize = 65_536;
+
 /// Raw result of parsing a file with optional YAML frontmatter.
 /// This is the intermediate representation before agent-specific normalization.
 #[derive(Debug, Clone)]
@@ -26,6 +33,15 @@ pub struct ParsedFrontmatter {
 /// - File has no `---` at the start -> no frontmatter, entire file is body
 /// - File is empty -> no frontmatter, empty body
 pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
+    // Reject oversized inputs early — these are almost never legitimate skill files.
+    if content.len() > MAX_CONTENT_SIZE {
+        return Ok(ParsedFrontmatter {
+            frontmatter: None,
+            body: content.chars().take(200).collect(),
+            raw_frontmatter: None,
+        });
+    }
+
     let trimmed = content.trim_start();
 
     // No frontmatter: file doesn't start with ---
@@ -74,11 +90,18 @@ pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
 }
 
 /// Helper: extract a string field from a YAML mapping.
+/// Truncates values longer than MAX_FIELD_LEN.
 pub fn yaml_str(value: &YamlValue, key: &str) -> Option<String> {
     value
         .get(key)
         .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
+        .map(|s| {
+            if s.len() > MAX_FIELD_LEN {
+                s[..MAX_FIELD_LEN].to_string()
+            } else {
+                s.to_string()
+            }
+        })
 }
 
 /// Helper: extract a bool field from a YAML mapping.

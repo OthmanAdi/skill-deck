@@ -281,6 +281,16 @@ pub fn scan_custom_paths(custom_scan_paths: &[String]) -> (Vec<Skill>, Vec<ScanE
             continue;
         }
 
+        // Reject obvious traversal patterns — custom paths should be absolute
+        // or relative without parent-directory escapes.
+        if trimmed.contains("..") {
+            errors.push(ScanError {
+                file_path: trimmed.to_string(),
+                message: "custom scan path must not contain '..'".to_string(),
+            });
+            continue;
+        }
+
         let path = Path::new(trimmed);
         if path.is_file() {
             match parse_custom_file(path) {
@@ -584,8 +594,10 @@ fn collect_with_walkdir(pattern: &str) -> Vec<PathBuf> {
 
     for entry in WalkDir::new(base_path)
         .follow_links(true)
+        .max_depth(16)
         .into_iter()
         .filter_map(|e| e.ok())
+        .take(10_000)
     {
         if !entry.file_type().is_file() {
             continue;

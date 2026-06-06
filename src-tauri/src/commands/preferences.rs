@@ -218,7 +218,7 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 /// Toggle star status for a skill
 #[tauri::command]
 pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
-    let mut config = state.0.lock().unwrap();
+    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let canonical_skill_id = {
         let mut temp = config.clone();
@@ -264,7 +264,7 @@ pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
 /// Set a custom icon for a skill
 #[tauri::command]
 pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String) {
-    let mut config = state.0.lock().unwrap();
+    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let canonical_skill_id = {
         let mut temp = config.clone();
@@ -308,7 +308,7 @@ pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String)
 /// Get the current app configuration
 #[tauri::command]
 pub fn get_config(state: State<ConfigState>) -> AppConfig {
-    state.0.lock().unwrap().clone()
+    state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
 }
 
 /// Update the global hotkey
@@ -362,14 +362,14 @@ pub fn set_hotkey<R: Runtime>(
 /// Get all starred skill IDs
 #[tauri::command]
 pub fn get_starred_skills(state: State<ConfigState>) -> Vec<String> {
-    let config = state.0.lock().unwrap();
+    let config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     config.starred_skills.iter().cloned().collect()
 }
 
 /// Set the active theme mode by name ("system", "dark", or "light")
 #[tauri::command]
 pub fn set_theme(state: State<ConfigState>, theme: String) {
-    let mut config = state.0.lock().unwrap();
+    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     config.theme = match theme.as_str() {
         "system" | "dark" | "light" => theme,
         "obsidian" => "dark".to_string(),

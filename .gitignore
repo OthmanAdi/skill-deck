@@ -42,6 +42,11 @@ notes.md
 SESSION_MEMORY.md
 llm.txt
 plan.html
+CHANGELOG_PLAN.md
+DESIGN.md
+FUTURE_IMPLEMENTATION_PLAN.md
+RELEASE_PLAN.md
+THEME_REDESIGN_TRACE.md
 
 # Local token-dump / contrast scratch scripts (never publish)
 .tmp-tokens/
