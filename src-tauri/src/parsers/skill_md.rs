@@ -59,8 +59,14 @@ pub fn parse_skill_md(
                     .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "tags"))),
                 use_cases: yaml_string_list(fm, "use-cases")
                     .or_else(|| yaml_string_list(fm, "use_cases"))
-                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "use-cases")))
-                    .or_else(|| fm.get("metadata").and_then(|m| yaml_string_list(m, "use_cases"))),
+                    .or_else(|| {
+                        fm.get("metadata")
+                            .and_then(|m| yaml_string_list(m, "use-cases"))
+                    })
+                    .or_else(|| {
+                        fm.get("metadata")
+                            .and_then(|m| yaml_string_list(m, "use_cases"))
+                    }),
                 globs: yaml_string_array(fm, "paths"),
                 trigger: determine_trigger(fm),
                 allowed_tools: yaml_str(fm, "allowed-tools"),
@@ -137,7 +143,13 @@ fn slugify(value: &str) -> String {
         .trim()
         .to_lowercase()
         .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' { ch } else { '-' })
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.' {
+                ch
+            } else {
+                '-'
+            }
+        })
         .collect::<String>();
 
     while slug.contains("--") {
@@ -215,5 +227,34 @@ Do the thing.
 
         assert_eq!(skill.description, "Simple skill");
         assert_eq!(skill.scope, SkillScope::Project);
+    }
+
+    #[test]
+    fn test_parse_malformed_fenced_frontmatter_uses_body_fallback() {
+        let temp = tempfile::tempdir().unwrap();
+        let skill_dir = temp.path().join("visible-skill");
+        std::fs::create_dir_all(&skill_dir).unwrap();
+        let skill_path = skill_dir.join("SKILL.md");
+        std::fs::write(
+            &skill_path,
+            concat!(
+                "---\n",
+                "name: hidden-by-invalid-yaml\n",
+                "description: No written brief exists yet: a new landing page\n",
+                "---\n",
+                "# Visible fallback heading\n",
+                "Readable instructions.\n",
+            ),
+        )
+        .unwrap();
+
+        let skill = parse_skill_md(AgentId::Codex, &skill_path, SkillScope::Global, None).unwrap();
+
+        assert_eq!(skill.name, "visible-skill");
+        assert_eq!(skill.description, "Visible fallback heading");
+        assert!(skill.metadata.version.is_none());
+        assert!(skill.metadata.author.is_none());
+        assert!(skill.metadata.tags.is_none());
+        assert!(skill.metadata.extra.is_none());
     }
 }

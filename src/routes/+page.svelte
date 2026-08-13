@@ -11,6 +11,7 @@
     store,
     toggleOverlay,
     setOverlayMode,
+    applyOverlayModeFromBackend,
     type OverlayMode,
   } from "$lib/stores/skills.svelte";
   import { initTheme } from "$lib/stores/theme.svelte";
@@ -83,7 +84,7 @@
 
       unlistenOverlayModeChanged = await listen<OverlayMode>("overlay-mode-changed", ({ payload }) => {
         if (payload === "auto-hide" || payload === "pinned") {
-          store.overlayMode = payload;
+          applyOverlayModeFromBackend(payload);
           if (payload === "auto-hide") {
             void maybeAutoHide();
           }
@@ -205,6 +206,11 @@
 
   function setupEscapeKey() {
     document.addEventListener("keydown", async (e) => {
+      // Dialogs and popovers own Escape while they are open. The document
+      // listener runs before their window-level handlers during bubbling, so
+      // hiding here would close the entire overlay before the focused surface
+      // can dismiss itself and return focus to its trigger.
+      if (e.defaultPrevented || document.querySelector('[role="dialog"]')) return;
       if (e.key === "Escape" && store.isVisible) {
         await hideOverlay();
       }

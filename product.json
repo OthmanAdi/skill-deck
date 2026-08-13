@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "flagship-product-contract/v2",
+  "productId": "skill-deck",
+  "name": "Skill Deck",
+  "version": "0.3.0",
+  "description": "Local searchable catalog for AI coding-agent skills, rules, prompts, providers, and model paths.",
+  "copyrightHolder": "Ahmad Othman Ammar Adi",
+  "publisher": "Ahmad Othman Ammar Adi",
+  "license": "MPL-2.0",
+  "distributionModel": "single-unlocked-product",
+  "canonical": {
+    "root": ".",
+    "rootRole": "complete-engineering-authority",
+    "repository": {
+      "url": "https://github.com/OthmanAdi/skill-deck",
+      "role": "public-source-authority"
+    }
+  },
+  "releaseState": {
+    "status": "pending",
+    "evidenceMode": "schema-only",
+    "attestedManifests": []
+  },
+  "internalBuilds": [],
+  "capabilities": [
+    "manager.artifact.discover",
+    "manager.artifact.read",
+    "manager.artifact.search",
+    "manager.artifact.organize",
+    "agent.skills.harness",
+    "agent.context.compaction",
+    "ai.jan-nano.provision-on-demand"
+  ],
+  "platformPolicy": {
+    "allowed": [
+      "windows-x64",
+      "source-portable"
+    ],
+    "notClaimed": [
+      "macos-native-package",
+      "linux-native-package",
+      "windows-arm64"
+    ]
+  },
+  "releaseRequirements": {
+    "signing": {
+      "requiredForDistributedArtifacts": true,
+      "unsignedDistributionAllowed": false,
+      "exceptionPolicy": "explicit-owner-approved-artifact-contract"
+    },
+    "notices": {
+      "required": true,
+      "status": "ready",
+      "sourcePaths": [
+        "LICENSE",
+        "src-tauri/resources/THIRD_PARTY_NOTICES.txt",
+        "src-tauri/resources/licenses/Jan-nano-ATTRIBUTION.txt",
+        "src-tauri/resources/licenses/Jan-nano-Apache-2.0.txt",
+        "src-tauri/resources/licenses/llama.cpp-MIT.txt"
+      ]
+    },
+    "sbom": {
+      "required": true,
+      "format": "cyclonedx-json"
+    },
+    "checksums": {
+      "required": true,
+      "algorithm": "sha256",
+      "manifestRequired": true
+    },
+    "provenance": {
+      "buildPathDisclosureAllowed": false,
+      "pdbDistributionAllowed": false
+    }
+  },
+  "allowedArtifactRoles": [
+    "source-archive",
+    "portable-executable",
+    "installer-msi",
+    "installer-nsis"
+  ],
+  "requiredExternalGates": [
+    {
+      "id": "windows-authenticode-certificate",
+      "required": true
+    },
+    {
+      "id": "jan-nano-model-hosting",
+      "required": true
+    }
+  ]
+}

@@ -1,74 +1,100 @@
-# Contributing
+# Contributing to Skill Deck
 
-Thanks for contributing to Skill Deck.
+Thank you for helping improve Skill Deck. Focused bug fixes, agent adapters, parser coverage, accessibility work, documentation, and reproducible performance improvements are welcome.
 
-## Development Setup
+By participating, you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report security vulnerabilities through the private process in [SECURITY.md](SECURITY.md), not a public issue.
 
-1. Install prerequisites:
-- Node.js 22+
-- pnpm 10+
+## Development setup
+
+Skill Deck 0.3.0 is currently qualified on Windows x64. Source-level fixes for other platforms are welcome, but do not describe a platform as supported without native validation evidence.
+
+Prerequisites:
+
+- Node.js 22.23.1
+- Corepack and the pnpm version pinned in `package.json`
 - Rust stable
+- Tauri v2 platform prerequisites
 
-2. Install dependencies:
-
-```bash
-pnpm install
-```
-
-3. Run app in dev mode:
-
-```bash
+```powershell
+corepack enable
+pnpm install --frozen-lockfile
 pnpm tauri dev
 ```
 
-## Quality Gates
+## Before changing code
 
-Before opening a pull request, run:
+- Read `AGENTS.md` and `CLAUDE.md` for architecture and repository rules.
+- Keep the universal artifact model aligned across Rust IPC types and frontend TypeScript types.
+- Prefer the existing adapter and parser pipeline over agent-specific frontend behavior.
+- Do not include real tokens, private prompts, personal paths, or production endpoints in fixtures.
+- Do not weaken filesystem scope, CSP, provider credential masking, download verification, or release signing gates.
 
-```bash
+## Quality gates
+
+Run the smallest focused tests while iterating. Before opening a pull request, run the complete source gate:
+
+```powershell
 pnpm check
-cd src-tauri && cargo test
-cd src-tauri && cargo clippy -- -D warnings
+pnpm compliance:test
+node --test scripts/release-compliance/tests/test_run_tauri_remapped.mjs
+Push-Location src-tauri
+cargo test --locked
+cargo clippy --locked -- -D warnings
+Pop-Location
 ```
 
-## Pull Request Guidelines
+For a release-affecting change, also run `pnpm tauri build` on Windows x64 and document the result. A local unsigned build is validation evidence, not a distributable project release.
 
-Include in each PR:
-- concise problem statement
-- why the change is needed
-- test and verification notes
-- docs updates when user-facing behavior changes
+To review the exact public-source boundary without changing the repository, export into a new empty directory and let the script compare every destination file and hash against its allowlist:
 
-If behavior changes, update:
-- `CHANGELOG.md`
-- relevant docs in README or planning docs
+```powershell
+pwsh -NoProfile -File scripts/public-export/Export-PublicSource.ps1 `
+  -Destination C:\path\to\empty\skill-deck-public
+```
 
-If scanner coverage or artifact-type behavior changes, also update:
-- `docs/skill-discovery.md`
-- parser docs and comments for any new parser module
+The export refuses nested or non-empty destinations and rejects private/process directories, generated binaries, archives, PDBs, unexpected files, changed hashes, and known private repository references. Update the manifest deliberately when adding a public top-level path.
 
-## Scope Guidance
+This allowlisted export is a review surface for source, documentation, legal, and compliance material. It intentionally omits the vendored llama.cpp `.exe` and `.dll` payloads, so it is not evidence that the managed local-model runtime can be rebuilt or redistributed from the exported directory alone.
 
-High-impact areas require extra care:
-- `src-tauri/src/commands/`
-- `src-tauri/src/agents/registry.rs`
-- `src-tauri/tauri.conf.json`
-- `src-tauri/capabilities/default.json`
+## Pull requests
 
-## Commit and Review Expectations
+Each pull request should include:
 
-- Keep changes focused and reviewable
-- Prefer additive and reversible changes
-- Avoid unrelated refactors in feature PRs
+- The problem and why it matters.
+- A focused description of the change.
+- Commands run and their results.
+- User-visible screenshots when the interface changes.
+- Documentation and changelog updates when behavior changes.
+- Remaining platform, security, or compatibility risk.
 
-## Code Style
+Keep changes reviewable and avoid unrelated refactors. Never add `Co-Authored-By` trailers on commits in this repository.
 
-- Rust: no `unwrap()` in production paths
-- Frontend: keep Svelte runes patterns consistent
-- Keep comments brief and useful for non-obvious logic
+## Contribution license
 
-## Artifact Coverage Notes
+By submitting a contribution, you agree that it may be distributed under the project's [Mozilla Public License 2.0](LICENSE). Do not submit code, text, media, or model material unless you have the right to contribute it under those terms. Third-party material must retain its original license and attribution.
 
-- Keep the universal model (`src-tauri/src/models/skill.rs`) in sync with frontend types (`src/lib/types/index.ts`).
-- Prefer extending scanner classification over introducing agent-specific frontend branches.
-- For new command or hook sources, add parser tests and at least one discovery-signal test path.
+## Common contribution paths
+
+### Add an agent
+
+1. Add the identifier in `src-tauri/src/models/skill.rs`.
+2. Add documented global/project paths and format metadata in `src-tauri/src/agents/registry.rs`.
+3. Reuse the frontmatter parser unless the source format is genuinely different.
+4. Add scanner and parser tests.
+5. Update `docs/skill-discovery.md`.
+
+### Change an IPC type
+
+Update the Rust model and its frontend TypeScript mirror together. IPC structs use `Serialize`, `Deserialize`, and camel-case serialization.
+
+### Change the interface
+
+Use Svelte 5 runes. Preserve keyboard-first search, facets, visible focus, grouped/card navigation, the collapsible Finder, and readable compact layout.
+
+## Release boundary
+
+Maintainers create releases from `v*` tags. The release workflow requires configured signing, verifies every Authenticode signature, and has no unsigned publication path. Contributors should never commit generated installers, portable executables, PDBs, `target/`, `build/`, or `release-evidence/`.
+
+## Review and conduct
+
+Maintainers may request narrower scope, additional tests, or native platform proof. Review code and ideas directly, keep discussion factual, and give actionable feedback.

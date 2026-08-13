@@ -252,6 +252,7 @@ fn map_trigger_use_case(trigger: Option<&str>) -> Option<&'static str> {
 fn strip_plugin_annotation(text: &str) -> String {
     static RE: OnceLock<Regex> = OnceLock::new();
     let re = RE.get_or_init(|| {
+        // Infallible: compile-time literal pattern.
         Regex::new(r"\[plugin:[^\]]*\]").expect("static regex must compile")
     });
     re.replace_all(text, "").to_string()
@@ -520,7 +521,10 @@ mod tests {
         // substrings ("dry" inside "laundry", "tag" inside "vintage",
         // "ai" inside "claim") used to false-trigger the old contains() check.
         let cases: &[(&str, &str)] = &[
-            ("misc-laundry", "Manages laundry within an industry workflow helper"),
+            (
+                "misc-laundry",
+                "Manages laundry within an industry workflow helper",
+            ),
             ("misc-vintage", "A vintage furniture marketplace organizer"),
             ("misc-fail", "Helps you claim every available widget edge"),
             ("misc-rapid", "Rapid widget arranger for warehouse rooms"),
@@ -566,7 +570,10 @@ mod tests {
     fn plugin_annotation_is_stripped_before_heuristics() {
         // Plugin annotation contains "modular" via the marketplace name. Without
         // stripping, every plugin skill would inherit the `refactoring` tag.
-        let mut skill = base_skill("status", "Show status [plugin: modularity@vladikk-modularity]");
+        let mut skill = base_skill(
+            "status",
+            "Show status [plugin: modularity@vladikk-modularity]",
+        );
         skill.metadata.tags = None;
         let mut items = vec![skill];
         enrich_skill_discovery(&mut items);

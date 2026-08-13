@@ -6,39 +6,57 @@ on:
     branches:
       - main
       - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skill-deck-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
-    runs-on: ubuntu-22.04
-    name: Validate
+    name: Validate source
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Linux dependencies
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Node.js
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          node-version: "22.23.1"
+          cache: pnpm
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Svelte type checks
+      - name: Run Svelte and TypeScript checks
         run: pnpm check
 
-      - name: Rust tests
-        run: cd src-tauri && cargo test --locked
+      - name: Run release compliance tests
+        run: pnpm compliance:test
 
-      - name: Rust clippy
-        run: cd src-tauri && cargo clippy --locked -- -D warnings
+      - name: Test the remapped-build launcher
+        run: node --test scripts/release-compliance/tests/test_run_tauri_remapped.mjs
+
+      - name: Run Rust tests
+        run: cargo test --locked
+        working-directory: src-tauri
+
+      - name: Run strict Rust lint
+        run: cargo clippy --locked -- -D warnings
+        working-directory: src-tauri

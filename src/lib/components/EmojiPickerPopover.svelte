@@ -3,18 +3,20 @@
   Singleton — driven by `emojiPicker` store. Rendered ONCE at the Overlay
   root, never per-card, so multi-spawn is impossible.
 
-  Positioning detects the BCR coord space at runtime: with CSS `zoom` on
-  <html>, Chromium can report `getBoundingClientRect()` in either visual
-  or logical space depending on version. We compute
-    scale = documentElement.getBoundingClientRect().width / clientWidth
-  which is 1 when BCR is logical and `zoom` when BCR is visual. Dividing
-  the anchor rect by `scale` and using `clientWidth/clientHeight` as the
-  viewport bound puts every input into the same logical coordinate system
-  that inline left/top is interpreted in — so the popover lands on the
-  trigger regardless of font scale or where in the list the trigger sits.
+  Positioning is delegated to the one shared brain, positionPopover() from
+  $lib/utils/position.ts, which is viewport-aware and scale-corrected for the
+  CSS `zoom` the app uses for font scaling (it derives the BCR coordinate space
+  internally, so the panel lands on its trigger at any font scale or scroll
+  position). This component only computes the panel SIZE (clamped to the
+  viewport) and hands it to the util; the flip/clamp math lives in one place.
+
+  PHOSPHOR floating surface (DESIGN 6/8): .layer-popover chrome, .popover-enter
+  entrance, subtle fade on exit. Focus is captured on open, moved into the
+  popover, and restored to the trigger on close; Esc closes.
 -->
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { fade } from "svelte/transition";
   import data from "@emoji-mart/data";
   import { Picker } from "emoji-mart";
   import {
@@ -22,15 +24,17 @@
     emojiPicker,
   } from "$lib/stores/emojiPicker.svelte";
   import { setSkillIcon } from "$lib/stores/skills.svelte";
+  import { positionPopover, type Placement } from "$lib/utils/position";
 
+  let popoverEl: HTMLDivElement | undefined = $state();
   let pickerHost: HTMLDivElement | undefined = $state();
   let picker: Picker | null = null;
+  let previousFocusEl: HTMLElement | null = null;
   let handleWindowClick: ((e: MouseEvent) => void) | null = null;
   let handleEscape: ((e: KeyboardEvent) => void) | null = null;
   let handleResize: (() => void) | null = null;
   let viewportLogicalW = $state(0);
   let viewportLogicalH = $state(0);
-  let bcrScale = $state(1);
 
   const POPOVER_W = 336;
   const POPOVER_H = 430;
@@ -43,113 +47,62 @@
   function syncViewport() {
     if (typeof document === "undefined") return;
     const html = document.documentElement;
-    // clientWidth/Height are the layout viewport in logical CSS px (post-zoom).
-    // BCR-space scale tells us whether BCR is in logical (scale=1) or
-    // visual (scale=zoom) coords.
-    const docRect = html.getBoundingClientRect();
+    // clientWidth/Height are the layout viewport in logical CSS px (post-zoom),
+    // which is what the panel-size clamp needs. positionPopover derives its own
+    // scale factor for placement.
     viewportLogicalW = html.clientWidth || window.innerWidth;
     viewportLogicalH = html.clientHeight || window.innerHeight;
-    bcrScale = viewportLogicalW > 0 ? docRect.width / viewportLogicalW : 1;
-    if (!Number.isFinite(bcrScale) || bcrScale <= 0) bcrScale = 1;
   }
 
   const popoverLayout = $derived.by(() => {
     const anchorRect = emojiPicker.anchorRect;
-    const scale = bcrScale > 0 ? bcrScale : 1;
     const vpW = Math.max(viewportLogicalW, 1);
     const vpH = Math.max(viewportLogicalH, 1);
     const width = Math.max(
       POPOVER_MIN_W,
-      Math.min(POPOVER_W, vpW - VIEWPORT_MARGIN * 2)
+      Math.min(POPOVER_W, vpW - VIEWPORT_MARGIN * 2),
     );
     const height = Math.max(
       POPOVER_MIN_H,
-      Math.min(POPOVER_H, vpH - VIEWPORT_MARGIN * 2)
+      Math.min(POPOVER_H, vpH - VIEWPORT_MARGIN * 2),
     );
     const pickerHeight = Math.max(PICKER_MIN_H, height - PICKER_CHROME_H);
-
-    const base = [
-      "border-color: var(--color-border)",
-      "background: var(--color-surface-1)",
-      "box-shadow: 0 22px 44px -16px var(--color-overlay-shadow)",
-      `height: ${height}px`,
-      `width: ${width}px`,
-    ];
 
     if (!anchorRect) {
       return {
         pickerHeight,
-        style: [
-          ...base,
-          `left: ${VIEWPORT_MARGIN}px`,
-          `top: ${VIEWPORT_MARGIN}px`,
-        ].join(";"),
+        width,
+        height,
+        x: VIEWPORT_MARGIN,
+        y: VIEWPORT_MARGIN,
+        placement: "right" as Placement,
       };
     }
 
-    // Project anchor rect into the same coord system inline left/top uses.
-    const anchorLeft = anchorRect.left / scale;
-    const anchorRight = anchorRect.right / scale;
-    const anchorTop = anchorRect.top / scale;
-    const anchorBottom = anchorRect.bottom / scale;
-    const anchorWidth = anchorRect.width / scale;
-    const anchorHeight = anchorRect.height / scale;
-
-    const gap = 8;
-
-    // Horizontal placement: prefer right of anchor, fall back to left, then clamp.
-    let left = anchorRight + gap;
-    if (left + width > vpW - VIEWPORT_MARGIN) {
-      left = anchorLeft - width - gap;
-    }
-    left = Math.max(VIEWPORT_MARGIN, Math.min(left, vpW - width - VIEWPORT_MARGIN));
-
-    // Vertical placement: try to vertically center on the anchor; if it
-    // would overflow either edge, flip to align with the anchor's other
-    // side. Bottom-of-list anchors used to disappear because the popover
-    // was simply clamped to viewportH - height with no awareness of WHERE
-    // the anchor is. Now we pin to the visible edge that the anchor is
-    // closest to, so the popover stays attached.
-    const spaceBelow = vpH - anchorBottom;
-    const spaceAbove = anchorTop;
-
-    let top: number;
-    if (height + VIEWPORT_MARGIN * 2 <= vpH) {
-      // Plenty of room — center vertically on anchor first.
-      top = anchorTop + anchorHeight / 2 - height / 2;
-      // If centering pushes off the bottom, place above the anchor.
-      if (top + height > vpH - VIEWPORT_MARGIN) {
-        if (spaceAbove >= height + VIEWPORT_MARGIN) {
-          top = anchorTop - height - gap;
-        } else if (spaceBelow >= height + VIEWPORT_MARGIN) {
-          top = anchorBottom + gap;
-        } else {
-          // Neither side fits cleanly — clamp to the side closer to anchor.
-          top = spaceBelow >= spaceAbove
-            ? Math.max(VIEWPORT_MARGIN, anchorBottom + gap)
-            : Math.max(VIEWPORT_MARGIN, anchorTop - height - gap);
-        }
-      }
-      // If centering pushed off the top, drop below.
-      if (top < VIEWPORT_MARGIN) {
-        top = spaceBelow >= height + VIEWPORT_MARGIN ? anchorBottom + gap : VIEWPORT_MARGIN;
-      }
-      // Final clamp into viewport.
-      top = Math.max(VIEWPORT_MARGIN, Math.min(top, vpH - height - VIEWPORT_MARGIN));
-    } else {
-      // Popover is taller than the viewport — pin to top margin.
-      top = VIEWPORT_MARGIN;
-    }
-
-    return {
-      pickerHeight,
-      style: [
-        ...base,
-        `left: ${left}px`,
-        `top: ${top}px`,
-      ].join(";"),
-    };
+    const p = positionPopover({
+      anchor: anchorRect,
+      panel: { width, height },
+      placement: "right",
+      align: "center",
+      gap: 8,
+      margin: VIEWPORT_MARGIN,
+    });
+    return { pickerHeight, width, height, x: p.x, y: p.y, placement: p.placement };
   });
+
+  function originForPlacement(p: Placement): string {
+    switch (p) {
+      case "top":
+        return "bottom center";
+      case "bottom":
+        return "top center";
+      case "left":
+        return "right center";
+      case "right":
+      default:
+        return "left center";
+    }
+  }
 
   function getTheme() {
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
@@ -168,7 +121,7 @@
       navPosition: "bottom",
       perLine: 8,
       emojiButtonSize: 46,
-      emojiButtonRadius: "14px",
+      emojiButtonRadius: "8px",
       emojiSize: 24,
       icons: "outline",
       searchPosition: "sticky",
@@ -221,6 +174,19 @@
     mountPicker();
   });
 
+  // Focus management: capture the trigger on open, move focus into the popover
+  // so it is keyboard-operable, and restore focus on close.
+  $effect(() => {
+    if (emojiPicker.open) {
+      previousFocusEl =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      requestAnimationFrame(() => popoverEl?.focus());
+    } else if (previousFocusEl) {
+      previousFocusEl.focus();
+      previousFocusEl = null;
+    }
+  });
+
   onMount(() => {
     syncViewport();
 
@@ -261,43 +227,37 @@
 
 {#if emojiPicker.open && emojiPicker.skill}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="fixed z-[210] overflow-hidden rounded-2xl border p-2"
-    style={popoverLayout.style}
+    bind:this={popoverEl}
+    class="layer-popover popover-enter fixed z-[210] overflow-hidden p-2"
+    style="left: {popoverLayout.x}px; top: {popoverLayout.y}px; width: {popoverLayout.width}px; height: {popoverLayout.height}px; --popover-origin: {originForPlacement(popoverLayout.placement)};"
     data-emoji-picker-popover
+    role="dialog"
+    aria-label="Choose icon for {emojiPicker.skill.name}"
+    tabindex="-1"
+    out:fade={{ duration: 120 }}
     onclick={(e) => e.stopPropagation()}
   >
-    <div class="mb-2 flex items-center justify-between px-1">
-      <span class="text-[11px] font-semibold text-[var(--color-text-secondary)]"
+    <div class="mb-2 flex items-center justify-between gap-2 px-1">
+      <span class="truncate text-xs font-semibold text-text-secondary"
         >Choose icon for {emojiPicker.skill.name}</span
       >
-      <button
-        class="rounded-md px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)]"
-        onclick={closeEmojiPicker}
-      >
-        close
-      </button>
+      <button class="btn-ghost btn-sm" onclick={closeEmojiPicker}>Close</button>
     </div>
 
     <div
-      class="mb-2 flex items-center justify-between gap-1.5 rounded-lg border px-2 py-1.5"
+      class="mb-2 flex items-center justify-between gap-2 rounded-sm border px-2 py-1"
       style="border-color: var(--color-border); background: var(--color-surface-2);"
     >
-      <span class="truncate text-[10px] text-[var(--color-text-muted)]">Current</span>
-      <span class="text-[18px]"
+      <span class="truncate text-2xs text-text-muted">Current</span>
+      <span class="text-xl leading-none"
         >{emojiPicker.skill.icon ?? emojiPicker.skill.name.charAt(0).toUpperCase()}</span
       >
-      <button
-        class="rounded-md px-1.5 py-0.5 text-[10px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)]"
-        onclick={resetIcon}
-      >
-        reset
-      </button>
+      <button class="btn-ghost btn-sm" onclick={resetIcon}>Reset</button>
     </div>
 
     <div
-      class="emoji-picker-shell overflow-hidden rounded-xl border"
+      class="emoji-picker-shell overflow-hidden rounded-sm border"
       style="border-color: var(--color-border); --emoji-picker-height: {popoverLayout.pickerHeight}px;"
       bind:this={pickerHost}
     ></div>
@@ -310,10 +270,10 @@
     height: var(--emoji-picker-height, 336px);
     --background: var(--color-surface-0);
     --border-color: var(--color-border);
-    --border-radius: 14px;
-    --emoji-size: 1.35rem;
-    --emoji-padding: 0.44rem;
-    --emoji-button-radius: 14px;
+    --border-radius: var(--radius-sm);
+    --emoji-size: 20px;
+    --emoji-padding: 8px;
+    --emoji-button-radius: var(--radius-md);
     --button-hover-background: var(--color-surface-3);
     --button-active-background: var(--color-surface-3);
     --input-font-color: var(--color-text-primary);

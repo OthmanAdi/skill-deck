@@ -1,0 +1,33 @@
+Jan-nano 4B Q4_K_M GGUF attribution
+
+Repository: Menlo/Jan-nano-gguf
+Repository URL: https://huggingface.co/Menlo/Jan-nano-gguf
+Pinned revision: 44c1024058604e95b4845fecde698f5f1a0c99e7
+Pinned model card:
+https://huggingface.co/Menlo/Jan-nano-gguf/blob/44c1024058604e95b4845fecde698f5f1a0c99e7/README.md
+
+The pinned model card states:
+
+  quantized_by: Menlo
+  base_model: Menlo/Jan-nano
+  base_model_relation: quantized
+  license: apache-2.0
+
+The pinned model card credits the Jan Nano authors as Alan Dao, Bach Vu Dinh,
+and Thinh. It describes Jan Nano as a fine-tuned model built on the Qwen3
+architecture and links the original weights at:
+
+https://huggingface.co/Menlo/Jan-nano
+
+Artifact downloaded by Skill Deck:
+
+  jan-nano-4b-Q4_K_M.gguf
+  2,497,280,448 bytes
+  SHA-256:
+  c345a1c0eda29e56c73c4c4c00035f28470e649cf4f551dea80a7baffe79a798
+
+The model file is downloaded on first use from the immutable revision above.
+It is not embedded in the Skill Deck installer.
+
+The complete Apache License 2.0 text is distributed beside this file as
+Jan-nano-Apache-2.0.txt.

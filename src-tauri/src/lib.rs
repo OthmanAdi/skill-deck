@@ -24,13 +24,15 @@
 // │  - Skill, AgentInfo, AppConfig — JSON-serializable  │
 // └─────────────────────────────────────────────────────┘
 
-mod agents;
+pub mod agents;
 mod commands;
 mod detection;
-mod models;
+pub mod harness;
+pub mod models;
 mod parsers;
 
 use commands::preferences::{load_config, register_overlay_hotkey, ConfigState, HotkeyState};
+use commands::skills::SkillCatalogState;
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
@@ -38,18 +40,19 @@ use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let config = load_config();
-    let startup_overlay_width = config.overlay_width.clamp(380, 2400) as f64;
-    let startup_overlay_height = config.overlay_height.clamp(560, 1800) as f64;
-    let startup_overlay_mode = config.overlay_mode.clone();
-    let startup_hotkey = config.hotkey.clone();
-
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        // This must remain first. On every supported desktop platform, the
+        // official plugin rejects a secondary process in its setup hook.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("overlay") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = window.emit("overlay-visibility-changed", true);
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
-        .manage(ConfigState(Mutex::new(config)))
-        .manage(HotkeyState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             // Skill scanning
             commands::scan_skills,
@@ -66,6 +69,7 @@ pub fn run() {
             commands::set_finder_open,
             commands::set_skill_sort_mode,
             commands::set_project_roots,
+            commands::set_custom_scan_paths,
             commands::set_collapsed_agents,
             commands::set_collapsed_tree_nodes,
             commands::get_starred_skills,
@@ -80,8 +84,46 @@ pub fn run() {
             commands::read_skill_snapshot,
             commands::search_marketplace,
             commands::search_marketplaces_aggregated,
+            // Harness (Speaking-in-Skills agent)
+            commands::harness_list_providers,
+            commands::harness_save_provider,
+            commands::harness_delete_provider,
+            commands::harness_set_active,
+            commands::harness_detect_ollama,
+            commands::harness_health,
+            commands::harness_list_models,
+            commands::harness_chat_send,
+            commands::harness_cancel_turn,
+            commands::harness_list_sessions,
+            commands::harness_get_session,
+            commands::harness_delete_session,
+            commands::harness_get_settings,
+            commands::harness_set_settings,
+            // Built-in local model (CANONICAL contract, task_plan.md §F)
+            commands::harness_builtin_status,
+            commands::harness_builtin_download,
+            commands::harness_builtin_cancel_download,
+            commands::harness_builtin_delete,
+            commands::harness_builtin_start,
+            commands::harness_builtin_stop,
         ])
         .setup(move |app| {
+            let mut config = load_config();
+            // Auto-managed built-in provider: injected once as the first entry
+            // so "Built-in model (recommended)" always shows in Settings.
+            if harness::builtin::ensure_builtin_provider(&mut config) {
+                let _ = commands::preferences::save_config(&config);
+            }
+            let startup_overlay_width = config.overlay_width.clamp(380, 2400) as f64;
+            let startup_overlay_height = config.overlay_height.clamp(560, 1800) as f64;
+            let startup_overlay_mode = config.overlay_mode.clone();
+            let startup_hotkey = config.hotkey.clone();
+
+            app.manage(ConfigState(Mutex::new(config)));
+            app.manage(SkillCatalogState::default());
+            app.manage(HotkeyState(Mutex::new(None)));
+            app.manage(harness::builtin::BuiltinRuntime::new());
+
             // The overlay window starts hidden — shown on global hotkey or tray click
             let window = match app.get_webview_window("overlay") {
                 Some(window) => window,
@@ -223,6 +265,26 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .unwrap_or_else(|e| eprintln!("error while running Skill Deck: {}", e));
+        .build(tauri::generate_context!());
+
+    // Split build/run so we get a RunEvent hook: Tauri does NOT auto-kill
+    // spawned processes, so the llama-server sidecar must be killed on exit
+    // or it leaks as an orphan (stale port + RAM held).
+    let app = match app {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("error while running Skill Deck: {}", e);
+            return;
+        }
+    };
+    app.run(|app_handle, event| {
+        if matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        ) {
+            if let Some(runtime) = app_handle.try_state::<harness::builtin::BuiltinRuntime>() {
+                runtime.0.kill_sidecar_now();
+            }
+        }
+    });
 }

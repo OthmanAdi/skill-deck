@@ -9,7 +9,7 @@
 
 pub mod marketplaces;
 pub mod repo_detector;
-pub mod skill_identity;
 pub mod skill_discovery;
 pub mod skill_history;
+pub mod skill_identity;
 pub mod update_checker;

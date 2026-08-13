@@ -9,8 +9,8 @@
 // 2. Implement the `parse` function that returns a ParsedSkill
 // 3. Register it in the agent's adapter (agents/your_agent.rs)
 
+pub mod claude_hooks;
 pub mod frontmatter;
 pub mod skill_md;
-pub mod claude_hooks;
 
 pub use frontmatter::*;

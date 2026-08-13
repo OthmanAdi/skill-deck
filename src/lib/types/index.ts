@@ -106,6 +106,9 @@ export type AgentId =
   | "adal"
   | "amp"
   | "antigravity"
+  | "antigravity-cli"
+  | "astrbot"
+  | "autohand-code"
   | "augment"
   | "bob"
   | "codearts-agent"
@@ -120,37 +123,56 @@ export type AgentId =
   | "deepagents"
   | "dexto"
   | "droid"
+  | "eve"
   | "firebender"
   | "forgecode"
   | "gemini-cli"
   | "goose"
+  | "grok"
   | "github-copilot"
+  | "hermes-agent"
   | "iflow-cli"
+  | "inference-sh"
+  | "jazz"
   | "junie"
   | "kilo"
+  | "kimchi"
+  | "kimi-code-cli"
   | "kimi-cli"
   | "kiro-cli"
   | "kode"
+  | "lingma"
+  | "loaf"
   | "mcpjam"
   | "mistral-vibe"
+  | "moxby"
   | "mux"
   | "neovate"
   | "codex"
+  | "ona"
   | "opencode"
   | "openclaw"
   | "openhands"
   | "pi"
   | "pochi"
+  | "promptscript"
   | "qoder"
+  | "qoder-cn"
   | "qwen-code"
+  | "reasonix"
   | "replit"
   | "roo"
   | "rovodev"
   | "tabnine-cli"
+  | "terramind"
+  | "tinycloud"
   | "trae"
   | "trae-cn"
   | "warp"
   | "windsurf"
+  | "zcode"
+  | "zed"
+  | "zenflow"
   | "zencoder"
   | "cline"
   | "aider"
@@ -225,6 +247,7 @@ export interface DeleteSkillVersionResult {
   deleted: boolean;
   versionId: string;
   remainingEntries: SkillVersionEntry[];
+  archiveCleanupPending: boolean;
 }
 
 export interface SkillSnapshotContentResponse {
@@ -265,6 +288,7 @@ export interface AppConfig {
   starredSkills: string[];
   skillIcons: Record<string, string>;
   customScanPaths: string[];
+  projectRoots: string[];
   checkUpdates: boolean;
   theme: string;
   overlayPosition: "bottom-right" | "bottom-left" | "top-right" | "top-left";

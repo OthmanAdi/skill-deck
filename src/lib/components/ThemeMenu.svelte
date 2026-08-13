@@ -1,11 +1,23 @@
 <!--
-  @agent-context: Theme selection popover triggered by gear icon in title bar.
-  Lists all registered themes from the theme store.
-  Active theme has a checkmark. Click to switch instantly.
+  @agent-context: Settings popover triggered by the gear .btn-icon in the title
+  bar. Four sections (theme, window behavior, project locations, global hotkey
+  capture) in one
+  .layer-popover dropdown with the shared .popover-enter entrance; it is
+  height-clamped + scrolls so it can never run off the window bottom. Active
+  theme / mode carry a checkmark; click to switch instantly. Positioning stays
+  CSS-absolute (anchored below-right of the trigger) rather than the
+  utils/position.ts fixed-panel util, which targets viewport-flipping popovers,
+  not a simple anchored dropdown — see needs_from_integrator.
 -->
 <script lang="ts">
   import { themeStore, setTheme, THEMES, type ThemeId } from "$lib/stores/theme.svelte";
-  import { store, setHotkey, setOverlayMode, type OverlayMode } from "$lib/stores/skills.svelte";
+  import {
+    store,
+    setHotkey,
+    setOverlayMode,
+    setProjectRoots,
+    type OverlayMode,
+  } from "$lib/stores/skills.svelte";
 
   const DEFAULT_HOTKEY = "CommandOrControl+Shift+K";
 
@@ -22,6 +34,7 @@
   let pendingCombo = $state<string | null>(null);
   let captureError = $state<string | null>(null);
   let saving = $state(false);
+  let projectPath = $state("");
 
   // Tauri's accelerator strings use these exact tokens. CommandOrControl maps
   // to Ctrl on Win/Linux and Cmd on macOS so the persisted accelerator is
@@ -264,6 +277,20 @@
   function selectOverlayMode(mode: OverlayMode) {
     void setOverlayMode(mode);
   }
+
+  async function addProjectRoot(e: SubmitEvent) {
+    e.preventDefault();
+    const candidate = projectPath.trim();
+    if (!candidate || store.projectRootsSaving) return;
+
+    const saved = await setProjectRoots([...store.projectRoots, candidate]);
+    if (saved) projectPath = "";
+  }
+
+  function removeProjectRoot(root: string) {
+    if (store.projectRootsSaving) return;
+    void setProjectRoots(store.projectRoots.filter((candidate) => candidate !== root));
+  }
 </script>
 
 <svelte:window
@@ -276,15 +303,11 @@
   <!-- Trigger: gear icon -->
   <button
     bind:this={triggerEl}
-    class="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)]
-      text-[var(--color-text-muted)]
-      transition-all duration-[120ms] ease-out
-      hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]
-      active:scale-[0.95]"
+    class="btn-icon"
     onclick={toggle}
-    aria-label="Settings / Theme"
+    aria-label="Settings"
     aria-expanded={isOpen}
-    aria-haspopup="menu"
+    aria-haspopup="dialog"
   >
     <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
       <path stroke-linecap="round" stroke-linejoin="round"
@@ -296,30 +319,26 @@
   <!-- Dropdown menu -->
   {#if isOpen}
     <div
-      role="menu"
+      role="dialog"
+      aria-label="Settings"
       tabindex="-1"
       onclick={stopInsideClick}
       onkeydown={(e) => { /* dropdown owns its own keys; window handler reads them */ if (e.key === "Tab") return; }}
-      class="absolute right-0 top-full z-50 mt-1.5 w-[228px]
-        rounded-[var(--radius-md)] border border-[var(--color-border)]
-        bg-[var(--color-surface-1)] py-1
-        shadow-[0_12px_32px_-6px_var(--color-overlay-shadow)]"
+      class="layer-popover popover-enter absolute right-0 top-full z-50 mt-1.5 w-[292px] py-1
+        max-h-[calc(100vh-52px)] overflow-x-hidden overflow-y-auto overscroll-contain"
+      style="--popover-origin: top right;"
     >
       <!-- Section label -->
-      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
-        text-[var(--color-text-muted)]">
-        Theme
-      </div>
+      <div class="u-caps px-3 py-1.5">Theme</div>
 
       <div class="mx-1 border-t border-[var(--color-border)] mb-1"></div>
 
       {#each THEMES as theme (theme.id)}
         {@const isActive = themeStore.currentThemeId === theme.id}
         <button
-          role="menuitem"
           class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] mx-1 px-2 py-2
             text-left
-            transition-[background-color] duration-[120ms] ease-out
+            transition-[background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
             hover:bg-[var(--color-surface-2)]"
           style="width: calc(100% - 8px);"
           onclick={() => selectTheme(theme.id)}
@@ -334,19 +353,23 @@
           </span>
 
           <div class="min-w-0">
-            <div class="text-[12px] font-medium
+            <div class="text-sm font-medium
               {isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}">
               {theme.name}
             </div>
-            <div class="text-[10px] text-[var(--color-text-muted)] leading-snug">
+            <div class="text-2xs text-[var(--color-text-muted)] leading-snug">
               {theme.description}
             </div>
           </div>
 
-          <!-- Color scheme indicator dot -->
+          <!-- Color-scheme indicator dot. These swatches must be theme-INVARIANT
+               (a dark swatch stays dark even while the app is in light mode), so
+               they cannot use --color-surface-* which flip with the active theme.
+               They resolve the fixed --color-swatch-dark / --color-swatch-light
+               tokens from app.css @theme (the sanctioned home for these values). -->
           <span
             class="instant-tooltip ml-auto h-2 w-2 shrink-0 rounded-full border border-[var(--color-border)]"
-            style="background: {theme.id === 'system' ? 'linear-gradient(135deg, #18191a 50%, #f5f6f6 50%)' : theme.colorScheme === 'dark' ? '#18191a' : '#f5f6f6'};"
+            style="background: {theme.id === 'system' ? 'linear-gradient(135deg, var(--color-swatch-dark) 50%, var(--color-swatch-light) 50%)' : theme.colorScheme === 'dark' ? 'var(--color-swatch-dark)' : 'var(--color-swatch-light)'};"
             data-tooltip="Color scheme: {theme.colorScheme}"
           ></span>
         </button>
@@ -354,10 +377,7 @@
 
       <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
 
-      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
-        text-[var(--color-text-muted)]">
-        Window behavior
-      </div>
+      <div class="u-caps px-3 py-1.5">Window behavior</div>
 
       {#each ([
         { id: "pinned", label: "Pinned mode", desc: "Stays open until you hide it" },
@@ -365,10 +385,9 @@
       ] as const) as mode (mode.id)}
         {@const active = store.overlayMode === mode.id}
         <button
-          role="menuitem"
           class="flex w-full items-center gap-2.5 rounded-[var(--radius-sm)] mx-1 px-2 py-2
             text-left
-            transition-[background-color] duration-[120ms] ease-out
+            transition-[background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
             hover:bg-[var(--color-surface-2)]"
           style="width: calc(100% - 8px);"
           onclick={() => selectOverlayMode(mode.id)}
@@ -382,11 +401,11 @@
           </span>
 
           <div class="min-w-0">
-            <div class="text-[12px] font-medium
+            <div class="text-sm font-medium
               {active ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}">
               {mode.label}
             </div>
-            <div class="text-[10px] text-[var(--color-text-muted)] leading-snug">
+            <div class="text-2xs text-[var(--color-text-muted)] leading-snug">
               {mode.desc}
             </div>
           </div>
@@ -395,10 +414,83 @@
 
       <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
 
-      <div class="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.08em]
-        text-[var(--color-text-muted)]">
-        Shortcut
+      <div class="u-caps px-3 py-1.5">Project locations</div>
+
+      <div class="px-3 pb-3">
+        <p class="text-2xs leading-snug text-[var(--color-text-muted)]">
+          Paths stay on this device. Skill Deck checks known agent folders plus these projects, never an entire drive.
+        </p>
+
+        {#if store.projectRoots.length > 0}
+          <ul class="mt-2 space-y-1" aria-label="Configured project locations">
+            {#each store.projectRoots as root (root)}
+              <li
+                class="flex min-h-10 items-center gap-1 rounded-sm border border-[var(--color-border)]
+                  bg-[var(--color-surface-2)] pl-2"
+              >
+                <span
+                  class="min-w-0 flex-1 truncate font-mono text-2xs text-[var(--color-text-secondary)]"
+                  title={root}
+                >
+                  {root}
+                </span>
+                <button
+                  type="button"
+                  class="min-h-10 shrink-0 rounded-r-sm px-2 text-2xs font-medium
+                    text-[var(--color-text-muted)]
+                    transition-[background-color,color,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+                    hover:bg-[var(--color-surface-3)] hover:text-[var(--color-error)] active:scale-[0.96]
+                    disabled:cursor-not-allowed disabled:opacity-50"
+                  onclick={() => removeProjectRoot(root)}
+                  disabled={store.projectRootsSaving}
+                  aria-label={`Remove project location ${root}`}
+                >
+                  Remove
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="mt-2 text-2xs italic text-[var(--color-text-muted)]">
+            No project folders added.
+          </p>
+        {/if}
+
+        <form class="mt-2 flex items-stretch gap-1" onsubmit={addProjectRoot}>
+          <label class="sr-only" for="project-root-path">Project folder path</label>
+          <input
+            id="project-root-path"
+            type="text"
+            class="min-h-10 min-w-0 flex-1 rounded-sm border border-[var(--color-border)]
+              bg-[var(--color-surface-2)] px-2 font-mono text-2xs text-[var(--color-text-primary)]
+              outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+              placeholder:text-[var(--color-text-muted)]
+              focus:border-[var(--color-accent)] focus:shadow-[0_0_0_3px_var(--color-accent-subtle)]
+              disabled:cursor-not-allowed disabled:opacity-50"
+            bind:value={projectPath}
+            placeholder="Paste a project folder path"
+            autocomplete="off"
+            spellcheck="false"
+            disabled={store.projectRootsSaving}
+          />
+          <button
+            type="submit"
+            class="min-h-10 shrink-0 rounded-sm border border-[var(--color-border)] px-2
+              text-2xs font-semibold text-[var(--color-text-secondary)]
+              transition-[background-color,color,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+              hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)] active:scale-[0.96]
+              disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={store.projectRootsSaving || projectPath.trim().length === 0}
+            aria-label="Add project location and rescan"
+          >
+            {store.projectRootsSaving ? "Saving…" : "Add"}
+          </button>
+        </form>
       </div>
+
+      <div class="mx-1 mt-1 border-t border-[var(--color-border)]"></div>
+
+      <div class="u-caps px-3 py-1.5">Shortcut</div>
 
       <div class="px-3 pb-3">
         <!-- Single inset field. Idle: shows the bound combo. Recording:
@@ -406,8 +498,8 @@
              the main key. Auto-saves on main key press; Esc cancels. -->
         <button
           type="button"
-          class="group flex w-full items-center gap-1.5 rounded-md border px-2 py-1.5
-            text-left transition-all duration-[120ms] ease-out
+          class="group flex w-full items-center gap-1.5 rounded-sm border px-2 py-1.5
+            text-left transition-[border-color,background-color,box-shadow] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
             {recording
               ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle)] shadow-[0_0_0_3px_var(--color-accent-subtle)]'
               : 'border-[var(--color-border)] bg-[var(--color-surface-2)] hover:border-[var(--color-border-active)] hover:bg-[var(--color-surface-3)]'}
@@ -417,35 +509,35 @@
         >
           {#each liveLabels() as label, i (label + i)}
             {#if i > 0}
-              <span class="text-[10px] font-medium text-[var(--color-text-muted)] select-none">
+              <span class="text-2xs font-medium text-[var(--color-text-muted)] select-none">
                 +
               </span>
             {/if}
             <span
-              class="inline-flex items-center justify-center rounded px-1.5 py-0.5
-                text-[10px] font-semibold tracking-wide
+              class="inline-flex items-center justify-center rounded-xs px-1.5 py-0.5
+                text-2xs font-semibold tracking-wide
                 border bg-[var(--color-surface-1)] tabular-nums
                 {recording
-                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
+                  ? 'border-[var(--color-accent)] text-[var(--color-accent-text)]'
                   : 'border-[var(--color-border)] text-[var(--color-text-primary)]'}"
             >
               {label}
             </span>
           {/each}
           {#if recording && liveLabels().length === 0}
-            <span class="text-[10px] italic text-[var(--color-accent-text)] animate-pulse">
+            <span class="text-2xs italic text-[var(--color-accent-text)] u-pulse">
               Hold Ctrl, Alt or Shift…
             </span>
           {/if}
           {#if !recording}
-            <span class="ml-auto text-[9px] uppercase tracking-[0.06em] text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]">
+            <span class="ml-auto text-2xs uppercase tracking-[0.06em] text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]">
               edit
             </span>
           {/if}
         </button>
 
         <div class="mt-1.5 flex items-center justify-between gap-2">
-          <p class="text-[9px] text-[var(--color-text-muted)] leading-snug">
+          <p class="text-2xs text-[var(--color-text-muted)] leading-snug">
             {#if recording}
               Press the key to save · Esc to cancel
             {:else}
@@ -455,9 +547,10 @@
           {#if !recording}
             <button
               type="button"
-              class="rounded border px-1.5 py-0.5 text-[9px] uppercase tracking-[0.06em]
+              class="rounded-xs border px-1.5 py-0.5 text-2xs uppercase tracking-[0.06em]
                 border-[var(--color-border)] text-[var(--color-text-muted)]
-                hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                transition-[background-color,color,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+                hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)] active:scale-[0.96]"
               onclick={resetHotkey}
               title="Reset to default (Ctrl + Shift + K)"
               disabled={saving}
@@ -468,7 +561,7 @@
         </div>
 
         {#if captureError}
-          <p class="mt-1.5 text-[9px] text-[var(--color-error, #d04848)] leading-snug">
+          <p class="mt-1.5 text-2xs text-[var(--color-error)] leading-snug">
             {captureError}
           </p>
         {/if}

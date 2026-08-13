@@ -1,8 +1,11 @@
 <!--
-  @agent-context: Dense 34px skill row for the grouped list view.
-  Click to expand and show file content preview with syntax highlighting.
-  Shows metadata (trigger, version, update indicator) inline.
-  Star and copy buttons appear on hover.
+  @agent-context: Dense 34px skill row for the grouped agent list. Click to
+  expand into a file-content preview with syntax highlighting; a read failure
+  shows a real error + Retry, never a fake "// Could not read file" string.
+  Collapsed density (DESIGN 8): at most 2 meta chips + 1 signal, matching
+  SkillCard so both views render a skill identically. Trigger + sources are
+  demoted into the expanded body. No agent badge — rows are grouped by agent.
+  The `enter` prop gates the one-time entrance stagger (first reveal only).
 -->
 <script lang="ts">
   import { slide } from "svelte/transition";
@@ -16,12 +19,14 @@
     snapshotSkillBeforeUpdate,
     loadSkillVersionHistory,
     restoreSkillVersion,
+    restoringVersionForSkill,
     deleteSkillVersion,
     openDiffModal,
     openFullSkillModal,
     store,
   } from "$lib/stores/skills.svelte";
   import ConfirmPopover from "./ConfirmPopover.svelte";
+  import Spinner from "./ui/Spinner.svelte";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import { relativeTime, absoluteTime } from "$lib/utils/formatTime";
 
@@ -30,38 +35,58 @@
     index = 0,
     delayIndex = 0,
     isFocused = false,
-  }: { skill: Skill; index?: number; delayIndex?: number; isFocused?: boolean } = $props();
+    enter = true,
+  }: {
+    skill: Skill;
+    index?: number;
+    delayIndex?: number;
+    isFocused?: boolean;
+    /** Play the one-time row-entrance stagger (first reveal only). */
+    enter?: boolean;
+  } = $props();
 
   let isExpanded = $state(false);
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
+  let contentError = $state<string | null>(null);
   let starAnimating = $state(false);
   let repoCheckLoading = $state(false);
   let snapshotLoading = $state(false);
   let historyLoading = $state(false);
-  let restoringVersionId = $state<string | null>(null);
+
+  async function loadContent() {
+    contentLoading = true;
+    contentError = null;
+    try {
+      fileContent = await invoke<string>("read_skill_content", {
+        skillId: skill.id,
+      });
+    } catch (e) {
+      // Real reason + retry affordance instead of a fake "// Could not read file".
+      contentError = e instanceof Error ? e.message : String(e);
+      fileContent = null;
+    } finally {
+      contentLoading = false;
+    }
+  }
 
   async function handleClick() {
     isExpanded = !isExpanded;
-    if (isExpanded && fileContent === null) {
-      contentLoading = true;
-      try {
-        fileContent = await invoke<string>("read_skill_content", {
-          skillId: skill.id,
-        });
-      } catch {
-        fileContent = "// Could not read file";
-      } finally {
-        contentLoading = false;
-      }
+    if (isExpanded && fileContent === null && !contentError) {
+      await loadContent();
     }
+  }
+
+  function handleRetryContent(e: MouseEvent) {
+    e.stopPropagation();
+    void loadContent();
   }
 
   function handleStarClick(e: MouseEvent) {
     e.stopPropagation();
     starAnimating = true;
     toggleStar(skill.id);
-    setTimeout(() => { starAnimating = false; }, 250);
+    setTimeout(() => { starAnimating = false; }, 220); // matches .star-pop keyframe
   }
 
   function handleCopyClick(e: MouseEvent) {
@@ -97,9 +122,9 @@
 
   async function handleRestore(e: MouseEvent, versionId: string) {
     e.stopPropagation();
-    restoringVersionId = versionId;
+    // The shared store protects the same skill across every renderer.
+    if (restoringVersionId !== null) return;
     await restoreSkillVersion(skill, versionId);
-    restoringVersionId = null;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -125,6 +150,7 @@
 
   const updateStatus = $derived(store.updateStatus[skill.id] ?? null);
   const historyEntries = $derived(store.versionHistory[skill.id] ?? []);
+  const restoringVersionId = $derived(restoringVersionForSkill(skill));
 
   const sourceAgentCount = $derived((skill.sourceAgents ?? []).length);
 
@@ -177,6 +203,29 @@
 
   // Archive indicator + delete confirm popover.
   const archiveCount = $derived(skill.archiveCount ?? 0);
+
+  // Collapsed density (DESIGN 8) — the SAME chip logic SkillCard uses, so both
+  // views read a skill identically: artifactType always leads; the second chip
+  // is the single most relevant of archive / time / version. Trigger + shared
+  // sources are demoted to the expanded body (nothing removed). Rows are already
+  // grouped by agent, so they carry no agent badge here.
+  const metaChips = $derived.by(() => {
+    const chips: { text: string; tip: string }[] = [
+      { text: skill.artifactType, tip: "Artifact type" },
+    ];
+    if (archiveCount > 0) {
+      chips.push({
+        text: `${archiveCount} archived`,
+        tip: `${archiveCount} archived version${archiveCount === 1 ? "" : "s"} — expand to manage`,
+      });
+    } else if (showTimePill && timePillRelative) {
+      chips.push({ text: `${timePillLabel} ${timePillRelative}`, tip: timePillTooltip });
+    } else if (skill.metadata.version) {
+      chips.push({ text: `v${skill.metadata.version}`, tip: "Version" });
+    }
+    return chips.slice(0, 2);
+  });
+
   let archiveDeleteOpenFor = $state<string | null>(null);
   let archiveDeleteAnchorRect = $state<DOMRect | null>(null);
   let archiveDeleteLoading = $state<string | null>(null);
@@ -203,8 +252,8 @@
 
 <!-- Row -->
 <div
-  class="row-enter group relative flex items-center gap-2 rounded-[var(--radius-sm)] px-2 cursor-pointer
-    transition-[background-color] duration-[120ms] ease-out select-none
+  class="{enter ? 'row-enter' : ''} group relative flex items-center gap-2 rounded-[var(--radius-sm)] px-2 cursor-pointer
+    transition-[background-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)] select-none
     hover:bg-[var(--color-surface-2)]
     {isExpanded ? 'bg-[var(--color-surface-2)]' : ''}
     {isFocused ? 'row-focused' : ''}"
@@ -220,7 +269,7 @@
   <svg
     class="h-2.5 w-2.5 shrink-0 text-[var(--color-text-muted)] opacity-0
       group-hover:opacity-40
-      transition-[transform,opacity] duration-200 ease-in-out
+      transition-[transform,opacity] duration-[var(--motion-base)] ease-[var(--ease-standard)]
       {isExpanded ? 'rotate-90 !opacity-50' : ''}"
     fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
   >
@@ -228,85 +277,31 @@
   </svg>
 
   <!-- Skill name -->
-  <span class="min-w-0 flex-1 truncate text-[12px] font-[450]
+  <span class="min-w-0 flex-1 truncate text-sm font-medium
     text-[var(--color-text-primary)] leading-none">
     {skill.name}
   </span>
 
-  <!-- Inline metadata (right side) -->
-  <div class="flex shrink-0 items-center gap-2">
-    {#if triggerLabel}
-      <span class="text-[9px] font-medium uppercase tracking-[0.06em]
-        text-[var(--color-text-muted)]">
-        {triggerLabel}
-      </span>
-    {/if}
-
-    <span
-      class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
-      style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-1);"
-      data-tooltip="Artifact type"
-    >
-      {skill.artifactType}
-    </span>
-
-    {#if sourceAgentCount > 1}
-      <span
-        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px]"
-        style="border-color: var(--color-border); color: var(--color-text-muted); background: var(--color-surface-2);"
-        data-tooltip={`Detected by ${sourceAgentCount} agent sources`}
-      >
-        shared {sourceAgentCount}
-      </span>
-    {/if}
-
-    {#if skill.metadata.version}
-      <span
-        class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums
-          text-[var(--color-text-secondary)]"
-        style="border-color: var(--color-border); background: var(--color-surface-3);"
-      >
-        v{skill.metadata.version}
-      </span>
-    {/if}
-
-    {#if showTimePill}
-      <span
-        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
-        style="
-          border-color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-border-active)'};
-          background: {pillIsUpdated ? 'var(--color-surface-3)' : 'var(--color-accent-subtle)'};
-          color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-accent)'};
-        "
-        data-tooltip={timePillTooltip}
-      >
-        {timePillLabel} {timePillRelative}
-      </span>
-    {/if}
-
-    {#if archiveCount > 0}
-      <span
-        class="instant-tooltip flex h-5 items-center gap-0.5 rounded-md border px-1 text-[9px] font-semibold tabular-nums"
-        style="border-color: var(--color-border-active); background: var(--color-accent-subtle); color: var(--color-accent);"
-        data-tooltip="{archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand to manage"
-      >
-        <svg class="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-          <path stroke-linecap="round" stroke-linejoin="round"
-            d="M3 4h18l-2 4H5L3 4z M5 8h14v10a2 2 0 01-2 2H7a2 2 0 01-2-2V8z M10 12h4" />
-        </svg>
-        {archiveCount}
-      </span>
-    {/if}
+  <!-- Inline metadata (DESIGN 8): <=2 meta chips + 1 signal. Trigger + sources
+       are demoted into the expanded body below — nothing is dropped. -->
+  <div class="flex shrink-0 items-center gap-1.5">
+    {#each metaChips as chip (chip.text)}
+      <span class="badge-meta instant-tooltip" data-tooltip={chip.tip}>{chip.text}</span>
+    {/each}
 
     {#if skill.updateAvailable}
-      <span class="instant-tooltip h-[5px] w-[5px] rounded-full bg-[var(--color-update-available)]"
-        data-tooltip="A newer version of this skill is available"></span>
+      <!-- The one signal (DESIGN 8): update available, as a calm pulsing accent
+           dot via the shared .u-pulse (DESIGN 7, replacing `breathe`). -->
+      <span
+        class="instant-tooltip u-pulse h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-update-available)]"
+        data-tooltip="A newer version of this skill is available"
+      ></span>
     {/if}
 
-    <!-- Star -->
+    <!-- Star (star-pop is its own press feedback; no active:scale) -->
     <button
-      class="flex h-6 w-6 items-center justify-center rounded-md text-[14px] leading-none
-        transition-all duration-[120ms] ease-out
+      class="flex h-6 w-6 items-center justify-center rounded-sm text-base leading-none
+        transition-[background-color,color,opacity] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
         {skill.starred
           ? 'text-[var(--color-starred)] bg-[var(--color-surface-3)]'
           : 'text-[var(--color-text-secondary)] opacity-80 hover:bg-[var(--color-surface-3)] hover:text-[var(--color-starred)] hover:opacity-100'}
@@ -317,10 +312,10 @@
 
     <!-- Copy -->
     <button
-      class="flex h-6 w-6 items-center justify-center rounded-md
+      class="flex h-6 w-6 items-center justify-center rounded-sm
         text-[var(--color-text-secondary)] opacity-80
-        hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)] hover:opacity-100
-        transition-all duration-[120ms] ease-out"
+        hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent-text)] hover:opacity-100
+        transition-[background-color,color,opacity,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)] active:scale-[0.96]"
       onclick={handleCopyClick}
       aria-label="Copy reference"
     >
@@ -340,14 +335,27 @@
   >
     <!-- Description -->
     {#if skill.description}
-      <p class="text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+      <p class="text-xs leading-relaxed text-[var(--color-text-secondary)]">
         {skill.description}
       </p>
     {/if}
 
-    <!-- Quick metadata bar -->
-    {#if skill.metadata.allowedTools || skill.metadata.globs || skill.metadata.author}
-      <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+    <!-- Quick metadata bar (trigger + sources demoted from the collapsed row so
+         no fact is lost). -->
+    {#if triggerLabel || sourceAgentCount > 1 || skill.metadata.allowedTools || skill.metadata.globs || skill.metadata.author}
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-2xs">
+        {#if triggerLabel}
+          <div class="flex gap-1.5">
+            <span class="font-medium text-[var(--color-text-secondary)]">Trigger</span>
+            <span class="text-[var(--color-text-muted)]">{triggerLabel}</span>
+          </div>
+        {/if}
+        {#if sourceAgentCount > 1}
+          <div class="flex gap-1.5">
+            <span class="font-medium text-[var(--color-text-secondary)]">Sources</span>
+            <span class="text-[var(--color-text-muted)] tabular-nums">{sourceAgentCount} agents</span>
+          </div>
+        {/if}
         {#if skill.metadata.allowedTools}
           <div class="flex gap-1.5">
             <span class="font-medium text-[var(--color-text-secondary)]">Tools</span>
@@ -371,9 +379,9 @@
 
     <!-- File content preview -->
     <div class="flex items-center justify-between gap-2">
-      <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
+      <span class="text-2xs font-medium text-[var(--color-text-secondary)]">Preview</span>
       <button
-        class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+        class="instant-tooltip rounded-sm border px-2 py-1 text-2xs font-medium transition-colors duration-[var(--motion-fast)]"
         style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
         onclick={handleOpenFullSkill}
         data-tooltip="Open the full skill body in a modal"
@@ -385,9 +393,26 @@
     <div class="rounded-[var(--radius-md)] overflow-hidden border border-[var(--color-code-border)]"
       style="background: var(--color-code-bg);">
       {#if contentLoading}
-        <div class="flex items-center gap-2 px-3 py-3 text-[10px] text-[var(--color-text-muted)]">
-          <span class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent spin"></span>
+        <div class="flex items-center gap-2 px-3 py-3 text-2xs text-[var(--color-text-muted)]">
+          <Spinner size={12} label="Reading skill file" />
           Reading…
+        </div>
+      {:else if contentError}
+        <!-- Real reason + retry, never the fake "// Could not read file". -->
+        <div class="flex flex-col items-start gap-2 px-3 py-3 text-2xs">
+          <div class="flex items-center gap-1.5 text-[var(--color-error)]">
+            <svg class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            </svg>
+            <span class="font-medium">Could not read this skill file</span>
+          </div>
+          <p class="leading-relaxed text-[var(--color-text-muted)]">{contentError}</p>
+          <button class="btn-secondary btn-sm" onclick={handleRetryContent}>Retry</button>
+        </div>
+      {:else if fileContent === ""}
+        <div class="px-3 py-4 text-2xs text-[var(--color-text-muted)]">
+          This skill file is empty.
         </div>
       {:else if contentPreview}
         <div class="skill-content-preview px-3 py-2 max-h-[180px] overflow-y-auto">
@@ -401,7 +426,7 @@
 
     <!-- File path + install command -->
     <div class="space-y-0.5">
-      <p class="truncate font-mono text-[9px] text-[var(--color-text-secondary)] opacity-95">
+      <p class="truncate font-mono text-2xs text-[var(--color-text-secondary)] opacity-95">
         {skill.filePath}
       </p>
 
@@ -412,17 +437,17 @@
               href={repoUrlDisplay}
               target="_blank"
               rel="noopener noreferrer"
-              class="truncate text-[9px] text-[var(--color-accent-text)] hover:underline"
+              class="truncate text-2xs text-[var(--color-accent-text)] hover:underline"
               onclick={(e) => e.stopPropagation()}
             >
               {repoUrlDisplay.replace(/^https?:\/\//, "")}
             </a>
           {:else}
-            <span class="truncate text-[9px] text-[var(--color-error)]">Invalid repo URL</span>
+            <span class="truncate text-2xs text-[var(--color-error)]">Invalid repo URL</span>
           {/if}
 
           <button
-            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleCheckUpdate}
             disabled={repoCheckLoading || !repoUrlDisplay}
             data-tooltip="Check upstream for a newer version"
@@ -431,7 +456,7 @@
           </button>
 
           <button
-            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleSnapshot}
             disabled={snapshotLoading}
             data-tooltip="Snapshot the current file so you can restore it later"
@@ -440,7 +465,7 @@
           </button>
 
           <button
-            class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+            class="instant-tooltip shrink-0 rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
             onclick={handleLoadHistory}
             disabled={historyLoading}
             data-tooltip="Show the list of archived versions for this skill"
@@ -450,11 +475,11 @@
         </div>
 
         {#if updateStatus?.error}
-          <p class="truncate text-[9px] text-[var(--color-error)]">{updateStatus.error}</p>
+          <p class="truncate text-2xs text-[var(--color-error)]">{updateStatus.error}</p>
         {/if}
 
         {#if historyEntries.length > 0}
-          <div class="max-h-[120px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5 text-[9px]">
+          <div class="max-h-[120px] overflow-y-auto rounded-xs border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5 text-2xs">
             {#each historyEntries as entry (entry.versionId)}
               <div class="mb-1 flex items-center justify-between gap-1 last:mb-0">
                 <span class="instant-tooltip truncate text-[var(--color-text-muted)]" data-tooltip={entry.versionId}>
@@ -463,7 +488,7 @@
                 <div class="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded-xs px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => {
                       e.stopPropagation();
                       openDiffModal(skill, entry.versionId, "view");
@@ -474,7 +499,7 @@
                   </button>
                   <button
                     type="button"
-                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded-xs px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => {
                       e.stopPropagation();
                       openDiffModal(skill, entry.versionId, "compare");
@@ -487,16 +512,20 @@
                   </button>
                   <button
                     type="button"
-                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                    class="instant-tooltip rounded-xs px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                     onclick={(e) => handleRestore(e, entry.versionId)}
-                    disabled={restoringVersionId === entry.versionId}
+                    disabled={restoringVersionId !== null}
+                    aria-busy={restoringVersionId === entry.versionId ? "true" : undefined}
+                    aria-label={restoringVersionId === entry.versionId
+                      ? "Restoring archived version"
+                      : "Restore archived version"}
                     data-tooltip="Overwrite the live skill file with this archived version"
                   >
-                    {restoringVersionId === entry.versionId ? "..." : "restore"}
+                    {restoringVersionId === entry.versionId ? "restoring..." : "restore"}
                   </button>
                   <button
                     type="button"
-                    class="instant-tooltip rounded px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
+                    class="instant-tooltip rounded-xs px-1 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
                     onclick={(e) => startDeleteVersion(e, entry.versionId)}
                     disabled={archiveDeleteLoading === entry.versionId}
                     data-tooltip="Permanently delete this archive entry"
@@ -511,25 +540,25 @@
         {/if}
 
         {#if skill.metadata.slashCommand}
-          <p class="truncate font-mono text-[9px] text-[var(--color-text-secondary)] opacity-95">
+          <p class="truncate font-mono text-2xs text-[var(--color-text-secondary)] opacity-95">
             slash {skill.metadata.slashCommand}
           </p>
         {/if}
 
         {#if skill.metadata.hookEvent}
-          <p class="truncate text-[9px] text-[var(--color-text-secondary)] opacity-95">
+          <p class="truncate text-2xs text-[var(--color-text-secondary)] opacity-95">
             hook event {skill.metadata.hookEvent}{skill.metadata.hookMatcher ? `, matcher ${skill.metadata.hookMatcher}` : ""}
           </p>
         {/if}
 
         {#if skill.metadata.hookCommand}
-          <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
+          <p class="truncate font-mono text-2xs text-[var(--color-accent-muted)]">
             {skill.metadata.hookCommand}
           </p>
         {/if}
 
         {#if skill.metadata.installCommand}
-          <p class="truncate font-mono text-[9px] text-[var(--color-accent-muted)]">
+          <p class="truncate font-mono text-2xs text-[var(--color-accent-muted)]">
             {skill.metadata.installCommand}
         </p>
       {/if}

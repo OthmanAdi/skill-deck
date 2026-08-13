@@ -3,6 +3,8 @@
   import { cubicOut } from "svelte/easing";
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import AgentBadge from "./AgentBadge.svelte";
+  import Spinner from "./ui/Spinner.svelte";
+  import Kbd from "./ui/Kbd.svelte";
   import {
     closeFullSkillModal,
     copySkillReference,
@@ -101,9 +103,9 @@
     if (!content) return;
     try {
       await navigator.clipboard.writeText(content);
-      showToast("Copied full skill content");
+      showToast("Copied full skill content", "ok");
     } catch {
-      showToast("Could not copy full content");
+      showToast("Could not copy full content", "error");
     }
   }
 
@@ -122,8 +124,7 @@
 
 {#if store.fullSkillModalOpen}
   <div
-    class="fixed inset-0 z-[220] flex items-center justify-center p-4"
-    style="background: rgba(4, 7, 12, 0.58); backdrop-filter: blur(2px);"
+    class="scrim z-[220] flex items-center justify-center p-4"
     transition:fade={{ duration: 140 }}
     onclick={handleBackdropClick}
     onkeydown={handleBackdropKeydown}
@@ -134,9 +135,9 @@
   >
     <div
       bind:this={panelEl}
-      class="full-skill-modal-panel flex w-full max-w-[980px] flex-col overflow-hidden"
-      style="max-height: min(88vh, 900px);"
-      transition:fly={{ y: 10, duration: 180, easing: cubicOut }}
+      class="layer-modal modal-panel-enter flex w-full max-w-[980px] flex-col overflow-hidden"
+      style="max-height: min(88vh, 900px); transform-origin: center;"
+      out:fly={{ y: 6, duration: 140, easing: cubicOut }}
       role="document"
       tabindex="-1"
     >
@@ -147,34 +148,28 @@
           <div class="flex flex-wrap items-center gap-2">
             {#if skill}
               <AgentBadge agentId={skill.agentId} />
-              <span
-                class="rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
-                style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-muted);"
-              >
-                {skill.artifactType}
-              </span>
+              <span class="badge-meta">{skill.artifactType}</span>
             {/if}
-            <span class="text-[10px] tabular-nums text-[var(--color-text-muted)]">{lineCountLabel}</span>
+            <span class="text-2xs tabular-nums text-[var(--color-text-muted)]">{lineCountLabel}</span>
           </div>
 
-          <h2 class="truncate text-[15px] font-semibold text-[var(--color-text-primary)]">
+          <h2 class="truncate font-display text-lg font-semibold text-[var(--color-text-primary)]">
             {skill?.name ?? "Skill"}
           </h2>
 
           {#if skill?.description}
-            <p class="line-clamp-2 text-[11px] text-[var(--color-text-secondary)]">{skill.description}</p>
+            <p class="line-clamp-2 text-xs text-pretty text-[var(--color-text-secondary)]">{skill.description}</p>
           {/if}
 
           {#if skill?.filePath}
-            <p class="truncate font-mono text-[9px] text-[var(--color-text-muted)]">{skill.filePath}</p>
+            <p class="truncate text-2xs text-[var(--color-text-muted)]">{skill.filePath}</p>
           {/if}
         </div>
 
-        <div class="flex shrink-0 items-center gap-1.5">
+        <div class="flex shrink-0 items-center gap-2">
           {#if skill}
             <button
-              class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
-              style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+              class="instant-tooltip btn-secondary btn-sm"
               onclick={handleCopyReference}
               data-tooltip="Copy the canonical reference for this skill"
               aria-label="Copy skill reference"
@@ -184,8 +179,7 @@
           {/if}
 
           <button
-            class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
-            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+            class="instant-tooltip btn-secondary btn-sm"
             onclick={handleCopyFullContent}
             disabled={!content}
             data-tooltip="Copy the full skill body to the clipboard"
@@ -196,8 +190,7 @@
 
           <button
             bind:this={closeButtonEl}
-            class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors"
-            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+            class="btn-secondary btn-sm"
             onclick={closeFullSkillModal}
             aria-label="Close full skill modal"
           >
@@ -207,10 +200,10 @@
       </header>
 
       {#if skill}
-        <div class="shrink-0 border-b px-4 py-1.5 text-[9px]"
+        <div class="shrink-0 border-b px-4 py-2 text-2xs"
           style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
         >
-          Press <span class="text-[var(--color-text-secondary)]">Esc</span> to close, use the header actions to copy reference or full content
+          Press <Kbd>Esc</Kbd> to close, use the header actions to copy reference or full content
         </div>
       {/if}
 
@@ -219,20 +212,38 @@
         style="background: var(--color-code-bg);"
       >
         {#if store.fullSkillModalLoading}
-          <div class="flex items-center gap-2 text-[11px] text-[var(--color-text-muted)]">
-            <span class="spin inline-block h-3 w-3 rounded-full border border-[var(--color-accent)] border-t-transparent"></span>
+          <div class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+            <Spinner size={14} label="Loading full skill content" />
             Loading full skill content...
           </div>
         {:else if store.fullSkillModalError}
-          <p class="text-[11px] text-[var(--color-error)]">{store.fullSkillModalError}</p>
+          <div class="text-xs text-[var(--color-error)]">
+            <p class="font-medium">Could not load skill content</p>
+            <p class="mt-1 text-2xs text-[var(--color-text-muted)]">{store.fullSkillModalError}</p>
+          </div>
         {:else if rendered}
           <div class="skill-content-preview full-skill-content">
             {@html rendered.html}
           </div>
         {:else}
-          <p class="text-[11px] text-[var(--color-text-muted)]">No content available</p>
+          <p class="text-xs text-[var(--color-text-muted)]">No content available</p>
         {/if}
       </div>
     </div>
   </div>
 {/if}
+
+<style>
+  /* Modal entrance (DESIGN 7): the shared popover-in recipe (scale 0.98->1 +
+     fade) at the modal tier — --motion-enter, emphasized ease. No `both` fill
+     so the Svelte out: transition's inline styles win on exit; reduced-motion
+     resolves it to opacity-only, matching the foundation's .popover-enter. */
+  .modal-panel-enter {
+    animation: popover-in var(--motion-enter) var(--ease-emphasized);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-panel-enter {
+      animation-name: u-fade-in;
+    }
+  }
+</style>

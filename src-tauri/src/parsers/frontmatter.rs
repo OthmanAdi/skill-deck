@@ -3,7 +3,7 @@
 // It extracts the YAML block between --- delimiters and the markdown body.
 // Specific parsers (skill_md, mdc) call this first, then add format-specific logic.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_yaml::Value as YamlValue;
 
 /// Maximum input size accepted by the frontmatter parser (1 MB).
@@ -71,11 +71,14 @@ pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
                 String::new()
             };
 
-            let frontmatter: YamlValue =
-                serde_yaml::from_str(yaml_str).context("Failed to parse YAML frontmatter")?;
+            // External skill files are not under Skill Deck's control. A malformed
+            // but properly fenced YAML block must not hide the readable Markdown
+            // body from discovery. Do not attempt field-level recovery: invalid
+            // YAML is treated as absent metadata.
+            let frontmatter = serde_yaml::from_str(yaml_str).ok();
 
             Ok(ParsedFrontmatter {
-                frontmatter: Some(frontmatter),
+                frontmatter,
                 body,
                 raw_frontmatter: Some(yaml_str.to_string()),
             })
@@ -92,16 +95,13 @@ pub fn parse_frontmatter(content: &str) -> Result<ParsedFrontmatter> {
 /// Helper: extract a string field from a YAML mapping.
 /// Truncates values longer than MAX_FIELD_LEN.
 pub fn yaml_str(value: &YamlValue, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(|v| v.as_str())
-        .map(|s| {
-            if s.len() > MAX_FIELD_LEN {
-                s[..MAX_FIELD_LEN].to_string()
-            } else {
-                s.to_string()
-            }
-        })
+    value.get(key).and_then(|v| v.as_str()).map(|s| {
+        if s.len() > MAX_FIELD_LEN {
+            s.chars().take(MAX_FIELD_LEN).collect()
+        } else {
+            s.to_string()
+        }
+    })
 }
 
 /// Helper: extract a bool field from a YAML mapping.
@@ -183,6 +183,48 @@ mod tests {
     }
 
     #[test]
+    fn test_malformed_fenced_yaml_preserves_body_without_metadata() {
+        let content = concat!(
+            "---\n",
+            "name: broken-skill\n",
+            "description: No written brief exists yet: a new landing page\n",
+            "---\n",
+            "# Readable fallback heading\n",
+            "The body remains available.\n",
+        );
+
+        let result = parse_frontmatter(content).unwrap();
+
+        assert!(result.frontmatter.is_none());
+        assert_eq!(
+            result.body,
+            "# Readable fallback heading\nThe body remains available.\n"
+        );
+        assert_eq!(
+            result.raw_frontmatter.as_deref(),
+            Some(
+                "name: broken-skill\n\
+                 description: No written brief exists yet: a new landing page"
+            )
+        );
+    }
+
+    #[test]
+    fn test_unclosed_malformed_frontmatter_remains_entire_body() {
+        let content = concat!(
+            "---\n",
+            "description: No written brief exists yet: a new landing page\n",
+            "# Body without a closing delimiter\n",
+        );
+
+        let result = parse_frontmatter(content).unwrap();
+
+        assert!(result.frontmatter.is_none());
+        assert_eq!(result.body, content);
+        assert!(result.raw_frontmatter.is_none());
+    }
+
+    #[test]
     fn test_parse_empty() {
         let result = parse_frontmatter("").unwrap();
         assert!(result.frontmatter.is_none());
@@ -205,7 +247,8 @@ mod tests {
 
     #[test]
     fn test_yaml_string_list_from_csv() {
-        let yaml: YamlValue = serde_yaml::from_str("tags: \"debugging, testing, release\"").unwrap();
+        let yaml: YamlValue =
+            serde_yaml::from_str("tags: \"debugging, testing, release\"").unwrap();
         let arr = yaml_string_list(&yaml, "tags").unwrap();
         assert_eq!(arr, vec!["debugging", "release", "testing"]);
     }

@@ -1,0 +1,32 @@
+Skill Deck: Severian local model delivery
+Third-party notices
+
+The Windows x64 application includes the llama.cpp runtime. The Jan-nano
+model file is not included in the installer; a user may download
+the pinned model artifact on first use, after which inference runs locally.
+
+1. llama.cpp
+
+Project: llama.cpp
+Upstream: https://github.com/ggml-org/llama.cpp
+Release: b10092
+Commit: 3ce7da2c852c538c4c5f9806da27029cf8c9cc4a
+License: MIT
+Complete license text: resources/licenses/llama.cpp-MIT.txt
+
+2. Jan-nano 4B Q4_K_M GGUF
+
+Repository: Menlo/Jan-nano-gguf
+Upstream: https://huggingface.co/Menlo/Jan-nano-gguf
+Pinned revision: 44c1024058604e95b4845fecde698f5f1a0c99e7
+Artifact: jan-nano-4b-Q4_K_M.gguf
+Artifact size: 2,497,280,448 bytes
+Artifact SHA-256:
+c345a1c0eda29e56c73c4c4c00035f28470e649cf4f551dea80a7baffe79a798
+Model-card license metadata: Apache-2.0
+Attribution: resources/licenses/Jan-nano-ATTRIBUTION.txt
+Complete license text: resources/licenses/Jan-nano-Apache-2.0.txt
+
+The model-card metadata and attribution above were read from the pinned
+repository revision. These notices do not grant trademark rights and do not
+replace the complete license texts.

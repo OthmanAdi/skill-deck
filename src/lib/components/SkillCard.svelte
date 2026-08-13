@@ -1,7 +1,10 @@
 <!--
-  @agent-context: Individual skill card with glassmorphism and content preview.
-  Shows: icon/emoji, name, description, agent badge, star button, copy button.
-  Expanded view fetches and displays the actual skill file content.
+  @agent-context: Individual skill card on a flat surface-1 carbon surface (no
+  glassmorphism) with content preview. Collapsed density follows DESIGN 8:
+  agent badge + at most 2 meta chips + 1 signal (the update dot); everything
+  else is demoted into the expanded body, nothing removed. Expanded view fetches
+  and displays the actual skill file content; a read failure shows a real error
+  + Retry rather than a fake "// Could not read file" string.
   Supports keyboard focus via isFocused prop from parent Overlay.
 -->
 <script lang="ts">
@@ -17,6 +20,7 @@
     snapshotSkillBeforeUpdate,
     loadSkillVersionHistory,
     restoreSkillVersion,
+    restoringVersionForSkill,
     deleteSkillVersion,
     openDiffModal,
     openFullSkillModal,
@@ -26,6 +30,7 @@
   import { renderSkillContent } from "$lib/utils/renderSkillContent";
   import { relativeTime, absoluteTime } from "$lib/utils/formatTime";
   import AgentBadge from "./AgentBadge.svelte";
+  import Spinner from "./ui/Spinner.svelte";
   import {
     emojiPicker,
     requestOpenEmojiPicker,
@@ -39,6 +44,7 @@
     childrenCollapsed = false,
     childrenCount = 0,
     onToggleChildren,
+    enter = true,
   }: {
     skill: Skill;
     index?: number;
@@ -47,6 +53,8 @@
     childrenCollapsed?: boolean;
     childrenCount?: number;
     onToggleChildren?: () => void;
+    /** Play the one-time card-entrance stagger (first reveal only). */
+    enter?: boolean;
   } = $props();
 
   function handleChildrenChevron(e: MouseEvent) {
@@ -58,6 +66,7 @@
   let starAnimating = $state(false);
   let fileContent = $state<string | null>(null);
   let contentLoading = $state(false);
+  let contentError = $state<string | null>(null);
 
   // Per-card flag derived from the global picker so styling / z-index still
   // reflects which card is hosting the open popover.
@@ -69,7 +78,7 @@
     e.stopPropagation();
     starAnimating = true;
     toggleStar(skill.id);
-    setTimeout(() => { starAnimating = false; }, 350);
+    setTimeout(() => { starAnimating = false; }, 220); // matches .star-pop keyframe
   }
 
   function handleIconClick(e: MouseEvent) {
@@ -89,21 +98,32 @@
     void openFullSkillModal(skill, fileContent);
   }
 
+  async function loadContent() {
+    contentLoading = true;
+    contentError = null;
+    try {
+      fileContent = await invoke<string>("read_skill_content", {
+        skillId: skill.id,
+      });
+    } catch (e) {
+      // Real reason + retry affordance instead of a fake "// Could not read file".
+      contentError = e instanceof Error ? e.message : String(e);
+      fileContent = null;
+    } finally {
+      contentLoading = false;
+    }
+  }
+
   async function handleCardClick() {
     isExpanded = !isExpanded;
-    if (isExpanded && fileContent === null) {
-      contentLoading = true;
-      try {
-        const raw: string = await invoke("read_skill_content", {
-          skillId: skill.id,
-        });
-        fileContent = raw;
-      } catch {
-        fileContent = "// Could not read file";
-      } finally {
-        contentLoading = false;
-      }
+    if (isExpanded && fileContent === null && !contentError) {
+      await loadContent();
     }
+  }
+
+  function handleRetryContent(e: MouseEvent) {
+    e.stopPropagation();
+    void loadContent();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -122,7 +142,6 @@
   let repoCheckLoading = $state(false);
   let historyLoading = $state(false);
   let snapshotLoading = $state(false);
-  let restoringVersionId = $state<string | null>(null);
 
   const repoUrlDisplay = $derived.by(() => {
     const value = skill.metadata.repositoryUrl?.trim() ?? "";
@@ -138,6 +157,7 @@
 
   const updateStatus = $derived(store.updateStatus[skill.id] ?? null);
   const historyEntries = $derived(store.versionHistory[skill.id] ?? []);
+  const restoringVersionId = $derived(restoringVersionForSkill(skill));
 
   async function handleCheckUpdate() {
     repoCheckLoading = true;
@@ -158,9 +178,9 @@
   }
 
   async function handleRestore(versionId: string) {
-    restoringVersionId = versionId;
+    // The shared store protects the same skill across every renderer.
+    if (restoringVersionId !== null) return;
     await restoreSkillVersion(skill, versionId);
-    restoringVersionId = null;
   }
 
   async function handleSaveRepo() {
@@ -246,6 +266,28 @@
 
   // Archive indicator + delete confirm popover state.
   const archiveCount = $derived(skill.archiveCount ?? 0);
+
+  // Collapsed density (DESIGN 8): agent badge + <=2 meta chips + 1 signal (the
+  // update dot). artifactType always leads; the second chip is the single most
+  // relevant of archive / time / version. Everything else lives in the expanded
+  // body (trigger, version, sources, use cases, install time) — nothing removed.
+  const metaChips = $derived.by(() => {
+    const chips: { text: string; tip: string }[] = [
+      { text: skill.artifactType, tip: "Artifact type" },
+    ];
+    if (archiveCount > 0) {
+      chips.push({
+        text: `${archiveCount} archived`,
+        tip: `${archiveCount} archived version${archiveCount === 1 ? "" : "s"} — expand to manage`,
+      });
+    } else if (showTimePill && timePillRelative) {
+      chips.push({ text: `${timePillLabel} ${timePillRelative}`, tip: timePillTooltip });
+    } else if (skill.metadata.version) {
+      chips.push({ text: `v${skill.metadata.version}`, tip: "Version" });
+    }
+    return chips.slice(0, 2);
+  });
+
   let archiveDeleteOpenFor = $state<string | null>(null);
   let archiveDeleteAnchorRect = $state<DOMRect | null>(null);
   let archiveDeleteLoading = $state<string | null>(null);
@@ -271,17 +313,15 @@
 </script>
 
 <div
-  class="card-enter group relative flex w-full gap-3 rounded-xl p-3 text-left cursor-pointer
-    transition-[background,border-color,box-shadow,transform] duration-[180ms] ease-[var(--motion-ease-standard)]
+  class="{enter ? 'card-enter' : ''} group relative flex w-full gap-3 rounded-md p-3 text-left cursor-pointer
+    transition-[background-color,border-color] duration-[var(--motion-base)] ease-[var(--ease-standard)]
     border
-    active:scale-[0.985]
     {isExpanded
       ? 'border-[var(--color-border-active)] bg-[var(--color-surface-2)]'
       : 'border-transparent bg-[var(--color-surface-1)] hover:border-[var(--color-border-hover)] hover:bg-[var(--color-surface-2)]'}
     {isFocused ? 'card-focused border-[var(--color-accent-muted)]' : ''}
     {emojiPickerOpen ? 'z-[180]' : 'z-0'}"
-  style="animation-delay: {entryDelayMs}ms;
-    {isExpanded ? 'box-shadow: 0 4px 20px -4px var(--color-overlay-shadow), inset 0 1px 0 0 rgba(247, 248, 248, 0.05);' : ''}"
+  style="animation-delay: {entryDelayMs}ms;"
   data-index={index}
   onclick={handleCardClick}
   onkeydown={handleKeydown}
@@ -291,8 +331,9 @@
 >
   <!-- Icon / Emoji / Letter avatar (click to change icon) -->
   <button
-    class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold
-      transition-all duration-200 group-hover:scale-105
+    class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm font-semibold
+      transition-[transform,background-color,border-color] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+      hover:scale-105 active:scale-[0.96]
       {isEmoji ? '' : 'text-[var(--color-text-secondary)]'}"
     style="{isEmoji
       ? ''
@@ -310,47 +351,30 @@
     <!-- Header row: name + actions -->
     <div class="flex items-start justify-between gap-1.5">
       <div class="min-w-0 flex-1">
-        <h3 class="truncate text-[13px] font-medium leading-snug text-[var(--color-text-primary)]">
+        <h3 class="truncate text-sm font-medium leading-snug text-[var(--color-text-primary)]">
           {skill.name}
         </h3>
-        <p class="mt-0.5 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+        <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-[var(--color-text-secondary)]">
           {skill.description || "No description"}
         </p>
       </div>
 
-      <!-- Action buttons -->
+      <!-- Action buttons (archive count is now a meta chip below, not a
+           duplicate indicator here) -->
       <div class="flex shrink-0 items-center gap-1">
-        {#if archiveCount > 0}
-          <span
-            class="instant-tooltip flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-md
-              border px-1 text-[9.5px] font-semibold tabular-nums leading-none"
-            style="
-              border-color: var(--color-border-active);
-              background: var(--color-accent-subtle);
-              color: var(--color-accent);
-            "
-            data-tooltip="{archiveCount} archived version{archiveCount === 1 ? '' : 's'} — expand the card to view"
-          >
-            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M3 4h18l-2 4H5L3 4z M5 8h14v10a2 2 0 01-2 2H7a2 2 0 01-2-2V8z M10 12h4" />
-            </svg>
-            {archiveCount}
-          </span>
-        {/if}
-
         {#if hasChildren}
           <!-- Children expand/collapse chevron (inline so parent card keeps full width) -->
           <button
-            class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-md
-              text-[var(--color-text-muted)] opacity-85 transition-all duration-150
-              hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)] hover:opacity-100"
+            class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-sm
+              text-[var(--color-text-muted)] opacity-85
+              transition-[background-color,color,opacity,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+              hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-secondary)] hover:opacity-100 active:scale-[0.96]"
             onclick={handleChildrenChevron}
             data-tooltip="{childrenCollapsed ? 'Expand' : 'Collapse'} {childrenCount} sub-skill{childrenCount !== 1 ? 's' : ''}"
             aria-label="{childrenCollapsed ? 'Expand' : 'Collapse'} children"
           >
             <svg
-              class="h-3 w-3 transition-transform duration-200"
+              class="h-3 w-3 transition-transform duration-[var(--motion-base)] ease-[var(--ease-standard)]"
               style="transform: rotate({childrenCollapsed ? '-90deg' : '0deg'});"
               fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"
             >
@@ -361,9 +385,10 @@
 
         <!-- Copy button -->
         <button
-          class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-md
-            text-[var(--color-text-secondary)] opacity-85 transition-all duration-150
-            hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)] hover:opacity-100"
+          class="instant-tooltip flex h-6 w-6 items-center justify-center rounded-sm
+            text-[var(--color-text-secondary)] opacity-85
+            transition-[background-color,color,opacity,scale] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
+            hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent-text)] hover:opacity-100 active:scale-[0.96]"
           onclick={handleCopyClick}
           data-tooltip="Copy skill reference (Ctrl+C)"
           aria-label="Copy skill reference"
@@ -376,7 +401,8 @@
 
         <!-- Star button -->
         <button
-          class="shrink-0 flex h-6 w-6 items-center justify-center rounded-md text-[15px] leading-none transition-all duration-150
+          class="shrink-0 flex h-6 w-6 items-center justify-center rounded-sm text-lg leading-none
+            transition-[background-color,color,opacity] duration-[var(--motion-fast)] ease-[var(--ease-standard)]
             {skill.starred
               ? 'text-[var(--color-starred)] bg-[var(--color-surface-3)]'
               : 'text-[var(--color-text-secondary)] opacity-85 hover:bg-[var(--color-surface-3)] hover:text-[var(--color-starred)] hover:opacity-100'}
@@ -389,83 +415,47 @@
       </div>
     </div>
 
-    <!-- Metadata row -->
+    <!-- Metadata row (DESIGN 8): agent badge + <=2 meta chips + 1 signal.
+         Demoted metadata (trigger, sources, version, use cases) lives in the
+         expanded body below — nothing is dropped, only re-ranked by relevance. -->
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <AgentBadge agentId={skill.agentId} />
 
-        {#if showTimePill}
+        {#each metaChips as chip (chip.text)}
+          <span class="badge-meta instant-tooltip" data-tooltip={chip.tip}>{chip.text}</span>
+        {/each}
+
+        {#if skill.updateAvailable}
+          <!-- The one signal (DESIGN 8): update available, rendered as the calm
+               pulsing accent dot via the shared .u-pulse (DESIGN 7, replacing the
+               dead `breathe` keyframe) rather than a loud text chip. -->
           <span
-            class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium tabular-nums"
-            style="
-              border-color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-border-active)'};
-              background: {pillIsUpdated ? 'var(--color-surface-3)' : 'var(--color-accent-subtle)'};
-              color: {pillIsUpdated ? 'var(--color-update-available)' : 'var(--color-accent)'};
-            "
-            data-tooltip={timePillTooltip}
-          >
-            {timePillLabel} {timePillRelative}
-          </span>
+            class="instant-tooltip u-pulse h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--color-update-available)]"
+            data-tooltip="A newer version of this skill is available"
+          ></span>
         {/if}
-
-        {#if skill.sourceAgents.length > 1}
-          <span
-            class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px]"
-            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-muted);"
-            data-tooltip={`Detected by ${skill.sourceAgents.length} agent sources`}
-          >
-            shared {skill.sourceAgents.length}
-          </span>
-        {/if}
-
-      <span
-        class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
-        style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
-        data-tooltip="Artifact type"
-      >
-        {skill.artifactType}
-      </span>
-
-      {#if skill.metadata.trigger}
-        <span class="rounded-md px-1.5 py-0.5 text-[9px] font-medium tracking-wide
-          text-[var(--color-text-muted)]"
-          style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
-          {skill.metadata.trigger}
-        </span>
-      {/if}
-
-      {#if skill.metadata.version}
-        <span
-          class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--color-text-secondary)]"
-          style="border-color: var(--color-border); background: var(--color-surface-3);"
-        >
-          v{skill.metadata.version}
-        </span>
-      {/if}
-
-      {#if skill.useCases.length > 0}
-        <span
-          class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] font-medium"
-          style="background: var(--color-accent-subtle); color: var(--color-accent); border: 1px solid var(--color-border-active);"
-          data-tooltip="Primary use case"
-        >
-          {skill.useCases[0]}
-        </span>
-      {/if}
-
-      {#if skill.updateAvailable}
-        <span class="instant-tooltip h-1.5 w-1.5 rounded-full bg-[var(--color-update-available)]"
-          style="animation: breathe 2s ease-in-out infinite;"
-          data-tooltip="A newer version of this skill is available"></span>
-      {/if}
-    </div>
+      </div>
 
     <!-- Expanded: file content preview -->
     {#if isExpanded}
       <div class="mt-3 space-y-2 border-t border-[var(--color-border)] pt-3"
         transition:slide={{ duration: 200, easing: cubicOut }}
       >
-        <!-- Quick metadata -->
-        <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+        <!-- Quick metadata (includes trigger + version demoted from the
+             collapsed row so no fact is lost) -->
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-2xs">
+          {#if skill.metadata.trigger}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Trigger</span>
+              <span class="text-[var(--color-text-muted)]">{skill.metadata.trigger}</span>
+            </div>
+          {/if}
+          {#if skill.metadata.version}
+            <div class="flex gap-1">
+              <span class="font-medium text-[var(--color-text-secondary)]">Version</span>
+              <span class="text-[var(--color-text-muted)] tabular-nums">{skill.metadata.version}</span>
+            </div>
+          {/if}
           {#if skill.discoveryTags.length > 0}
             <div class="flex gap-1">
               <span class="font-medium text-[var(--color-text-secondary)]">Tags</span>
@@ -514,16 +504,16 @@
 
         {#if parentSkill || childSkills.length > 0}
           <div
-            class="rounded-lg px-2.5 py-2 text-[10px]"
+            class="rounded-sm px-2.5 py-2 text-2xs"
             style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
           >
-            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+            <div class="mb-1 text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
               hierarchy
             </div>
 
             {#if parentSkill}
               <div class="flex items-center gap-1.5">
-                <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold text-[var(--color-text-primary)]"
+                <span class="rounded-xs px-1.5 py-0.5 text-2xs font-semibold text-[var(--color-text-primary)]"
                   style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
                   parent
                 </span>
@@ -536,7 +526,7 @@
             {#if childSkills.length > 0}
               <div class="mt-1.5 space-y-1">
                 <div class="flex items-center gap-1.5">
-                  <span class="rounded px-1.5 py-0.5 text-[9px] font-semibold text-[var(--color-text-primary)]"
+                  <span class="rounded-xs px-1.5 py-0.5 text-2xs font-semibold text-[var(--color-text-primary)]"
                     style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
                     children
                   </span>
@@ -546,7 +536,7 @@
                 <div class="flex flex-wrap gap-1">
                   {#each childSkills.slice(0, 5) as child}
                     <span
-                      class="instant-tooltip max-w-[180px] truncate rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+                      class="instant-tooltip max-w-[180px] truncate rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-secondary)]"
                       style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
                       data-tooltip={child.name}
                     >
@@ -555,7 +545,7 @@
                   {/each}
 
                   {#if childSkills.length > 5}
-                    <span class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]"
+                    <span class="rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)]"
                       style="background: var(--color-surface-2); border: 1px solid var(--color-border);">
                       +{childSkills.length - 5} more
                     </span>
@@ -568,16 +558,16 @@
 
         {#if extraSourceAgentNames.length > 0}
           <div
-            class="rounded-lg px-2.5 py-2 text-[10px]"
+            class="rounded-sm px-2.5 py-2 text-2xs"
             style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
           >
-            <div class="mb-1 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+            <div class="mb-1 text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
               detected via
             </div>
             <div class="flex flex-wrap gap-1">
               {#each extraSourceAgentNames as sourceName}
                 <span
-                  class="rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-secondary)]"
+                  class="rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-secondary)]"
                   style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
                 >
                   {sourceName}
@@ -589,9 +579,9 @@
 
         <!-- File content preview -->
         <div class="flex items-center justify-between gap-2">
-          <span class="text-[10px] font-medium text-[var(--color-text-secondary)]">Preview</span>
+          <span class="text-2xs font-medium text-[var(--color-text-secondary)]">Preview</span>
           <button
-            class="instant-tooltip rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150"
+            class="instant-tooltip rounded-md border px-2 py-1 text-2xs font-medium transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]"
             style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
             onclick={handleOpenFullSkill}
             data-tooltip="Open the full skill body in a modal"
@@ -600,13 +590,29 @@
           </button>
         </div>
 
-        <div class="rounded-lg overflow-hidden"
+        <div class="rounded-sm overflow-hidden"
           style="background: var(--color-code-bg); border: 1px solid var(--color-code-border);">
           {#if contentLoading}
-            <div class="flex items-center gap-2 px-3 py-4 text-[10px] text-[var(--color-text-muted)]">
-              <div class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent"
-                style="animation: refresh-spin 0.7s linear infinite;"></div>
+            <div class="flex items-center gap-2 px-3 py-4 text-2xs text-[var(--color-text-muted)]">
+              <Spinner size={12} label="Reading skill file" />
               Reading file...
+            </div>
+          {:else if contentError}
+            <!-- Real reason + retry, never the fake "// Could not read file". -->
+            <div class="flex flex-col items-start gap-2 px-3 py-3 text-2xs">
+              <div class="flex items-center gap-1.5 text-[var(--color-error)]">
+                <svg class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                </svg>
+                <span class="font-medium">Could not read this skill file</span>
+              </div>
+              <p class="leading-relaxed text-[var(--color-text-muted)]">{contentError}</p>
+              <button class="btn-secondary btn-sm" onclick={handleRetryContent}>Retry</button>
+            </div>
+          {:else if fileContent === ""}
+            <div class="px-3 py-4 text-2xs text-[var(--color-text-muted)]">
+              This skill file is empty.
             </div>
           {:else if contentPreview}
             <div class="skill-content-preview px-3 py-2.5 max-h-[200px] overflow-y-auto">
@@ -619,7 +625,7 @@
         </div>
 
         <!-- Repo / update section -->
-        <div class="rounded-lg px-2.5 py-2 text-[10px]"
+        <div class="rounded-sm px-2.5 py-2 text-2xs"
           style="background: var(--color-surface-3); border: 1px solid var(--color-border);">
 
           {#if skill.metadata.repositoryUrl}
@@ -642,14 +648,14 @@
                 <span class="truncate text-[var(--color-text-muted)]">Invalid repo URL</span>
               {/if}
               <button
-                class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip shrink-0 rounded-xs px-1.5 py-0.5 text-2xs font-medium transition-[background-color,color] duration-[var(--motion-fast)]
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleCheckUpdate(); }}
                 disabled={repoCheckLoading || !repoUrlDisplay}
                 data-tooltip="Check upstream for a newer version"
               >
                 {#if repoCheckLoading}
-                  <span class="spin inline-block h-2.5 w-2.5 rounded-full border border-[var(--color-accent)] border-t-transparent"></span>
+                  <Spinner size={10} label="Checking for updates" />
                 {:else if skill.updateAvailable}
                   ↑ update
                 {:else}
@@ -660,7 +666,7 @@
 
             <div class="mt-1.5 flex flex-wrap items-center gap-1">
               <button
-                class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs font-medium transition-[background-color,color] duration-[var(--motion-fast)]
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleSnapshot(); }}
                 disabled={snapshotLoading}
@@ -669,7 +675,7 @@
                 {snapshotLoading ? "saving..." : "archive"}
               </button>
               <button
-                class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] font-medium transition-all duration-150
+                class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs font-medium transition-[background-color,color] duration-[var(--motion-fast)]
                   text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                 onclick={(e) => { e.stopPropagation(); handleLoadHistory(); }}
                 disabled={historyLoading}
@@ -680,7 +686,7 @@
             </div>
 
             {#if updateStatus}
-              <div class="mt-1 text-[9px] text-[var(--color-text-muted)]">
+              <div class="mt-1 text-2xs text-[var(--color-text-muted)]">
                 {#if updateStatus.error}
                   <span class="text-[var(--color-error)]">{updateStatus.error}</span>
                 {:else if updateStatus.source === "cache"}
@@ -693,10 +699,10 @@
 
             {#if historyEntries.length > 0}
               <div
-                class="mt-1.5 max-h-[140px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5"
+                class="mt-1.5 max-h-[140px] overflow-y-auto rounded-xs border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5"
               >
                 {#each historyEntries as entry (entry.versionId)}
-                  <div class="mb-1 flex items-center justify-between gap-1 text-[9px] last:mb-0">
+                  <div class="mb-1 flex items-center justify-between gap-1 text-2xs last:mb-0">
                     <span
                       class="instant-tooltip truncate text-[var(--color-text-muted)]"
                       data-tooltip={entry.versionId}
@@ -706,7 +712,7 @@
                     <div class="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
-                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => {
                           e.stopPropagation();
                           openDiffModal(skill, entry.versionId, "view");
@@ -717,7 +723,7 @@
                       </button>
                       <button
                         type="button"
-                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => {
                           e.stopPropagation();
                           openDiffModal(skill, entry.versionId, "compare");
@@ -730,16 +736,20 @@
                       </button>
                       <button
                         type="button"
-                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
+                        class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)]"
                         onclick={(e) => { e.stopPropagation(); handleRestore(entry.versionId); }}
-                        disabled={restoringVersionId === entry.versionId}
+                        disabled={restoringVersionId !== null}
+                        aria-busy={restoringVersionId === entry.versionId ? "true" : undefined}
+                        aria-label={restoringVersionId === entry.versionId
+                          ? "Restoring archived version"
+                          : "Restore archived version"}
                         data-tooltip="Overwrite the live skill file with this archived version"
                       >
-                        {restoringVersionId === entry.versionId ? "..." : "restore"}
+                        {restoringVersionId === entry.versionId ? "restoring..." : "restore"}
                       </button>
                       <button
                         type="button"
-                        class="instant-tooltip rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
+                        class="instant-tooltip rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-error)]"
                         onclick={(e) => startDeleteVersion(e, entry.versionId)}
                         disabled={archiveDeleteLoading === entry.versionId}
                         data-tooltip="Permanently delete this archive entry"
@@ -759,20 +769,20 @@
                   type="text"
                   bind:value={repoInputValue}
                   placeholder="https://github.com/owner/repo"
-                  class="flex-1 rounded border bg-[var(--color-surface-1)] px-2 py-1 text-[10px]
+                  class="flex-1 rounded-xs border bg-[var(--color-surface-1)] px-2 py-1 text-2xs
                     text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)]
                     focus:outline-none focus:border-[var(--color-accent-muted)]"
                   style="border-color: var(--color-border);"
                   onkeydown={(e) => { if (e.key === 'Enter') handleSaveRepo(); if (e.key === 'Escape') repoInputVisible = false; }}
                 />
                 <button
-                  class="shrink-0 rounded px-2 py-1 text-[9px] font-medium transition-colors
+                  class="shrink-0 rounded-xs px-2 py-1 text-2xs font-medium transition-colors
                     bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]
-                    hover:bg-[var(--color-accent-muted)] hover:text-white"
+                    hover:bg-[var(--color-accent-muted)] hover:text-[var(--color-on-accent)]"
                   onclick={handleSaveRepo}
                 >save</button>
                 <button
-                  class="shrink-0 rounded px-1.5 py-1 text-[9px] text-[var(--color-text-muted)]
+                  class="shrink-0 rounded-xs px-1.5 py-1 text-2xs text-[var(--color-text-muted)]
                     hover:text-[var(--color-text-secondary)]"
                   onclick={() => repoInputVisible = false}
                 >✕</button>
@@ -780,7 +790,7 @@
             {:else}
               <button
                 class="flex items-center gap-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]
-                  transition-colors duration-150"
+                  transition-colors duration-[var(--motion-fast)] ease-[var(--ease-standard)]"
                 onclick={(e) => { e.stopPropagation(); repoInputVisible = true; repoInputValue = ""; }}
               >
                 <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -794,12 +804,12 @@
           {#if skill.metadata.installCommand}
             <div class="mt-1.5 flex items-center justify-between gap-2 border-t pt-1.5"
               style="border-color: var(--color-border);">
-              <span class="truncate font-mono text-[9px] text-[var(--color-text-muted)]">
+              <span class="truncate font-mono text-2xs text-[var(--color-text-muted)]">
                 {skill.metadata.installCommand}
               </span>
               <button
-                class="instant-tooltip shrink-0 rounded px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]
-                  hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent)] transition-colors"
+                class="instant-tooltip shrink-0 rounded-xs px-1.5 py-0.5 text-2xs text-[var(--color-text-muted)]
+                  hover:bg-[var(--color-surface-2)] hover:text-[var(--color-accent-text)] transition-colors"
                 onclick={(e) => {
                   e.stopPropagation();
                   navigator.clipboard.writeText(skill.metadata.installCommand!).catch(() => {});
@@ -811,7 +821,7 @@
         </div>
 
         <!-- File path -->
-        <div class="flex items-center gap-1.5 text-[9px] text-[var(--color-text-secondary)] opacity-95">
+        <div class="flex items-center gap-1.5 text-2xs text-[var(--color-text-secondary)] opacity-95">
           <svg class="h-2.5 w-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>

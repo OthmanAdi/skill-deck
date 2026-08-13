@@ -14,9 +14,12 @@
   let {
     skills,
     focusedIndex = -1,
+    enter = true,
   }: {
     skills: Skill[];
     focusedIndex?: number;
+    /** Play the one-time card-entrance stagger (first reveal only). */
+    enter?: boolean;
   } = $props();
 
   const collapsed = $derived(store.collapsedTreeNodes);
@@ -131,8 +134,8 @@
   /**
    * For a given root, return its visible descendants in DFS order (respecting
    * per node collapsed state). Used to render a root and all its visible
-   * sub skills inside a single glass container so the visual grouping is
-   * unambiguous.
+   * sub skills inside a single flat surface-1 group container so the visual
+   * grouping is unambiguous.
    */
   function collectVisibleDescendants(root: Skill): Skill[] {
     const result: Skill[] = [];
@@ -159,8 +162,9 @@
     {@const groupHasVisibleKids = rootHasKids && descendants.length > 0}
 
     {#if groupHasVisibleKids}
-      <!-- Glass group container: visually binds the root with its visible sub skills -->
-      <div class="skill-group-glass rounded-2xl p-1.5">
+      <!-- Flat group container (radius-lg, p-1): concentric with the radius-md
+           cards it holds, binds the root with its visible sub skills. -->
+      <div class="skill-group p-1">
         <div class="flex flex-col gap-1">
           <SkillCard
             skill={root}
@@ -170,6 +174,7 @@
             childrenCollapsed={rootCollapsed}
             childrenCount={rootChildCount}
             onToggleChildren={() => toggleTreeNodeCollapse(root.id)}
+            {enter}
           />
 
           {#each descendants as desc (desc.id)}
@@ -188,6 +193,7 @@
                 childrenCollapsed={dCollapsed}
                 childrenCount={dCount}
                 onToggleChildren={() => toggleTreeNodeCollapse(desc.id)}
+                {enter}
               />
             </div>
           {/each}
@@ -202,6 +208,7 @@
         childrenCollapsed={rootCollapsed}
         childrenCount={rootChildCount}
         onToggleChildren={() => toggleTreeNodeCollapse(root.id)}
+        {enter}
       />
     {/if}
   {/each}

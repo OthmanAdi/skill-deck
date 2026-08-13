@@ -18,6 +18,9 @@ pub struct DetectedSource {
 }
 
 // ── Compiled regex patterns (compiled once, reused across calls) ─────────────
+// The expect() calls below are justified: every pattern is a compile-time
+// string literal, so Regex::new is infallible (a bad pattern fails the test
+// suite at first call, never in the field).
 
 fn github_url_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -363,7 +366,8 @@ mod tests {
 
     #[test]
     fn test_github_repo_after_sponsor_link_wins() {
-        let body = "Sponsor at https://github.com/sponsors/me. Repo at https://github.com/me/cool-skill";
+        let body =
+            "Sponsor at https://github.com/sponsors/me. Repo at https://github.com/me/cool-skill";
         let result = detect_repo_from_body(body);
         assert_eq!(result, Some("https://github.com/me/cool-skill".to_string()));
     }

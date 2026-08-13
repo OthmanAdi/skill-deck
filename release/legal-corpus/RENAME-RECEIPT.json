@@ -1,0 +1,116 @@
+{
+  "schemaVersion": "skill-deck-legal-corpus-rename/v2",
+  "contentTransformation": "identifier-only-metadata-normalization",
+  "thirdPartyLegalContentTransformation": "none",
+  "verification": "Git blob identity and SHA-256",
+  "mappings": [
+    {
+      "from": "release/free-notices-policy.json",
+      "to": "release/legal-corpus-policy.json",
+      "historicalSha256": "0d88d5c7ee9269164159188af12b68aa5e41500af5483031d0ba29554eeeebb0",
+      "currentSha256": "3ca321ac3295019a07c7b6e6f0ba000016ba5d941d5145ea7612b3903821c565",
+      "transformation": "schema identifier only"
+    },
+    {
+      "from": "release/free-notices/upstream/UPSTREAM-SOURCES.json",
+      "to": "release/legal-corpus/upstream/UPSTREAM-SOURCES.json",
+      "sha256": "40d7b79f8d321d3fade960b3b6d5330a536d94572f21a9fe0d753d8e5cc67136"
+    },
+    {
+      "from": "release/free-notices/upstream/dropbox__rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+      "to": "release/legal-corpus/upstream/dropbox__rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+      "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae"
+    },
+    {
+      "from": "release/free-notices/upstream/knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+      "to": "release/legal-corpus/upstream/knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+      "sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90"
+    },
+    {
+      "from": "release/free-notices/upstream/knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+      "to": "release/legal-corpus/upstream/knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+      "sha256": "0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+      "sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+      "sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+      "sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2"
+    },
+    {
+      "from": "release/free-notices/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+      "to": "release/legal-corpus/upstream/open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+    },
+    {
+      "from": "release/free-notices/upstream/spdx__license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+      "to": "release/legal-corpus/upstream/spdx__license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+      "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+    },
+    {
+      "from": "release/free-notices/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+      "to": "release/legal-corpus/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+      "sha256": "5e834fe9788c524210deda859c46a550ffa5aa0cba9ea0572f0d81120e97c008"
+    },
+    {
+      "from": "release/free-notices/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+      "to": "release/legal-corpus/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "from": "release/free-notices/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+      "to": "release/legal-corpus/upstream/tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "from": "release/free-notices/upstream/wravery__webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+      "to": "release/legal-corpus/upstream/wravery__webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+      "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73"
+    },
+    {
+      "from": "release/free-notices/upstream/wravery__webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+      "to": "release/legal-corpus/upstream/wravery__webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+      "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73"
+    },
+    {
+      "from": "src-tauri/free-notices/THIRD_PARTY_NOTICES.txt",
+      "to": "src-tauri/notice-corpus/THIRD_PARTY_NOTICES.txt",
+      "historicalSha256": "23838ac04265a5946e91f121f44074d33d877b1d6dcc47bd0aaacc49fa557529",
+      "currentSha256": "7e7871e1bdc67c4b1fee7425cf462cb44e073540902ee5394e65ed9a83f83bd0",
+      "transformation": "header schema and source archive filename identifiers only"
+    },
+    {
+      "from": "src-tauri/free-notices/THIRD_PARTY_NOTICES.index.json",
+      "to": "src-tauri/notice-corpus/THIRD_PARTY_NOTICES.index.json",
+      "historicalSha256": "114c1b9622c694bc594c9a1bac5bc3d83c8ed60dbe4b87c58d3503f7a05eef44",
+      "currentSha256": "fb787c4f55e325e4bcb299406ecf840136e84ee43f78c7af2d4d93fe349627cf",
+      "transformation": "schema and source archive filename identifiers only"
+    },
+    {
+      "from": "src-tauri/free-notices/SOURCE-OFFER-RECEIPT.json",
+      "to": "src-tauri/notice-corpus/SOURCE-OFFER-RECEIPT.json",
+      "historicalSha256": "63242891f9fbaa6300cfab3c09cc12fc0a9fb3372f16516ef1a847f0fc44e7e5",
+      "currentSha256": "bc9376b1f0121eea6df863407c797d5c9f6e1b48681f234a4beb3156d6003c3d",
+      "transformation": "schema and source archive filename identifiers only"
+    }
+  ]
+}

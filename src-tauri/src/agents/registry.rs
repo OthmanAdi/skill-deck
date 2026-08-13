@@ -1,858 +1,1037 @@
-// @agent-context: The agent registry — single source of truth for all supported coding agents.
+// @agent-context: Versioned, data-only coding-agent catalog.
 //
-// This list mirrors official `npx skills` agent ids and canonical paths from
-// vercel-labs/skills, plus compatibility entries for legacy project formats.
+// The upstream portion is pinned to an immutable vercel-labs/skills revision.
+// Skill Deck adds three retained legacy adapters after the pinned 75 entries.
+// Location templates are resolved locally by locations.rs; no scan path is
+// downloaded or inferred through a broad disk crawl.
 
+use super::locations::LocationEnvironment;
 use crate::models::{AgentId, AgentInfo, SkillFormat};
 
-fn shared_project_skills_path() -> String {
-    "$PROJECT/.agents/skills/**/SKILL.md".to_string()
+pub const AGENT_CATALOG_VERSION: &str = "2026-07-29.1";
+pub const AGENT_CATALOG_SOURCE: &str =
+    "https://github.com/vercel-labs/skills/blob/e173b8c88f2581cfdaa1b6767c6519a08155790e/src/agents.ts";
+pub const AGENT_CATALOG_UPSTREAM_COMMIT: &str = "e173b8c88f2581cfdaa1b6767c6519a08155790e";
+pub const PINNED_UPSTREAM_AGENT_COUNT: usize = 75;
+pub const RETAINED_LEGACY_AGENT_COUNT: usize = 3;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CatalogOrigin {
+    PinnedUpstream,
+    RetainedLegacy,
 }
 
-fn shared_global_skills_path() -> String {
-    "$HOME/.agents/skills/**/SKILL.md".to_string()
+#[derive(Debug, Clone)]
+struct CatalogEntry {
+    id: AgentId,
+    display_name: &'static str,
+    global_paths: &'static [&'static str],
+    detection_paths: &'static [&'static str],
+    project_paths: &'static [&'static str],
+    format: SkillFormat,
+    origin: CatalogOrigin,
 }
+
+const fn upstream(
+    id: AgentId,
+    display_name: &'static str,
+    global_paths: &'static [&'static str],
+    detection_paths: &'static [&'static str],
+    project_paths: &'static [&'static str],
+) -> CatalogEntry {
+    CatalogEntry {
+        id,
+        display_name,
+        global_paths,
+        detection_paths,
+        project_paths,
+        format: SkillFormat::SkillMd,
+        origin: CatalogOrigin::PinnedUpstream,
+    }
+}
+
+const fn legacy(
+    id: AgentId,
+    display_name: &'static str,
+    global_paths: &'static [&'static str],
+    detection_paths: &'static [&'static str],
+    project_paths: &'static [&'static str],
+    format: SkillFormat,
+) -> CatalogEntry {
+    CatalogEntry {
+        id,
+        display_name,
+        global_paths,
+        detection_paths,
+        project_paths,
+        format,
+        origin: CatalogOrigin::RetainedLegacy,
+    }
+}
+
+// Keep this order aligned with the pinned upstream source. Shared
+// `.agents/skills` stores intentionally appear only on the Universal entry;
+// agents that consume the store retain independent detection probes.
+const CATALOG: &[CatalogEntry] = &[
+    upstream(
+        AgentId::AiderDesk,
+        "AiderDesk",
+        &["$HOME/.aider-desk/skills/**/SKILL.md"],
+        &["$HOME/.aider-desk"],
+        &["$PROJECT/.aider-desk/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::Amp, "Amp", &[], &["$CONFIG_HOME/amp"], &[]),
+    upstream(
+        AgentId::Antigravity,
+        "Antigravity",
+        &["$HOME/.gemini/antigravity/skills/**/SKILL.md"],
+        &["$HOME/.gemini/antigravity"],
+        &[],
+    ),
+    upstream(
+        AgentId::AntigravityCli,
+        "Antigravity CLI",
+        &["$HOME/.gemini/antigravity-cli/skills/**/SKILL.md"],
+        &["$HOME/.gemini/antigravity-cli"],
+        &[],
+    ),
+    upstream(
+        AgentId::AstrBot,
+        "AstrBot",
+        &["$HOME/.astrbot/data/skills/**/SKILL.md"],
+        &["$HOME/.astrbot"],
+        &["$PROJECT/data/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::AutohandCode,
+        "Autohand Code CLI",
+        &["$AUTOHAND_HOME/skills/**/SKILL.md"],
+        &["$AUTOHAND_HOME"],
+        &["$PROJECT/.autohand/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::AugmentCode,
+        "Augment",
+        &["$HOME/.augment/skills/**/SKILL.md"],
+        &["$HOME/.augment"],
+        &[
+            "$PROJECT/.augment/skills/**/SKILL.md",
+            "$PROJECT/.augment/rules/*.md",
+        ],
+    ),
+    upstream(
+        AgentId::Bob,
+        "IBM Bob",
+        &["$HOME/.bob/skills/**/SKILL.md"],
+        &["$HOME/.bob"],
+        &["$PROJECT/.bob/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::ClaudeCode,
+        "Claude Code",
+        &[
+            "$CLAUDE_HOME/skills/**/SKILL.md",
+            "$CLAUDE_HOME/commands/*.md",
+            "$CLAUDE_HOME/settings.json",
+            "$CLAUDE_HOME/settings.local.json",
+        ],
+        &["$CLAUDE_HOME"],
+        &[
+            "$PROJECT/.claude/skills/**/SKILL.md",
+            "$PROJECT/.claude/commands/*.md",
+            "$PROJECT/.claude/settings.json",
+            "$PROJECT/.claude/settings.local.json",
+            "$PROJECT/CLAUDE.md",
+        ],
+    ),
+    upstream(
+        AgentId::OpenClaw,
+        "OpenClaw",
+        &[
+            "$HOME/.openclaw/skills/**/SKILL.md",
+            "$HOME/.clawdbot/skills/**/SKILL.md",
+            "$HOME/.moltbot/skills/**/SKILL.md",
+        ],
+        &["$HOME/.openclaw", "$HOME/.clawdbot", "$HOME/.moltbot"],
+        &["$PROJECT/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Cline,
+        "Cline",
+        &["$HOME/.cline/skills/**/SKILL.md"],
+        &[
+            "$HOME/.cline",
+            "$CLINE_DATA_DIR",
+            "$VSCODE_GLOBAL_STORAGE/saoudrizwan.claude-dev",
+        ],
+        &["$PROJECT/.clinerules", "$PROJECT/.clinerules/*.md"],
+    ),
+    upstream(
+        AgentId::CodeArtsAgent,
+        "CodeArts Agent",
+        &["$HOME/.codeartsdoer/skills/**/SKILL.md"],
+        &["$HOME/.codeartsdoer"],
+        &["$PROJECT/.codeartsdoer/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::CodeBuddy,
+        "CodeBuddy",
+        &["$HOME/.codebuddy/skills/**/SKILL.md"],
+        &["$HOME/.codebuddy"],
+        &["$PROJECT/.codebuddy/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Codemaker,
+        "Codemaker",
+        &["$HOME/.codemaker/skills/**/SKILL.md"],
+        &["$HOME/.codemaker"],
+        &["$PROJECT/.codemaker/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::CodeStudio,
+        "Code Studio",
+        &["$HOME/.codestudio/skills/**/SKILL.md"],
+        &["$HOME/.codestudio"],
+        &["$PROJECT/.codestudio/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Codex,
+        "Codex",
+        &["$CODEX_HOME/skills/**/SKILL.md", "$CODEX_HOME/AGENTS.md"],
+        &["$CODEX_HOME", "/etc/codex"],
+        &["$PROJECT/.codex/skills/**/SKILL.md", "$PROJECT/AGENTS.md"],
+    ),
+    upstream(
+        AgentId::CommandCode,
+        "Command Code",
+        &["$HOME/.commandcode/skills/**/SKILL.md"],
+        &["$HOME/.commandcode"],
+        &["$PROJECT/.commandcode/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::ContinueDev,
+        "Continue",
+        &["$CONTINUE_HOME/skills/**/SKILL.md"],
+        &["$CONTINUE_HOME"],
+        &["$PROJECT/.continue/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Cortex,
+        "Cortex Code",
+        &["$HOME/.snowflake/cortex/skills/**/SKILL.md"],
+        &["$HOME/.snowflake/cortex"],
+        &["$PROJECT/.cortex/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Crush,
+        "Crush",
+        &["$CONFIG_HOME/crush/skills/**/SKILL.md"],
+        &["$CONFIG_HOME/crush"],
+        &["$PROJECT/.crush/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Cursor,
+        "Cursor",
+        &[
+            "$HOME/.cursor/skills/**/SKILL.md",
+            "$HOME/.cursor/rules/*.mdc",
+        ],
+        &["$HOME/.cursor"],
+        &[
+            "$PROJECT/.cursor/skills/**/SKILL.md",
+            "$PROJECT/.cursor/rules/*.mdc",
+            "$PROJECT/.cursorrules",
+        ],
+    ),
+    upstream(
+        AgentId::DeepAgents,
+        "Deep Agents",
+        &["$HOME/.deepagents/agent/skills/**/SKILL.md"],
+        &["$HOME/.deepagents"],
+        &[],
+    ),
+    upstream(
+        AgentId::Devin,
+        "Devin for Terminal",
+        &["$CONFIG_HOME/devin/skills/**/SKILL.md"],
+        &["$CONFIG_HOME/devin"],
+        &["$PROJECT/.devin/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::Dexto, "Dexto", &[], &["$HOME/.dexto"], &[]),
+    upstream(
+        AgentId::Droid,
+        "Droid",
+        &["$HOME/.factory/skills/**/SKILL.md"],
+        &["$HOME/.factory"],
+        &["$PROJECT/.factory/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Eve,
+        "Eve",
+        &[],
+        &[],
+        &[
+            "$PROJECT/agent/skills/**/SKILL.md",
+            "$PROJECT/agent/subagents/*/skills/**/SKILL.md",
+        ],
+    ),
+    upstream(
+        AgentId::Firebender,
+        "Firebender",
+        &["$HOME/.firebender/skills/**/SKILL.md"],
+        &["$HOME/.firebender"],
+        &[],
+    ),
+    upstream(
+        AgentId::ForgeCode,
+        "ForgeCode",
+        &["$HOME/.forge/skills/**/SKILL.md"],
+        &["$HOME/.forge"],
+        &["$PROJECT/.forge/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Gemini,
+        "Gemini CLI",
+        &["$GEMINI_HOME/skills/**/SKILL.md", "$GEMINI_HOME/GEMINI.md"],
+        &["$GEMINI_HOME"],
+        &[
+            "$PROJECT/.gemini/skills/**/SKILL.md",
+            "$PROJECT/.gemini/GEMINI.md",
+            "$PROJECT/GEMINI.md",
+        ],
+    ),
+    upstream(
+        AgentId::GithubCopilot,
+        "GitHub Copilot",
+        &[
+            "$COPILOT_HOME/skills/**/SKILL.md",
+            "$COPILOT_HOME/skills/**/*.instructions.md",
+            "$COPILOT_SKILLS_DIRS/**/SKILL.md",
+        ],
+        &["$COPILOT_HOME"],
+        &[
+            "$PROJECT/.github/copilot-instructions.md",
+            "$PROJECT/.github/instructions/*.instructions.md",
+            "$PROJECT/.github/copilot/agents/*.md",
+        ],
+    ),
+    upstream(
+        AgentId::Goose,
+        "Goose",
+        &["$CONFIG_HOME/goose/skills/**/SKILL.md"],
+        &["$CONFIG_HOME/goose"],
+        &["$PROJECT/.goose/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Grok,
+        "Grok Build",
+        &["$GROK_HOME/skills/**/SKILL.md"],
+        &["$GROK_HOME"],
+        &["$PROJECT/.grok/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::HermesAgent,
+        "Hermes Agent",
+        &["$HERMES_HOME/skills/**/SKILL.md"],
+        &["$HERMES_HOME"],
+        &["$PROJECT/.hermes/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::InferenceSh,
+        "inference.sh",
+        &["$HOME/.inferencesh/skills/**/SKILL.md"],
+        &["$HOME/.inferencesh"],
+        &["$PROJECT/.inferencesh/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Jazz,
+        "Jazz",
+        &["$HOME/.jazz/skills/**/SKILL.md"],
+        &["$HOME/.jazz"],
+        &["$PROJECT/.jazz/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Junie,
+        "Junie",
+        &["$HOME/.junie/skills/**/SKILL.md"],
+        &["$HOME/.junie"],
+        &["$PROJECT/.junie/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::IFlowCli,
+        "iFlow CLI",
+        &["$HOME/.iflow/skills/**/SKILL.md"],
+        &["$HOME/.iflow"],
+        &["$PROJECT/.iflow/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Kilo,
+        "Kilo Code",
+        &["$HOME/.kilocode/skills/**/SKILL.md"],
+        &[
+            "$HOME/.kilocode",
+            "$XDG_DATA_HOME/kilo",
+            "$VSCODE_GLOBAL_STORAGE/kilocode.kilo-code",
+        ],
+        &["$PROJECT/.kilocode/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Kimchi,
+        "Kimchi",
+        &["$CONFIG_HOME/kimchi/harness/skills/**/SKILL.md"],
+        &["$CONFIG_HOME/kimchi"],
+        &["$PROJECT/.kimchi/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::KimiCodeCli,
+        "Kimi Code CLI",
+        &[],
+        &["$HOME/.kimi-code", "$HOME/.kimi"],
+        &[],
+    ),
+    upstream(
+        AgentId::KiroCli,
+        "Kiro CLI",
+        &["$HOME/.kiro/skills/**/SKILL.md"],
+        &["$HOME/.kiro"],
+        &["$PROJECT/.kiro/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Kode,
+        "Kode",
+        &["$HOME/.kode/skills/**/SKILL.md"],
+        &["$HOME/.kode"],
+        &["$PROJECT/.kode/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Lingma,
+        "Lingma",
+        &["$HOME/.lingma/skills/**/SKILL.md"],
+        &["$HOME/.lingma"],
+        &["$PROJECT/.lingma/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::Loaf, "Loaf", &[], &["$HOME/.loaf"], &[]),
+    upstream(
+        AgentId::McpJam,
+        "MCPJam",
+        &["$HOME/.mcpjam/skills/**/SKILL.md"],
+        &["$HOME/.mcpjam"],
+        &["$PROJECT/.mcpjam/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::MistralVibe,
+        "Mistral Vibe",
+        &["$VIBE_HOME/skills/**/SKILL.md"],
+        &["$VIBE_HOME"],
+        &["$PROJECT/.vibe/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Moxby,
+        "Moxby",
+        &["$HOME/.moxby/skills/**/SKILL.md"],
+        &["$HOME/.moxby"],
+        &["$PROJECT/.moxby/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Mux,
+        "Mux",
+        &["$HOME/.mux/skills/**/SKILL.md"],
+        &["$HOME/.mux"],
+        &["$PROJECT/.mux/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::OpenCode,
+        "OpenCode",
+        &["$CONFIG_HOME/opencode/skills/**/SKILL.md"],
+        &["$CONFIG_HOME/opencode", "$XDG_DATA_HOME/opencode"],
+        &["$PROJECT/.opencode/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::OpenHands,
+        "OpenHands",
+        &["$HOME/.openhands/skills/**/SKILL.md"],
+        &["$HOME/.openhands"],
+        &["$PROJECT/.openhands/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Ona,
+        "Ona",
+        &["$HOME/.ona/skills/**/SKILL.md"],
+        &["$HOME/.ona"],
+        &["$PROJECT/.ona/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Pi,
+        "Pi",
+        &["$HOME/.pi/agent/skills/**/SKILL.md"],
+        &["$HOME/.pi/agent"],
+        &["$PROJECT/.pi/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Qoder,
+        "Qoder",
+        &["$HOME/.qoder/skills/**/SKILL.md"],
+        &["$HOME/.qoder"],
+        &["$PROJECT/.qoder/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::QoderCn,
+        "Qoder CN",
+        &["$HOME/.qoder-cn/skills/**/SKILL.md"],
+        &["$HOME/.qoder-cn"],
+        &["$PROJECT/.qoder/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::QwenCode,
+        "Qwen Code",
+        &["$HOME/.qwen/skills/**/SKILL.md"],
+        &["$HOME/.qwen"],
+        &["$PROJECT/.qwen/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::Replit, "Replit", &[], &[], &[]),
+    upstream(
+        AgentId::Reasonix,
+        "Reasonix",
+        &["$HOME/.reasonix/skills/**/SKILL.md"],
+        &["$HOME/.reasonix"],
+        &["$PROJECT/.reasonix/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::RovoDev,
+        "Rovo Dev",
+        &["$HOME/.rovodev/skills/**/SKILL.md"],
+        &["$HOME/.rovodev"],
+        &["$PROJECT/.rovodev/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::RooCode,
+        "Roo Code",
+        &["$HOME/.roo/skills/**/SKILL.md", "$HOME/.roo/rules/*.md"],
+        &[
+            "$HOME/.roo",
+            "$VSCODE_GLOBAL_STORAGE/rooveterinaryinc.roo-cline",
+            "$ROO_CUSTOM_STORAGE",
+        ],
+        &[
+            "$PROJECT/.roo/skills/**/SKILL.md",
+            "$PROJECT/.roo/rules/*.md",
+            "$PROJECT/.roorules",
+        ],
+    ),
+    upstream(
+        AgentId::Tabnine,
+        "Tabnine CLI",
+        &["$HOME/.tabnine/agent/skills/**/SKILL.md"],
+        &["$HOME/.tabnine"],
+        &[
+            "$PROJECT/.tabnine/agent/skills/**/SKILL.md",
+            "$PROJECT/.tabnine/guidelines/*.md",
+        ],
+    ),
+    upstream(
+        AgentId::Terramind,
+        "Terramind",
+        &["$HOME/.terramind/skills/**/SKILL.md"],
+        &["$HOME/.terramind"],
+        &["$PROJECT/.terramind/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Tinycloud,
+        "Tinycloud",
+        &["$HOME/.tinycloud/skills/**/SKILL.md"],
+        &["$HOME/.tinycloud"],
+        &["$PROJECT/.tinycloud/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Trae,
+        "Trae",
+        &["$HOME/.trae/skills/**/SKILL.md"],
+        &["$HOME/.trae"],
+        &["$PROJECT/.trae/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::TraeCn,
+        "Trae CN",
+        &["$HOME/.trae-cn/skills/**/SKILL.md"],
+        &["$HOME/.trae-cn"],
+        &["$PROJECT/.trae/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::Warp, "Warp", &[], &["$HOME/.warp"], &[]),
+    upstream(
+        AgentId::Windsurf,
+        "Windsurf",
+        &[
+            "$HOME/.codeium/windsurf/skills/**/SKILL.md",
+            "$HOME/.windsurf/global_rules.md",
+        ],
+        &["$HOME/.codeium/windsurf", "$HOME/.windsurf"],
+        &[
+            "$PROJECT/.windsurf/skills/**/SKILL.md",
+            "$PROJECT/.windsurf/rules/*.md",
+            "$PROJECT/.windsurfrules",
+        ],
+    ),
+    upstream(
+        AgentId::Zed,
+        "Zed",
+        &[],
+        &[
+            "$CONFIG_HOME/zed",
+            "$APPDATA/Zed",
+            "$FLATPAK_XDG_CONFIG_HOME/zed",
+            "$MAC_APP_SUPPORT/Zed",
+        ],
+        &[],
+    ),
+    upstream(
+        AgentId::ZCode,
+        "ZCode",
+        &["$HOME/.zcode/skills/**/SKILL.md"],
+        &["$HOME/.zcode", "/Applications/ZCode.app"],
+        &["$PROJECT/.zcode/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Zencoder,
+        "Zencoder",
+        &["$HOME/.zencoder/skills/**/SKILL.md"],
+        &["$HOME/.zencoder"],
+        &["$PROJECT/.zencoder/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Zenflow,
+        "Zenflow",
+        &["$HOME/.zencoder/skills/**/SKILL.md"],
+        &["$HOME/.zencoder"],
+        &["$PROJECT/.zencoder/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Neovate,
+        "Neovate",
+        &["$HOME/.neovate/skills/**/SKILL.md"],
+        &["$HOME/.neovate"],
+        &["$PROJECT/.neovate/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Pochi,
+        "Pochi",
+        &["$HOME/.pochi/skills/**/SKILL.md"],
+        &["$HOME/.pochi"],
+        &["$PROJECT/.pochi/skills/**/SKILL.md"],
+    ),
+    upstream(AgentId::PromptScript, "PromptScript", &[], &[], &[]),
+    upstream(
+        AgentId::Adal,
+        "AdaL",
+        &["$HOME/.adal/skills/**/SKILL.md"],
+        &["$HOME/.adal"],
+        &["$PROJECT/.adal/skills/**/SKILL.md"],
+    ),
+    upstream(
+        AgentId::Universal,
+        "Universal",
+        &[
+            "$HOME/.agents/skills/**/SKILL.md",
+            "$CONFIG_HOME/agents/skills/**/SKILL.md",
+        ],
+        &[],
+        &["$PROJECT/.agents/skills/**/SKILL.md"],
+    ),
+    legacy(
+        AgentId::Aider,
+        "Aider",
+        &["$HOME/.aider.conf.yml"],
+        &["$HOME/.aider.conf.yml"],
+        &["$PROJECT/.aider.conf.yml", "$PROJECT/CONVENTIONS.md"],
+        SkillFormat::Yaml,
+    ),
+    legacy(
+        AgentId::AmazonQ,
+        "Amazon Q",
+        &[],
+        &[],
+        &["$PROJECT/.amazonq/rules/*.md"],
+        SkillFormat::RulesDir,
+    ),
+    legacy(
+        AgentId::JetbrainsAi,
+        "JetBrains AI",
+        &[],
+        &[],
+        &["$PROJECT/.aiassistant/rules/*.md"],
+        SkillFormat::RulesDir,
+    ),
+];
 
 pub fn get_agent_registry() -> Vec<AgentInfo> {
-    vec![
-        AgentInfo {
-            id: AgentId::ClaudeCode,
-            display_name: "Claude Code".to_string(),
-            description: "Anthropic CLI coding agent".to_string(),
-            color: "#f28c54".to_string(),
+    get_agent_registry_with_environment(&LocationEnvironment::from_process())
+}
+
+pub(crate) fn get_agent_registry_with_environment(
+    environment: &LocationEnvironment,
+) -> Vec<AgentInfo> {
+    debug_assert_eq!(
+        CATALOG
+            .iter()
+            .filter(|entry| entry.origin == CatalogOrigin::PinnedUpstream)
+            .count(),
+        PINNED_UPSTREAM_AGENT_COUNT
+    );
+    debug_assert_eq!(
+        CATALOG
+            .iter()
+            .filter(|entry| entry.origin == CatalogOrigin::RetainedLegacy)
+            .count(),
+        RETAINED_LEGACY_AGENT_COUNT
+    );
+
+    CATALOG
+        .iter()
+        .map(|entry| AgentInfo {
+            id: entry.id.clone(),
+            display_name: entry.display_name.to_string(),
+            description: format!("{} skill and rule source", entry.display_name),
+            color: brand_color(&entry.id).to_string(),
             installed: false,
             skill_count: 0,
-            global_paths: vec![
-                "$HOME/.claude/skills/**/SKILL.md".to_string(),
-                "$HOME/.claude/commands/*.md".to_string(),
-                "$HOME/.claude/settings.json".to_string(),
-                "$HOME/.claude/settings.local.json".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.claude".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.claude/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.claude/commands/*.md".to_string(),
-                "$PROJECT/.claude/settings.json".to_string(),
-                "$PROJECT/.claude/settings.local.json".to_string(),
-                "$PROJECT/CLAUDE.md".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Codex,
-            display_name: "Codex".to_string(),
-            description: "OpenAI terminal coding agent".to_string(),
-            color: "#4dc8b0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.codex/skills/**/SKILL.md".to_string(),
-                "$HOME/.codex/AGENTS.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.codex".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.codex/skills/**/SKILL.md".to_string(),
-                "$PROJECT/AGENTS.md".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::OpenCode,
-            display_name: "OpenCode".to_string(),
-            description: "OpenCode CLI".to_string(),
-            color: "#5ab0ff".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.config/opencode/skills/**/SKILL.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.config/opencode".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.opencode/skills/**/SKILL.md".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::GithubCopilot,
-            display_name: "GitHub Copilot".to_string(),
-            description: "GitHub coding assistant".to_string(),
-            color: "#57a0ff".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.copilot/skills/**/SKILL.md".to_string(),
-                "$HOME/.copilot/skills/**/*.instructions.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.copilot".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.github/copilot-instructions.md".to_string(),
-                "$PROJECT/.github/instructions/*.instructions.md".to_string(),
-                "$PROJECT/.github/copilot/agents/*.md".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Cursor,
-            display_name: "Cursor".to_string(),
-            description: "Cursor editor".to_string(),
-            color: "#a58cff".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.cursor/skills/**/SKILL.md".to_string(),
-                "$HOME/.cursor/rules/*.mdc".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.cursor".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.cursor/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.cursor/rules/*.mdc".to_string(),
-                "$PROJECT/.cursorrules".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Crush,
-            display_name: "Crush".to_string(),
-            description: "Charmbracelet Crush".to_string(),
-            color: "#e08f54".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.config/crush/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.config/crush".to_string()],
-            project_paths: vec!["$PROJECT/.crush/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Windsurf,
-            display_name: "Windsurf".to_string(),
-            description: "Codeium Windsurf".to_string(),
-            color: "#49bed9".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.codeium/windsurf/skills/**/SKILL.md".to_string(),
-                "$HOME/.windsurf/global_rules.md".to_string(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.codeium/windsurf".to_string(),
-                "$HOME/.windsurf".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.windsurf/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.windsurf/rules/*.md".to_string(),
-                "$PROJECT/.windsurfrules".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Gemini,
-            display_name: "Gemini CLI".to_string(),
-            description: "Google Gemini CLI".to_string(),
-            color: "#d5b347".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.gemini/skills/**/SKILL.md".to_string(),
-                "$HOME/.gemini/GEMINI.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.gemini".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                "$PROJECT/.gemini/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.gemini/GEMINI.md".to_string(),
-                "$PROJECT/GEMINI.md".to_string(),
-                shared_project_skills_path(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Cline,
-            display_name: "Cline".to_string(),
-            description: "Cline VS Code agent".to_string(),
-            color: "#d082d6".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.agents/skills/**/SKILL.md".to_string(),
-                "$HOME/.cline/skills/**/SKILL.md".to_string(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.cline".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![
-                shared_project_skills_path(),
-                "$PROJECT/.clinerules".to_string(),
-                "$PROJECT/.clinerules/*.md".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::RooCode,
-            display_name: "Roo Code".to_string(),
-            description: "Roo coding agent".to_string(),
-            color: "#cf7ca7".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.roo/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.roo".to_string()],
-            project_paths: vec![
-                "$PROJECT/.roo/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.roo/rules/*.md".to_string(),
-                "$PROJECT/.roorules".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::ContinueDev,
-            display_name: "Continue".to_string(),
-            description: "Continue coding assistant".to_string(),
-            color: "#5fb77b".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.continue/skills/**/SKILL.md".to_string(),
-                "$HOME/.continue/rules/*.md".to_string(),
-            ],
-            global_detection_paths: vec!["$HOME/.continue".to_string()],
-            project_paths: vec![
-                "$PROJECT/.continue/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.continue/rules/*.md".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Aider,
-            display_name: "Aider".to_string(),
-            description: "Aider terminal coding assistant".to_string(),
-            color: "#82b36d".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.aider.conf.yml".to_string()],
-            global_detection_paths: vec!["$HOME/.aider.conf.yml".to_string()],
-            project_paths: vec![
-                "$PROJECT/.aider.conf.yml".to_string(),
-                "$PROJECT/CONVENTIONS.md".to_string(),
-            ],
-            format: SkillFormat::Yaml,
-        },
-        AgentInfo {
-            id: AgentId::AmazonQ,
-            display_name: "Amazon Q".to_string(),
-            description: "AWS Amazon Q".to_string(),
-            color: "#d68748".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![],
-            global_detection_paths: vec![],
-            project_paths: vec!["$PROJECT/.amazonq/rules/*.md".to_string()],
-            format: SkillFormat::RulesDir,
-        },
-        AgentInfo {
-            id: AgentId::JetbrainsAi,
-            display_name: "JetBrains AI".to_string(),
-            description: "JetBrains IDE AI".to_string(),
-            color: "#d46d95".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![],
-            global_detection_paths: vec![],
-            project_paths: vec!["$PROJECT/.aiassistant/rules/*.md".to_string()],
-            format: SkillFormat::RulesDir,
-        },
-        AgentInfo {
-            id: AgentId::Tabnine,
-            display_name: "Tabnine CLI".to_string(),
-            description: "Tabnine CLI".to_string(),
-            color: "#6f88d9".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.tabnine/agent/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.tabnine".to_string()],
-            project_paths: vec![
-                "$PROJECT/.tabnine/agent/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.tabnine/guidelines/*.md".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::AugmentCode,
-            display_name: "Augment".to_string(),
-            description: "Augment coding assistant".to_string(),
-            color: "#3fa89a".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.augment/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.augment".to_string()],
-            project_paths: vec![
-                "$PROJECT/.augment/skills/**/SKILL.md".to_string(),
-                "$PROJECT/.augment/rules/*.md".to_string(),
-            ],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::OpenHands,
-            display_name: "OpenHands".to_string(),
-            description: "OpenHands coding agent".to_string(),
-            color: "#7ea8ff".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.openhands/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.openhands".to_string()],
-            project_paths: vec!["$PROJECT/.openhands/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Devin,
-            display_name: "Devin for Terminal".to_string(),
-            description: "Devin terminal agent".to_string(),
-            color: "#7b9ab2".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.config/devin/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.config/devin".to_string()],
-            project_paths: vec!["$PROJECT/.devin/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::AiderDesk,
-            display_name: "AiderDesk".to_string(),
-            description: "AiderDesk".to_string(),
-            color: "#89b9a0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.aider-desk/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.aider-desk".to_string()],
-            project_paths: vec!["$PROJECT/.aider-desk/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Amp,
-            display_name: "Amp".to_string(),
-            description: "Amp coding agent".to_string(),
-            color: "#86a8ff".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.config/amp/skills/**/SKILL.md".to_string(),
-                "$HOME/.config/agents/skills/**/SKILL.md".to_string(),
-            ],
-            global_detection_paths: vec!["$HOME/.config/amp".to_string()],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Antigravity,
-            display_name: "Antigravity".to_string(),
-            description: "Antigravity agent".to_string(),
-            color: "#8ea467".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.gemini/antigravity/skills/**/SKILL.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.gemini/antigravity".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::OpenClaw,
-            display_name: "OpenClaw".to_string(),
-            description: "OpenClaw".to_string(),
-            color: "#6dbf9f".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.openclaw/skills/**/SKILL.md".to_string(),
-                "$HOME/.clawdbot/skills/**/SKILL.md".to_string(),
-                "$HOME/.moltbot/skills/**/SKILL.md".to_string(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.openclaw".to_string(),
-                "$HOME/.clawdbot".to_string(),
-                "$HOME/.moltbot".to_string(),
-            ],
-            project_paths: vec!["$PROJECT/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::CodeArtsAgent,
-            display_name: "CodeArts Agent".to_string(),
-            description: "Huawei CodeArts Agent".to_string(),
-            color: "#7b89d4".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.codeartsdoer/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.codeartsdoer".to_string()],
-            project_paths: vec!["$PROJECT/.codeartsdoer/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::CodeBuddy,
-            display_name: "CodeBuddy".to_string(),
-            description: "CodeBuddy".to_string(),
-            color: "#5cb6a7".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.codebuddy/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.codebuddy".to_string()],
-            project_paths: vec!["$PROJECT/.codebuddy/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Codemaker,
-            display_name: "Codemaker".to_string(),
-            description: "Codemaker".to_string(),
-            color: "#6ca2c2".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.codemaker/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.codemaker".to_string()],
-            project_paths: vec!["$PROJECT/.codemaker/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::CodeStudio,
-            display_name: "Code Studio".to_string(),
-            description: "Code Studio".to_string(),
-            color: "#7099d0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.codestudio/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.codestudio".to_string()],
-            project_paths: vec!["$PROJECT/.codestudio/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::CommandCode,
-            display_name: "Command Code".to_string(),
-            description: "Command Code".to_string(),
-            color: "#8f9cc7".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.commandcode/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.commandcode".to_string()],
-            project_paths: vec!["$PROJECT/.commandcode/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Cortex,
-            display_name: "Cortex Code".to_string(),
-            description: "Cortex Code".to_string(),
-            color: "#6f8ea6".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.snowflake/cortex/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.snowflake/cortex".to_string()],
-            project_paths: vec!["$PROJECT/.cortex/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::DeepAgents,
-            display_name: "Deep Agents".to_string(),
-            description: "Deep Agents".to_string(),
-            color: "#7b83be".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.deepagents/agent/skills/**/SKILL.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.deepagents".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Dexto,
-            display_name: "Dexto".to_string(),
-            description: "Dexto".to_string(),
-            color: "#65a8b0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.agents/skills/**/SKILL.md".to_string(),
-                "$HOME/.dexto/skills/**/SKILL.md".to_string(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.dexto".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Droid,
-            display_name: "Droid".to_string(),
-            description: "Factory Droid".to_string(),
-            color: "#7d9f72".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.factory/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.factory".to_string()],
-            project_paths: vec!["$PROJECT/.factory/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Firebender,
-            display_name: "Firebender".to_string(),
-            description: "Firebender".to_string(),
-            color: "#cf8557".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.firebender/skills/**/SKILL.md".to_string(),
-                shared_global_skills_path(),
-            ],
-            global_detection_paths: vec![
-                "$HOME/.firebender".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::ForgeCode,
-            display_name: "ForgeCode".to_string(),
-            description: "ForgeCode".to_string(),
-            color: "#9b7abd".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.forge/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.forge".to_string()],
-            project_paths: vec!["$PROJECT/.forge/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Goose,
-            display_name: "Goose".to_string(),
-            description: "Goose".to_string(),
-            color: "#8bb08a".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.config/goose/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.config/goose".to_string()],
-            project_paths: vec!["$PROJECT/.goose/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Junie,
-            display_name: "Junie".to_string(),
-            description: "Junie".to_string(),
-            color: "#a17db0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.junie/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.junie".to_string()],
-            project_paths: vec!["$PROJECT/.junie/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::IFlowCli,
-            display_name: "iFlow CLI".to_string(),
-            description: "iFlow CLI".to_string(),
-            color: "#6ba9bf".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.iflow/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.iflow".to_string()],
-            project_paths: vec!["$PROJECT/.iflow/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Kilo,
-            display_name: "Kilo Code".to_string(),
-            description: "Kilo Code".to_string(),
-            color: "#75b19a".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.kilocode/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.kilocode".to_string()],
-            project_paths: vec!["$PROJECT/.kilocode/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::KimiCli,
-            display_name: "Kimi Code CLI".to_string(),
-            description: "Kimi Code CLI".to_string(),
-            color: "#6d9ad9".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![
-                "$HOME/.kimi/skills/**/SKILL.md".to_string(),
-                "$HOME/.config/agents/skills/**/SKILL.md".to_string(),
-            ],
-            global_detection_paths: vec!["$HOME/.kimi".to_string()],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::KiroCli,
-            display_name: "Kiro CLI".to_string(),
-            description: "Kiro CLI".to_string(),
-            color: "#7ea6c8".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.kiro/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.kiro".to_string()],
-            project_paths: vec!["$PROJECT/.kiro/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Kode,
-            display_name: "Kode".to_string(),
-            description: "Kode".to_string(),
-            color: "#71a0b6".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.kode/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.kode".to_string()],
-            project_paths: vec!["$PROJECT/.kode/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::McpJam,
-            display_name: "MCPJam".to_string(),
-            description: "MCPJam".to_string(),
-            color: "#7f9cb8".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.mcpjam/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.mcpjam".to_string()],
-            project_paths: vec!["$PROJECT/.mcpjam/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::MistralVibe,
-            display_name: "Mistral Vibe".to_string(),
-            description: "Mistral Vibe".to_string(),
-            color: "#8fa2d2".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.vibe/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.vibe".to_string()],
-            project_paths: vec!["$PROJECT/.vibe/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Mux,
-            display_name: "Mux".to_string(),
-            description: "Mux".to_string(),
-            color: "#7ba6a0".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.mux/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.mux".to_string()],
-            project_paths: vec!["$PROJECT/.mux/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Neovate,
-            display_name: "Neovate".to_string(),
-            description: "Neovate".to_string(),
-            color: "#79a8bf".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.neovate/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.neovate".to_string()],
-            project_paths: vec!["$PROJECT/.neovate/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Pi,
-            display_name: "Pi".to_string(),
-            description: "Pi agent".to_string(),
-            color: "#6f95c8".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.pi/agent/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.pi/agent".to_string()],
-            project_paths: vec!["$PROJECT/.pi/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Qoder,
-            display_name: "Qoder".to_string(),
-            description: "Qoder".to_string(),
-            color: "#6c9bb1".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.qoder/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.qoder".to_string()],
-            project_paths: vec!["$PROJECT/.qoder/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::QwenCode,
-            display_name: "Qwen Code".to_string(),
-            description: "Qwen Code".to_string(),
-            color: "#69a7b6".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.qwen/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.qwen".to_string()],
-            project_paths: vec!["$PROJECT/.qwen/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Replit,
-            display_name: "Replit".to_string(),
-            description: "Replit".to_string(),
-            color: "#f08d4f".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.config/agents/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.replit".to_string()],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::RovoDev,
-            display_name: "Rovo Dev".to_string(),
-            description: "Rovo Dev".to_string(),
-            color: "#6ca3c1".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.rovodev/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.rovodev".to_string()],
-            project_paths: vec!["$PROJECT/.rovodev/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Trae,
-            display_name: "Trae".to_string(),
-            description: "Trae".to_string(),
-            color: "#7a9ed1".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.trae/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.trae".to_string()],
-            project_paths: vec!["$PROJECT/.trae/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::TraeCn,
-            display_name: "Trae CN".to_string(),
-            description: "Trae CN".to_string(),
-            color: "#8aa0d3".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.trae-cn/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.trae-cn".to_string()],
-            project_paths: vec!["$PROJECT/.trae-cn/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Warp,
-            display_name: "Warp".to_string(),
-            description: "Warp".to_string(),
-            color: "#7f7dc8".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.agents/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec![
-                "$HOME/.warp".to_string(),
-                "$HOME/.agents/skills".to_string(),
-            ],
-            project_paths: vec![shared_project_skills_path()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Zencoder,
-            display_name: "Zencoder".to_string(),
-            description: "Zencoder".to_string(),
-            color: "#7b94bc".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.zencoder/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.zencoder".to_string()],
-            project_paths: vec!["$PROJECT/.zencoder/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Pochi,
-            display_name: "Pochi".to_string(),
-            description: "Pochi".to_string(),
-            color: "#7a9aaf".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.pochi/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.pochi".to_string()],
-            project_paths: vec!["$PROJECT/.pochi/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Adal,
-            display_name: "AdaL".to_string(),
-            description: "AdaL".to_string(),
-            color: "#7aa8a3".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.adal/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.adal".to_string()],
-            project_paths: vec!["$PROJECT/.adal/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Bob,
-            display_name: "IBM Bob".to_string(),
-            description: "IBM Bob".to_string(),
-            color: "#5e98a8".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec!["$HOME/.bob/skills/**/SKILL.md".to_string()],
-            global_detection_paths: vec!["$HOME/.bob".to_string()],
-            project_paths: vec!["$PROJECT/.bob/skills/**/SKILL.md".to_string()],
-            format: SkillFormat::SkillMd,
-        },
-        AgentInfo {
-            id: AgentId::Universal,
-            display_name: "AGENTS.md".to_string(),
-            description: "Universal agent instructions".to_string(),
-            color: "#7a7fad".to_string(),
-            installed: false,
-            skill_count: 0,
-            global_paths: vec![],
-            global_detection_paths: vec![],
-            project_paths: vec![
-                "$PROJECT/AGENTS.md".to_string(),
-                "$PROJECT/AGENTS.override.md".to_string(),
-            ],
-            format: SkillFormat::PlainMarkdown,
-        },
-    ]
+            global_paths: resolve_templates(environment, entry.global_paths),
+            global_detection_paths: resolve_templates(environment, entry.detection_paths),
+            project_paths: resolve_templates(environment, entry.project_paths),
+            format: entry.format.clone(),
+        })
+        .collect()
+}
+
+fn resolve_templates(environment: &LocationEnvironment, templates: &[&str]) -> Vec<String> {
+    environment.resolve_all(templates)
+}
+
+fn brand_color(id: &AgentId) -> &'static str {
+    match id {
+        AgentId::ClaudeCode => "#f28c54",
+        AgentId::Codex => "#4dc8b0",
+        AgentId::Cursor => "#a58cff",
+        AgentId::GithubCopilot => "#57a0ff",
+        AgentId::Windsurf => "#49bed9",
+        AgentId::Gemini | AgentId::Antigravity | AgentId::AntigravityCli => "#d5b347",
+        AgentId::HermesAgent => "#d49a62",
+        AgentId::KimiCodeCli => "#65b5d8",
+        AgentId::Zed => "#d28c55",
+        AgentId::Universal => "#a6a6a6",
+        AgentId::Custom(_) => "#9ca3af",
+        _ => "#8294b8",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::agents::locations::{LocationEnvironment, Platform};
+
+    const PINNED_UPSTREAM_IDS: &[&str] = &[
+        "aider-desk",
+        "amp",
+        "antigravity",
+        "antigravity-cli",
+        "astrbot",
+        "autohand-code",
+        "augment",
+        "bob",
+        "claude-code",
+        "openclaw",
+        "cline",
+        "codearts-agent",
+        "codebuddy",
+        "codemaker",
+        "codestudio",
+        "codex",
+        "command-code",
+        "continue",
+        "cortex",
+        "crush",
+        "cursor",
+        "deepagents",
+        "devin",
+        "dexto",
+        "droid",
+        "eve",
+        "firebender",
+        "forgecode",
+        "gemini-cli",
+        "github-copilot",
+        "goose",
+        "grok",
+        "hermes-agent",
+        "inference-sh",
+        "jazz",
+        "junie",
+        "iflow-cli",
+        "kilo",
+        "kimchi",
+        "kimi-code-cli",
+        "kiro-cli",
+        "kode",
+        "lingma",
+        "loaf",
+        "mcpjam",
+        "mistral-vibe",
+        "moxby",
+        "mux",
+        "opencode",
+        "openhands",
+        "ona",
+        "pi",
+        "qoder",
+        "qoder-cn",
+        "qwen-code",
+        "replit",
+        "reasonix",
+        "rovodev",
+        "roo",
+        "tabnine-cli",
+        "terramind",
+        "tinycloud",
+        "trae",
+        "trae-cn",
+        "warp",
+        "windsurf",
+        "zed",
+        "zcode",
+        "zencoder",
+        "zenflow",
+        "neovate",
+        "pochi",
+        "promptscript",
+        "adal",
+        "universal",
+    ];
+
+    fn serialized_id(id: &AgentId) -> String {
+        serde_json::to_string(id)
+            .expect("serialize agent id")
+            .trim_matches('"')
+            .to_string()
+    }
+
+    #[test]
+    fn catalog_matches_pinned_upstream_plus_retained_legacy() {
+        let upstream = CATALOG
+            .iter()
+            .filter(|entry| entry.origin == CatalogOrigin::PinnedUpstream)
+            .count();
+        let legacy = CATALOG
+            .iter()
+            .filter(|entry| entry.origin == CatalogOrigin::RetainedLegacy)
+            .count();
+        let ids: HashSet<_> = CATALOG
+            .iter()
+            .map(|entry| serialized_id(&entry.id))
+            .collect();
+        let upstream_ids: Vec<_> = CATALOG
+            .iter()
+            .filter(|entry| entry.origin == CatalogOrigin::PinnedUpstream)
+            .map(|entry| serialized_id(&entry.id))
+            .collect();
+
+        assert_eq!(upstream, PINNED_UPSTREAM_AGENT_COUNT);
+        assert_eq!(upstream_ids, PINNED_UPSTREAM_IDS);
+        assert_eq!(legacy, RETAINED_LEGACY_AGENT_COUNT);
+        assert_eq!(CATALOG.len(), 78);
+        assert_eq!(ids.len(), CATALOG.len(), "catalog ids must be unique");
+        assert_eq!(AGENT_CATALOG_VERSION, "2026-07-29.1");
+        assert_eq!(
+            AGENT_CATALOG_UPSTREAM_COMMIT,
+            "e173b8c88f2581cfdaa1b6767c6519a08155790e"
+        );
+        assert!(AGENT_CATALOG_SOURCE.contains(AGENT_CATALOG_UPSTREAM_COMMIT));
+    }
+
+    #[test]
+    fn shared_store_is_owned_only_by_universal() {
+        let env = LocationEnvironment::fixture(Platform::Linux, "/home/test");
+        let registry = get_agent_registry_with_environment(&env);
+        let shared = "/home/test/.agents/skills/**/SKILL.md";
+        let owners: Vec<_> = registry
+            .iter()
+            .filter(|agent| agent.global_paths.iter().any(|path| path == shared))
+            .map(|agent| agent.id.clone())
+            .collect();
+
+        assert_eq!(owners, vec![AgentId::Universal]);
+        for id in [
+            AgentId::Amp,
+            AgentId::Cline,
+            AgentId::Dexto,
+            AgentId::KimiCodeCli,
+            AgentId::Loaf,
+            AgentId::Warp,
+            AgentId::Zed,
+        ] {
+            let agent = registry.iter().find(|agent| agent.id == id).expect("agent");
+            assert!(
+                !agent
+                    .global_detection_paths
+                    .iter()
+                    .any(|path| path.contains(".agents/skills")),
+                "{id:?} must use its independent installation probe"
+            );
+        }
+    }
+
+    #[test]
+    fn hermes_kimi_and_windows_zed_resolve_to_real_agent_roots() {
+        let mut env = LocationEnvironment::fixture(Platform::Windows, "C:/Users/Test");
+        env.hermes_home = PathBuf::from("D:/Agents/Hermes");
+        env.app_data = Some(PathBuf::from("D:/Profiles/Roaming"));
+        let registry = get_agent_registry_with_environment(&env);
+
+        let hermes = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::HermesAgent)
+            .expect("Hermes");
+        assert_eq!(
+            hermes.global_paths,
+            vec!["D:/Agents/Hermes/skills/**/SKILL.md"]
+        );
+
+        let kimi = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::KimiCodeCli)
+            .expect("Kimi");
+        assert_eq!(
+            kimi.global_detection_paths,
+            vec!["C:/Users/Test/.kimi-code", "C:/Users/Test/.kimi"]
+        );
+
+        let zed = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::Zed)
+            .expect("Zed");
+        assert!(zed
+            .global_detection_paths
+            .contains(&"D:/Profiles/Roaming/Zed".to_string()));
+        assert!(!zed
+            .global_detection_paths
+            .iter()
+            .any(|path| path.contains("Application Support")));
+    }
+
+    #[test]
+    fn kimi_legacy_id_deserializes_to_current_identity() {
+        let current: AgentId = serde_json::from_str("\"kimi-code-cli\"").expect("current id");
+        let legacy: AgentId = serde_json::from_str("\"kimi-cli\"").expect("legacy id");
+        assert_eq!(current, AgentId::KimiCodeCli);
+        assert_eq!(legacy, AgentId::KimiCodeCli);
+        assert_eq!(
+            serde_json::to_string(&legacy).expect("serialize"),
+            "\"kimi-code-cli\""
+        );
+    }
+
+    #[test]
+    fn provider_overrides_replace_only_their_documented_roots() {
+        let mut env = LocationEnvironment::fixture(Platform::Windows, "C:/Users/Test");
+        env.gemini_home = PathBuf::from("D:/GeminiParent/.gemini");
+        env.copilot_home = PathBuf::from("E:/Copilot");
+        env.continue_home = PathBuf::from("F:/Continue");
+        env.cline_data_dir = Some(PathBuf::from("G:/ClineData"));
+        let registry = get_agent_registry_with_environment(&env);
+
+        let gemini = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::Gemini)
+            .expect("Gemini");
+        assert_eq!(
+            gemini.global_paths,
+            vec![
+                "D:/GeminiParent/.gemini/skills/**/SKILL.md",
+                "D:/GeminiParent/.gemini/GEMINI.md",
+            ]
+        );
+
+        let copilot = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::GithubCopilot)
+            .expect("Copilot");
+        assert!(copilot
+            .global_paths
+            .iter()
+            .all(|path| path.starts_with("E:/Copilot/")));
+
+        let continue_dev = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::ContinueDev)
+            .expect("Continue");
+        assert_eq!(
+            continue_dev.global_paths,
+            vec!["F:/Continue/skills/**/SKILL.md"]
+        );
+
+        let cline = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::Cline)
+            .expect("Cline");
+        assert!(cline
+            .global_detection_paths
+            .contains(&"G:/ClineData".to_string()));
+    }
+
+    #[test]
+    fn extension_state_is_detection_only_and_never_a_transcript_glob() {
+        let env = LocationEnvironment::fixture(Platform::Macos, "/Users/test");
+        let registry = get_agent_registry_with_environment(&env);
+
+        for id in [AgentId::Cline, AgentId::RooCode, AgentId::Kilo] {
+            let agent = registry.iter().find(|agent| agent.id == id).expect("agent");
+            assert!(agent
+                .global_detection_paths
+                .iter()
+                .any(|path| path.contains("/User/globalStorage/")));
+            assert!(agent
+                .global_paths
+                .iter()
+                .all(|path| !path.contains("/User/globalStorage/")));
+        }
+
+        for agent in &registry {
+            for path in agent.global_paths.iter().chain(&agent.project_paths) {
+                let lower = path.to_ascii_lowercase();
+                assert!(!lower.contains("events.jsonl"));
+                assert!(!lower.contains("sessions.db"));
+                assert!(!lower.contains("opencode.db"));
+                assert!(!lower.contains("/tasks/**"));
+            }
+        }
+    }
+
+    #[test]
+    fn copilot_custom_roots_scan_only_skill_artifacts() {
+        let mut env = LocationEnvironment::fixture(Platform::Linux, "/home/test");
+        env.copilot_skill_dirs = vec![
+            PathBuf::from("/opt/copilot-skills"),
+            PathBuf::from("/srv/team-skills"),
+        ];
+        let registry = get_agent_registry_with_environment(&env);
+        let copilot = registry
+            .iter()
+            .find(|agent| agent.id == AgentId::GithubCopilot)
+            .expect("Copilot");
+
+        assert_eq!(
+            copilot.global_paths,
+            vec![
+                "/home/test/.copilot/skills/**/SKILL.md",
+                "/home/test/.copilot/skills/**/*.instructions.md",
+                "/opt/copilot-skills/**/SKILL.md",
+                "/srv/team-skills/**/SKILL.md",
+            ]
+        );
+        assert!(copilot.global_paths.iter().all(|path| {
+            !path.contains("session-state")
+                && !path.contains("events.jsonl")
+                && !path.contains("history")
+        }));
+    }
 }

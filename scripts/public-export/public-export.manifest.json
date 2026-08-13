@@ -1,0 +1,145 @@
+{
+  "schemaVersion": "skill-deck-public-export/v1",
+  "description": "Allowlist for a reviewable Skill Deck public-source export. Generated binaries and private process material are never inferred or copied.",
+  "files": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".gitattributes",
+    ".gitignore",
+    "AUTHORS.md",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "README.md",
+    "README.en.md",
+    "SECURITY.md",
+    "VERSION",
+    "media/social-preview.jpg",
+    "package.json",
+    "pnpm-lock.yaml",
+    "product.json",
+    "release/compliance-contract.json",
+    "release/legal-corpus-policy.json",
+    "release/manifest.schema.json",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/build.rs",
+    "src-tauri/resources/THIRD_PARTY_NOTICES.txt",
+    "src-tauri/resources/llama/RUNTIME-NOTES.txt",
+    "src-tauri/tauri.conf.json",
+    "svelte.config.js",
+    "tsconfig.json",
+    "vite.config.js"
+  ],
+  "directories": [
+    ".github/ISSUE_TEMPLATE",
+    ".github/workflows",
+    "docs",
+    "media",
+    "release/legal-corpus",
+    "scripts/public-export",
+    "scripts/release-compliance",
+    "src",
+    "src-tauri/capabilities",
+    "src-tauri/icons",
+    "src-tauri/notice-corpus",
+    "src-tauri/resources/licenses",
+    "src-tauri/src",
+    "static"
+  ],
+  "excludedPaths": [
+    "media/banner.png"
+  ],
+  "forbiddenDirectoryNames": [
+    ".agents",
+    ".claude",
+    ".expect",
+    ".git",
+    ".gmira",
+    ".herenow",
+    ".planning",
+    ".product-research",
+    ".research",
+    ".svelte-kit",
+    ".tmp-tokens",
+    ".vscode",
+    "__pycache__",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "editions",
+    "free-projection",
+    "node_modules",
+    "package",
+    "release-evidence",
+    "stripe-worker",
+    "target"
+  ],
+  "forbiddenFileNames": [
+    ".env",
+    ".DS_Store",
+    "Thumbs.db",
+    "build.log"
+  ],
+  "forbiddenExtensions": [
+    ".7z",
+    ".dll",
+    ".exe",
+    ".gz",
+    ".msi",
+    ".msix",
+    ".pyc",
+    ".pdb",
+    ".tar",
+    ".zip"
+  ],
+  "textExtensions": [
+    ".css",
+    ".html",
+    ".js",
+    ".json",
+    ".lock",
+    ".md",
+    ".mjs",
+    ".ps1",
+    ".py",
+    ".rs",
+    ".svelte",
+    ".toml",
+    ".ts",
+    ".txt",
+    ".yaml",
+    ".yml"
+  ],
+  "extensionlessTextFiles": [
+    ".gitattributes",
+    ".gitignore",
+    "LICENSE",
+    "VERSION"
+  ],
+  "contentScanExclusions": [
+    "scripts/public-export/public-export.manifest.json"
+  ],
+  "forbiddenContentPatterns": [
+    {
+      "pattern": "Copyright \\(c\\) 2026 (?:Ahmad Adi|Othman Adi)",
+      "description": "stale shortened Skill Deck copyright identity"
+    },
+    {
+      "pattern": "authors\\s*=\\s*\\[\\\"(?:Ahmad Adi|Othman Adi)\\\"\\]",
+      "description": "stale shortened Skill Deck Cargo author identity"
+    },
+    {
+      "pattern": "\\\"publisher\\\"\\s*:\\s*\\\"(?:Ahmad Adi|Othman Adi)\\\"",
+      "description": "stale shortened Skill Deck publisher identity"
+    },
+    {
+      "pattern": "Skill Deck (?:steht unter MIT-Lizenz|is MIT licensed|wird unter der \\[MIT-Lizenz|is released under the \\[MIT License)",
+      "description": "stale Skill Deck project-license statement"
+    },
+    {
+      "pattern": "github\\.com/[^/\\s\\\"']+/[^/\\s\\\"']*(?:-private|-pro)(?:\\.git)?(?:$|[/?#\\s\\\"'])",
+      "description": "GitHub repository URL with a private or pro suffix"
+    }
+  ]
+}

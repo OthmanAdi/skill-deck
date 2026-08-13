@@ -48,33 +48,41 @@ function resolve(input: TooltipInput): Resolved | null {
 }
 
 const TOOLTIP_CLASS = "skill-deck-tooltip-portal";
+// One stable id so the trigger can point aria-describedby at the shared node.
+const TOOLTIP_ID = "skill-deck-tooltip-node";
+// Single source of truth for the fade duration: the CSS transition AND the JS
+// removal timeout both read this, so they can never drift apart (they used to:
+// 80ms CSS vs 120ms JS left an invisible node hanging in the DOM).
+const TOOLTIP_FADE_MS = 120;
 
 function ensureStylesInjected(): void {
   if (typeof document === "undefined") return;
   if (document.getElementById("skill-deck-tooltip-style")) return;
   const style = document.createElement("style");
   style.id = "skill-deck-tooltip-style";
+  // PHOSPHOR floating surface (DESIGN 5-8): surface-3, hairline, radius-xs,
+  // --text-2xs, --shadow-popover, one mono voice. Tokens only — no literals.
   style.textContent = `
     .${TOOLTIP_CLASS} {
       position: fixed;
       z-index: 9999;
       pointer-events: none;
       padding: 4px 8px;
-      border-radius: 6px;
-      border: 1px solid var(--color-border, #2a2c30);
-      background: var(--color-surface-3, var(--color-surface-2, #15171a));
-      color: var(--color-text-secondary, #b8bcc4);
-      font-family: var(--font-chat-mono, ui-monospace, monospace);
-      font-size: 10px;
+      border-radius: var(--radius-xs);
+      border: 1px solid var(--color-border);
+      background: var(--color-surface-3);
+      color: var(--color-text-secondary);
+      font-family: var(--font-ui);
+      font-size: var(--text-2xs);
       font-weight: 500;
-      line-height: 1.25;
+      line-height: 1.3;
       letter-spacing: 0.01em;
       max-width: 280px;
       white-space: normal;
-      box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--shadow-popover);
       opacity: 0;
       transform: translateY(-2px);
-      transition: opacity 80ms ease-out, transform 80ms ease-out;
+      transition: opacity ${TOOLTIP_FADE_MS}ms ease-out, transform ${TOOLTIP_FADE_MS}ms ease-out;
     }
     .${TOOLTIP_CLASS}.is-visible {
       opacity: 1;
@@ -139,9 +147,14 @@ function showShared(trigger: HTMLElement, text: string, placement: TooltipPlacem
     if (sharedTrigger !== trigger) return;
     const tip = document.createElement("div");
     tip.className = TOOLTIP_CLASS;
+    tip.id = TOOLTIP_ID;
+    // role="tooltip" + aria-describedby so screen readers get the supplementary
+    // text (timestamps, source counts) several badges convey via data-tooltip alone.
+    tip.setAttribute("role", "tooltip");
     tip.textContent = text;
     document.body.appendChild(tip);
     sharedTip = tip;
+    trigger.setAttribute("aria-describedby", TOOLTIP_ID);
     place(tip, trigger, placement);
     requestAnimationFrame(() => {
       tip.classList.add("is-visible");
@@ -154,6 +167,8 @@ function hideShared(immediate = false): void {
     clearTimeout(sharedTimer);
     sharedTimer = null;
   }
+  // Drop the aria link before we lose the trigger reference.
+  if (sharedTrigger) sharedTrigger.removeAttribute("aria-describedby");
   sharedTrigger = null;
   if (!sharedTip) return;
   const tip = sharedTip;
@@ -163,7 +178,8 @@ function hideShared(immediate = false): void {
     return;
   }
   tip.classList.remove("is-visible");
-  window.setTimeout(() => tip.remove(), 120);
+  // Match the CSS fade exactly so the node leaves the DOM the instant it's gone.
+  window.setTimeout(() => tip.remove(), TOOLTIP_FADE_MS);
 }
 
 function syncSharedPosition(): void {

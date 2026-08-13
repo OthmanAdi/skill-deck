@@ -23,6 +23,7 @@ import type {
   RegistryProviderId,
   RegistryProviderSelection,
   ScanResult,
+  ScanError,
   AgentInfo,
   TabView,
   ViewMode,
@@ -37,7 +38,11 @@ import { DEFAULT_AGENT_COLOR } from "$lib/types";
 
 export type OverlayMode = "pinned" | "auto-hide";
 
+/** Toast severity — drives the icon + color branch in Toast.svelte. */
+export type ToastKind = "ok" | "error";
+
 const REGISTRY_DEFAULT_LIMIT = 20;
+const MAX_RETAINED_SCAN_ERRORS = 5;
 
 export const skillSortOptions: { id: SkillSortMode; label: string }[] = [
   { id: "default", label: "Default" },
@@ -177,7 +182,30 @@ class SkillStore {
 
   /** Clipboard toast state */
   toastMessage = $state<string | null>(null);
+  /** Severity of the current toast — Toast.svelte branches icon + color on it. */
+  toastKind = $state<ToastKind>("ok");
   toastTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Scan failure message. Set by scanSkills() on a real IO/permission/parse
+   * failure, cleared on a successful scan. Overlay renders a distinct error
+   * empty-state (with Retry) on this rather than the misleading "install an
+   * agent" copy — a broken scan is not the same as zero installed skills.
+   */
+  scanError = $state<string | null>(null);
+
+  /** Safe diagnostic sample for partial scans, with the true total kept separately. */
+  scanErrors = $state<ScanError[]>([]);
+  scanErrorCount = $state(0);
+
+  /**
+   * True once the overlay's skill list has been revealed at least once this
+   * process. The overlay subtree unmounts on hide and remounts on show, which
+   * used to replay the full staggered entrance on every hotkey press. Builders
+   * gate row/card entrance animations on this so recall feels instant
+   * (Spotlight-style) after the first reveal.
+   */
+  listRevealed = $state(false);
 
   /** Full skill modal state */
   fullSkillModalOpen = $state(false);
@@ -206,6 +234,9 @@ class SkillStore {
 
   /** Overlay behavior mode: pinned (stays open) or auto-hide (hides on focus loss) */
   overlayMode = $state<OverlayMode>("pinned");
+  /** User-selected project folders scanned for project-scoped agent artifacts. */
+  projectRoots = $state<string[]>([]);
+  projectRootsSaving = $state(false);
   finderOpen = $state(false);
   skillSortMode = $state<SkillSortMode>("default");
 
@@ -220,6 +251,9 @@ class SkillStore {
   registryDurationMs = $state(0);
   registryLoading = $state(false);
   registryError = $state<string | null>(null);
+  /** Most recent submitted request, even when it fails and last-good rows remain. */
+  registryAttemptedQuery = $state("");
+  registryAttemptedProvider = $state<RegistryProviderSelection>("skills-sh");
   registryLastSearchedQuery = $state("");
   registryLastSearchedProvider = $state<RegistryProviderSelection>("skills-sh");
 
@@ -301,6 +335,13 @@ class SkillStore {
 
   /** Version history entries per skill ID */
   versionHistory = $state<Record<string, SkillVersionEntry[]>>({});
+
+  /**
+   * One in-flight destructive restore per canonical skill identity. This lives
+   * in the shared store because a user can switch grouped/tree renderers while
+   * a restore is running.
+   */
+  restoringVersionBySkill = $state<Record<string, string>>({});
 
   /** Skills filtered by current tab, search query, and agent filter */
   get filteredSkills(): Skill[] {
@@ -532,6 +573,46 @@ class SkillStore {
 /** Singleton store instance — import this in all components */
 export const store = new SkillStore();
 
+type ScanPreferenceField =
+  | "hotkey"
+  | "collapsedAgents"
+  | "collapsedTreeNodes"
+  | "overlayMode"
+  | "projectRoots"
+  | "finderOpen"
+  | "skillSortMode";
+
+// A scan is discovery data, not an authoritative preferences refresh. Once a
+// field has been changed in this webview, retain the local, persisted intent
+// instead of letting an earlier scan's get_config response put an old snapshot
+// back on screen. The revision makes the mutation boundary explicit for
+// diagnostics and later state work; field ownership handles a mutation that
+// was already pending when the scan began.
+let configMutationRevision = 0;
+const locallyManagedPreferenceFields = new Set<ScanPreferenceField>();
+const latestPreferenceRevisionByField = new Map<ScanPreferenceField, number>();
+
+function markPreferenceMutation(field: ScanPreferenceField): number {
+  locallyManagedPreferenceFields.add(field);
+  configMutationRevision += 1;
+  latestPreferenceRevisionByField.set(field, configMutationRevision);
+  return configMutationRevision;
+}
+
+function isCurrentPreferenceMutation(field: ScanPreferenceField, revision: number): boolean {
+  return latestPreferenceRevisionByField.get(field) === revision;
+}
+
+function canHydrateScanPreference(
+  field: ScanPreferenceField,
+  snapshotRevision: number,
+): boolean {
+  return (
+    snapshotRevision === configMutationRevision &&
+    !locallyManagedPreferenceFields.has(field)
+  );
+}
+
 export function toggleTagFilter(tag: string) {
   const normalized = tag.trim().toLowerCase();
   if (!normalized) return;
@@ -545,6 +626,7 @@ export function toggleTagFilter(tag: string) {
 }
 
 export function setFinderOpen(open: boolean) {
+  markPreferenceMutation("finderOpen");
   store.finderOpen = open;
   void invoke("set_finder_open", { open }).catch((e) => {
     console.warn("Failed to persist finder state:", e);
@@ -553,15 +635,32 @@ export function setFinderOpen(open: boolean) {
 
 export async function setSkillSortMode(mode: SkillSortMode) {
   const normalized = normalizeSkillSortMode(mode);
+  const mutationRevision = markPreferenceMutation("skillSortMode");
   store.skillSortMode = normalized;
 
   try {
     const persisted = await invoke<SkillSortMode>("set_skill_sort_mode", { mode: normalized });
-    store.skillSortMode = normalizeSkillSortMode(persisted);
+    if (isCurrentPreferenceMutation("skillSortMode", mutationRevision)) {
+      store.skillSortMode = normalizeSkillSortMode(persisted);
+    }
   } catch (e) {
     console.warn("Failed to persist skill sort mode:", e);
-    showToast("Could not save sort mode");
+    showToast("Could not save sort mode", "error");
   }
+}
+
+let registryRequestSequence = 0;
+
+/**
+ * Update the pending registry query and invalidate an earlier request. Search
+ * remains explicit, but an old completion must not overwrite new intent.
+ */
+export function setRegistryQuery(query: string) {
+  if (store.registryQuery === query) return;
+  store.registryQuery = query;
+  registryRequestSequence += 1;
+  store.registryLoading = false;
+  store.registryError = null;
 }
 
 /**
@@ -576,10 +675,11 @@ export async function searchMarketplace(
   limit = REGISTRY_DEFAULT_LIMIT,
 ) {
   const normalizedQuery = query.trim();
+  const requestSequence = ++registryRequestSequence;
   store.registryQuery = query;
   store.registryProvider = provider;
-  store.registryLastSearchedQuery = normalizedQuery;
-  store.registryLastSearchedProvider = provider;
+  store.registryAttemptedQuery = normalizedQuery;
+  store.registryAttemptedProvider = provider;
 
   if (normalizedQuery.length < 2) {
     store.registryItems = [];
@@ -587,6 +687,8 @@ export async function searchMarketplace(
     store.registryResultCount = 0;
     store.registryDurationMs = 0;
     store.registryError = null;
+    store.registryLastSearchedQuery = normalizedQuery;
+    store.registryLastSearchedProvider = provider;
     store.registryLoading = false;
     return;
   }
@@ -611,16 +713,27 @@ export async function searchMarketplace(
       }
       mergeAndRankItems(merged);
 
+      const allErrored = response.providers.length > 0
+        && response.providers.every((p) => p.error !== null);
+      if (requestSequence !== registryRequestSequence) return;
+
+      if (allErrored) {
+        // Preserve usable results through a transient all-provider failure.
+        store.registryProviderOutcomes = response.providers;
+        store.registryDurationMs = Math.round(performance.now() - startedAt);
+        store.registryError = response.providers
+          .map((p) => `${labelForProvider(p.provider)}: ${p.error}`)
+          .join(" — ");
+        return;
+      }
+
       store.registryItems = merged;
       store.registryProviderOutcomes = response.providers;
       store.registryResultCount = merged.length;
       store.registryDurationMs = Math.round(performance.now() - startedAt);
-
-      const allErrored = response.providers.length > 0
-        && response.providers.every((p) => p.error !== null);
-      store.registryError = allErrored
-        ? response.providers.map((p) => `${labelForProvider(p.provider)}: ${p.error}`).join(" — ")
-        : null;
+      store.registryLastSearchedQuery = normalizedQuery;
+      store.registryLastSearchedProvider = provider;
+      store.registryError = null;
     } else {
       const response = await invoke<MarketplaceSearchResponse>("search_marketplace", {
         provider,
@@ -628,22 +741,28 @@ export async function searchMarketplace(
         limit,
       });
 
+      if (requestSequence !== registryRequestSequence) return;
+
       store.registryItems = response.items;
       store.registryProviderOutcomes = [
         { provider, response, error: null },
       ];
       store.registryResultCount = response.count ?? response.items.length;
       store.registryDurationMs = response.durationMs ?? Math.round(performance.now() - startedAt);
+      store.registryLastSearchedQuery = normalizedQuery;
+      store.registryLastSearchedProvider = provider;
+      store.registryError = null;
     }
   } catch (e) {
+    if (requestSequence !== registryRequestSequence) return;
     const message = e instanceof Error ? e.message : String(e);
-    store.registryItems = [];
-    store.registryProviderOutcomes = [];
-    store.registryResultCount = 0;
-    store.registryDurationMs = 0;
+    // Do not erase the last successful catalogue on a recoverable failure.
+    store.registryDurationMs = Math.round(performance.now() - startedAt);
     store.registryError = message;
   } finally {
-    store.registryLoading = false;
+    if (requestSequence === registryRequestSequence) {
+      store.registryLoading = false;
+    }
   }
 }
 
@@ -669,6 +788,9 @@ export function labelForProvider(provider: RegistryProviderId | "all"): string {
 export function setRegistryProvider(provider: RegistryProviderSelection) {
   if (store.registryProvider === provider) return;
   store.registryProvider = provider;
+  registryRequestSequence += 1;
+  store.registryLoading = false;
+  store.registryError = null;
   if (store.registryLastSearchedQuery.length >= 2) {
     void searchMarketplace(store.registryQuery, provider);
   }
@@ -730,6 +852,7 @@ export function toggleAgentCollapse(agentId: string) {
   } else {
     next.add(agentId);
   }
+  markPreferenceMutation("collapsedAgents");
   store.collapsedAgents = next; // reassign to trigger Svelte 5 reactivity
   persistCollapsedAgents(next);
 }
@@ -737,6 +860,7 @@ export function toggleAgentCollapse(agentId: string) {
 /** Replace collapsed grouped-agent ids and persist */
 export function setCollapsedAgents(collapsed: Set<string>) {
   const next = new Set(collapsed);
+  markPreferenceMutation("collapsedAgents");
   store.collapsedAgents = next;
   persistCollapsedAgents(next);
 }
@@ -759,6 +883,7 @@ export function toggleTreeNodeCollapse(nodeId: string) {
   } else {
     next.add(nodeId);
   }
+  markPreferenceMutation("collapsedTreeNodes");
   store.collapsedTreeNodes = next;
   persistCollapsedTreeNodes(next);
 }
@@ -766,6 +891,7 @@ export function toggleTreeNodeCollapse(nodeId: string) {
 /** Replace collapsed tree node ids and persist */
 export function setCollapsedTreeNodes(collapsed: Set<string>) {
   const next = new Set(collapsed);
+  markPreferenceMutation("collapsedTreeNodes");
   store.collapsedTreeNodes = next;
   persistCollapsedTreeNodes(next);
 }
@@ -806,6 +932,96 @@ let refreshInterval: ReturnType<typeof setInterval> | null = null;
 const REFRESH_INTERVAL_MS = 30_000; // 30 seconds
 const SOFT_CACHE_MS = 60_000;
 
+/**
+ * Every scan has one owner. A foreground refresh, a silent interval refresh,
+ * and the forced scans after a restore or project-root change all compete for
+ * the same state. Keep the generation outside the Svelte store so an older
+ * IPC completion cannot put an older skills/config/stars snapshot back on
+ * screen after a newer scan has begun.
+ */
+let scanRequestSequence = 0;
+const historyRequestSequenceBySkill = new Map<string, number>();
+
+/**
+ * Star writes can finish while a scan is assembling its snapshot. Keep each
+ * skill's latest desired state until the backend confirms it, so a scan cannot
+ * undo a click and rapid clicks for one skill cannot be dispatched out of
+ * order. Different skills deliberately retain independent queues.
+ */
+let starIntentRevision = 0;
+let completedStarMutationRevision = 0;
+type StarIntent = { revision: number; desiredStarred: boolean };
+type ConfirmedStarState = { completionRevision: number; desiredStarred: boolean };
+const pendingStarIntentBySkill = new Map<string, StarIntent>();
+const committedStarStateBySkill = new Map<string, ConfirmedStarState>();
+const starWriteQueueBySkill = new Map<string, Promise<void>>();
+
+function isCurrentScan(requestSequence: number): boolean {
+  return requestSequence === scanRequestSequence;
+}
+
+function skillStateKey(skillId: string): string {
+  const skill = store.skills.find(
+    (candidate) => candidate.id === skillId || candidate.legacyIds.includes(skillId),
+  );
+  return skill?.id ?? skillId;
+}
+
+/** The archive version currently restoring for a skill, if any. */
+export function restoringVersionForSkill(skill: Skill): string | null {
+  return store.restoringVersionBySkill[skillStateKey(skill.id)] ?? null;
+}
+
+function beginSkillHistoryRequest(skillId: string): { skillKey: string; sequence: number } {
+  const skillKey = skillStateKey(skillId);
+  const sequence = (historyRequestSequenceBySkill.get(skillKey) ?? 0) + 1;
+  historyRequestSequenceBySkill.set(skillKey, sequence);
+  return { skillKey, sequence };
+}
+
+function isCurrentSkillHistoryRequest(skillKey: string, sequence: number): boolean {
+  return historyRequestSequenceBySkill.get(skillKey) === sequence;
+}
+
+function currentStarredState(skillId: string): boolean {
+  const key = skillStateKey(skillId);
+  const pending = pendingStarIntentBySkill.get(key);
+  if (pending) return pending.desiredStarred;
+
+  return store.skills.some(
+    (skill) => (skill.id === key || skill.legacyIds.includes(key)) && skill.starred,
+  );
+}
+
+function setLocalStarredState(skillId: string, starred: boolean) {
+  store.skills = store.skills.map((skill) =>
+    skill.id === skillId || skill.legacyIds.includes(skillId)
+      ? { ...skill, starred }
+      : skill,
+  );
+}
+
+function starIntentForSkill(skill: Skill): StarIntent | undefined {
+  return (
+    pendingStarIntentBySkill.get(skill.id) ??
+    skill.legacyIds
+      .map((legacyId) => pendingStarIntentBySkill.get(legacyId))
+      .find((intent): intent is StarIntent => intent !== undefined)
+  );
+}
+
+function committedStarStateAfter(
+  skill: Skill,
+  completionRevision: number,
+): ConfirmedStarState | undefined {
+  const state =
+    committedStarStateBySkill.get(skill.id) ??
+    skill.legacyIds
+      .map((legacyId) => committedStarStateBySkill.get(legacyId))
+      .find((intent): intent is ConfirmedStarState => intent !== undefined);
+  return state && state.completionRevision > completionRevision ? state : undefined;
+}
+
 function startBackgroundRefresh() {
   stopBackgroundRefresh();
   refreshInterval = setInterval(() => {
@@ -831,40 +1047,111 @@ export async function scanSkills(silent = false, force = false) {
     return;
   }
 
-  if (!silent) store.isLoading = true;
+  const requestSequence = ++scanRequestSequence;
+  const starCompletionRevisionAtStart = completedStarMutationRevision;
+  const configMutationRevisionAtStart = configMutationRevision;
+  if (!silent) {
+    store.isLoading = true;
+  } else if (store.isLoading) {
+    // A newer silent scan supersedes an older foreground request. Do not leave
+    // its spinner stranded while the latest request intentionally stays quiet.
+    store.isLoading = false;
+  }
+
   try {
     const result: ScanResult = await invoke("scan_skills");
-    store.skills = result.skills;
-    store.scanDurationMs = result.scanDurationMs;
-    store.lastScanTime = Date.now();
+    if (!isCurrentScan(requestSequence)) return;
 
-    store.agents = await invoke("list_agents");
-
-    const config = await invoke<{
+    const [agents, config, starred] = await Promise.all([
+      invoke<AgentInfo[]>("list_agents"),
+      invoke<{
       hotkey?: string;
       collapsedAgents?: string[];
       collapsedTreeNodes?: string[];
       overlayMode?: OverlayMode;
+      projectRoots?: string[];
       finderOpen?: boolean;
       skillSortMode?: SkillSortMode;
-    }>("get_config");
-    store.hotkey = normalizeHotkey(config.hotkey);
-    store.collapsedAgents = new Set(config.collapsedAgents ?? []);
-    store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
-    store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
-    store.finderOpen = config.finderOpen === true;
-    store.skillSortMode = normalizeSkillSortMode(config.skillSortMode);
+      }>("get_config"),
+      invoke<string[]>("get_starred_skills"),
+    ]);
 
-    // Apply starred status from config
-    const starred: string[] = await invoke("get_starred_skills");
-    store.skills = store.skills.map((s) => ({
-      ...s,
-      starred: starred.includes(s.id),
-    }));
+    if (!isCurrentScan(requestSequence)) return;
+
+    const skills = result.skills.map((skill) => {
+      const serverStarred =
+        starred.includes(skill.id) || skill.legacyIds.some((legacyId) => starred.includes(legacyId));
+      const retainedState =
+        starIntentForSkill(skill) ?? committedStarStateAfter(skill, starCompletionRevisionAtStart);
+      return {
+        ...skill,
+        // Pending user intent wins over an in-flight scan snapshot. If a write
+        // completed after this scan began, retain only that skill's confirmed
+        // state, not an unrelated stale value from the old list.
+        starred: retainedState?.desiredStarred ?? serverStarred,
+      };
+    });
+
+    // Commit the scan snapshot together. Every branch is fenced above, so a
+    // stale completion can change neither skills nor its adjacent metadata.
+    store.skills = skills;
+    store.agents = agents;
+    store.scanDurationMs = result.scanDurationMs;
+    store.lastScanTime = Date.now();
+    store.scanError = null;
+    store.scanErrorCount = result.errors.length;
+    store.scanErrors = result.errors.slice(0, MAX_RETAINED_SCAN_ERRORS);
+
+    // A result with only failures is not an ordinary empty install. Keep the
+    // diagnostic sample in memory, but use generic copy so the compact UI
+    // never discloses filesystem paths or parser messages.
+    if (result.skills.length === 0 && result.errors.length > 0) {
+      store.scanError = "No skills could be read during this scan. Check agent folders and try again.";
+    }
+
+    // Explicit scans are the freshness boundary for file-backed modal content.
+    // Silent background scans retain the cache so a normal overlay recall stays fast.
+    if (!silent) store.fullSkillContentCache.clear();
+
+    // Preserve any preference field this webview has already changed. This
+    // includes writes that were pending before this scan started, where a
+    // global revision equality alone would still admit a stale get_config
+    // snapshot. On a cold start every field remains hydrateable.
+    if (canHydrateScanPreference("hotkey", configMutationRevisionAtStart)) {
+      store.hotkey = normalizeHotkey(config.hotkey);
+    }
+    if (canHydrateScanPreference("collapsedAgents", configMutationRevisionAtStart)) {
+      store.collapsedAgents = new Set(config.collapsedAgents ?? []);
+    }
+    if (canHydrateScanPreference("collapsedTreeNodes", configMutationRevisionAtStart)) {
+      store.collapsedTreeNodes = new Set(config.collapsedTreeNodes ?? []);
+    }
+    if (canHydrateScanPreference("overlayMode", configMutationRevisionAtStart)) {
+      store.overlayMode = config.overlayMode === "auto-hide" ? "auto-hide" : "pinned";
+    }
+    if (canHydrateScanPreference("projectRoots", configMutationRevisionAtStart)) {
+      store.projectRoots = config.projectRoots ?? [];
+    }
+    if (canHydrateScanPreference("finderOpen", configMutationRevisionAtStart)) {
+      store.finderOpen = config.finderOpen === true;
+    }
+    if (canHydrateScanPreference("skillSortMode", configMutationRevisionAtStart)) {
+      store.skillSortMode = normalizeSkillSortMode(config.skillSortMode);
+    }
   } catch (e) {
+    if (!isCurrentScan(requestSequence)) return;
     console.error("Scan failed:", e);
+    // Surface the failure so the UI can distinguish a broken scan from an
+    // empty install. A silent background refresh keeps whatever skills it
+    // already had; a foreground scan with no prior skills shows the error state.
+    const message = e instanceof Error ? e.message : String(e);
+    store.scanErrorCount = 0;
+    store.scanErrors = [];
+    store.scanError = message || "Scan failed";
   } finally {
-    if (!silent) store.isLoading = false;
+    if (isCurrentScan(requestSequence)) {
+      store.isLoading = false;
+    }
   }
 }
 
@@ -875,10 +1162,69 @@ export async function refreshSkills() {
 
 /** Toggle star on a skill */
 export async function toggleStar(skillId: string) {
-  const isStarred: boolean = await invoke("toggle_star", { skillId });
-  store.skills = store.skills.map((s) =>
-    s.id === skillId ? { ...s, starred: isStarred } : s
-  );
+  const key = skillStateKey(skillId);
+  const desiredStarred = !currentStarredState(key);
+  const intent: StarIntent = {
+    revision: ++starIntentRevision,
+    desiredStarred,
+  };
+
+  // Render the user's last click immediately, but persist through a per-skill
+  // queue. This preserves click order even if Tauri schedules IPC work on
+  // different backend threads. Other skills never wait on this queue.
+  pendingStarIntentBySkill.set(key, intent);
+  setLocalStarredState(key, desiredStarred);
+
+  const previous = starWriteQueueBySkill.get(key) ?? Promise.resolve();
+  const write = previous
+    .catch(() => undefined)
+    .then(async () => {
+      try {
+        const confirmed = await invoke<boolean>("toggle_star", {
+          skillId,
+          desiredStarred,
+        });
+        const currentIntent = pendingStarIntentBySkill.get(key);
+        if (!currentIntent || currentIntent.revision !== intent.revision) return;
+
+        pendingStarIntentBySkill.delete(key);
+        committedStarStateBySkill.set(key, {
+          completionRevision: ++completedStarMutationRevision,
+          desiredStarred: confirmed,
+        });
+        setLocalStarredState(key, confirmed);
+      } catch (error) {
+        const currentIntent = pendingStarIntentBySkill.get(key);
+        if (!currentIntent || currentIntent.revision !== intent.revision) return;
+
+        pendingStarIntentBySkill.delete(key);
+        // The backend rolls back its in-memory mutation when persistence
+        // fails. Fetch its authoritative state before correcting the optimistic
+        // card so a failed write cannot leave a visual lie behind.
+        try {
+          const starred = await invoke<string[]>("get_starred_skills");
+          const skill = store.skills.find(
+            (candidate) => candidate.id === key || candidate.legacyIds.includes(key),
+          );
+          setLocalStarredState(
+            key,
+            starred.includes(key) || skill?.legacyIds.some((legacyId) => starred.includes(legacyId)) === true,
+          );
+        } catch {
+          await refreshSkills();
+        }
+        showToast("Could not save starred state", "error");
+        console.warn("Failed to persist starred state:", error);
+      }
+    })
+    .finally(() => {
+      if (starWriteQueueBySkill.get(key) === write) {
+        starWriteQueueBySkill.delete(key);
+      }
+    });
+
+  starWriteQueueBySkill.set(key, write);
+  await write;
 }
 
 /** Persist a custom icon or clear it for a skill */
@@ -910,10 +1256,16 @@ export function toggleOverlay() {
   }
 }
 
-/** Show a toast notification (auto-dismisses after 2.5s) */
-export function showToast(message: string) {
+/**
+ * Show a toast notification (auto-dismisses after 2.5s). `kind` drives the
+ * icon + color in Toast.svelte: "ok" (default) is the phosphor checkmark,
+ * "error" is the error-toned alert. Every failure call site passes "error"
+ * so the green checkmark can no longer sit on top of a "Delete failed".
+ */
+export function showToast(message: string, kind: ToastKind = "ok") {
   if (store.toastTimeout) clearTimeout(store.toastTimeout);
   store.toastMessage = message;
+  store.toastKind = kind;
   store.toastTimeout = setTimeout(() => {
     store.toastMessage = null;
     store.toastTimeout = null;
@@ -963,13 +1315,13 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
 
     if (response.error) {
       if (response.errorKind === "repoNotFound") {
-        showToast("Repo not found, check URL or permissions");
+        showToast("Repo not found, check URL or permissions", "error");
       } else if (response.errorKind === "rateLimited") {
-        showToast("Update check rate limited by GitHub");
+        showToast("Update check rate limited by GitHub", "error");
       } else if (response.errorKind === "invalidRepoUrl") {
-        showToast("Invalid repo URL, use github.com/owner/repo");
+        showToast("Invalid repo URL, use github.com/owner/repo", "error");
       } else {
-        showToast(`Update check failed: ${response.error}`);
+        showToast(`Update check failed: ${response.error}`, "error");
       }
       return;
     }
@@ -980,35 +1332,88 @@ export async function checkSkillUpdate(skill: Skill): Promise<void> {
       showToast(response.source === "cache" ? "Cached: up to date" : "Already up to date");
     }
   } catch (e) {
-    showToast(`Update check failed: ${e}`);
+    showToast(`Update check failed: ${e}`, "error");
   }
+}
+
+/**
+ * Apply an overlay-mode change emitted by the backend without sending the
+ * command back across IPC. Tray/native changes still own the same preference
+ * mutation boundary as a webview-originated setting change.
+ */
+export function applyOverlayModeFromBackend(mode: OverlayMode) {
+  const normalized: OverlayMode = mode === "auto-hide" ? "auto-hide" : "pinned";
+  markPreferenceMutation("overlayMode");
+  store.overlayMode = normalized;
 }
 
 /** Persist overlay behavior mode */
 export async function setOverlayMode(mode: OverlayMode) {
   const normalized: OverlayMode = mode === "auto-hide" ? "auto-hide" : "pinned";
-  store.overlayMode = normalized;
+  applyOverlayModeFromBackend(normalized);
   try {
     await invoke("set_overlay_mode", { mode: normalized });
   } catch (e) {
     console.warn("Failed to persist overlay mode:", e);
-    showToast("Could not save window behavior setting");
+    showToast("Could not save window behavior setting", "error");
+  }
+}
+
+/**
+ * Replace the configured project folders and immediately rescan.
+ *
+ * The list updates optimistically so the settings surface feels immediate.
+ * Backend normalization is authoritative; a persistence failure restores the
+ * exact prior list and reports the failure through the shared toast.
+ */
+export async function setProjectRoots(roots: string[]): Promise<boolean> {
+  if (store.projectRootsSaving) return false;
+
+  const previous = [...store.projectRoots];
+  const optimistic = roots.map((root) => root.trim()).filter(Boolean);
+  const mutationRevision = markPreferenceMutation("projectRoots");
+  store.projectRoots = optimistic;
+  store.projectRootsSaving = true;
+
+  try {
+    const normalized = await invoke<string[]>("set_project_roots", { roots: optimistic });
+    if (isCurrentPreferenceMutation("projectRoots", mutationRevision)) {
+      store.projectRoots = normalized;
+    }
+    await scanSkills(true, true);
+    showToast(normalized.length === 1 ? "Project location saved" : "Project locations saved");
+    return true;
+  } catch (e) {
+    if (isCurrentPreferenceMutation("projectRoots", mutationRevision)) {
+      store.projectRoots = previous;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn("Failed to persist project locations:", e);
+    showToast(`Project locations not saved: ${message}`, "error");
+    return false;
+  } finally {
+    store.projectRootsSaving = false;
   }
 }
 
 export async function setHotkey(hotkey: string) {
   const normalized = normalizeHotkey(hotkey);
   const previous = store.hotkey;
+  const mutationRevision = markPreferenceMutation("hotkey");
   store.hotkey = normalized;
   try {
     const active = await invoke<string>("set_hotkey", { hotkey: normalized });
-    store.hotkey = normalizeHotkey(active);
-    showToast(`Shortcut set: ${store.hotkey}`);
+    if (isCurrentPreferenceMutation("hotkey", mutationRevision)) {
+      store.hotkey = normalizeHotkey(active);
+      showToast(`Shortcut set: ${store.hotkey}`);
+    }
   } catch (e) {
-    store.hotkey = previous;
+    if (isCurrentPreferenceMutation("hotkey", mutationRevision)) {
+      store.hotkey = previous;
+    }
     console.warn("Failed to persist hotkey:", e);
     const message = e instanceof Error ? e.message : String(e);
-    showToast(`Shortcut not saved: ${message}`);
+    showToast(`Shortcut not saved: ${message}`, "error");
   }
 }
 
@@ -1025,7 +1430,7 @@ export async function setSkillRepo(skillId: string, repoUrl: string): Promise<vo
     );
     showToast(resolvedRepo ? "Repo URL saved" : "Repo URL cleared");
   } catch (e) {
-    showToast(`Failed to save repo URL: ${e}`);
+    showToast(`Failed to save repo URL: ${e}`, "error");
   }
 }
 
@@ -1050,22 +1455,45 @@ export async function snapshotSkillBeforeUpdate(
     showToast("Snapshot saved before update");
     return entry;
   } catch (e) {
-    showToast(`Snapshot failed: ${e}`);
+    showToast(`Snapshot failed: ${e}`, "error");
     return null;
   }
 }
 
 /** Load local version history entries for a skill */
 export async function loadSkillVersionHistory(skillId: string): Promise<SkillVersionEntry[]> {
+  const { skillKey, sequence } = beginSkillHistoryRequest(skillId);
   try {
     const response: SkillHistoryResponse = await invoke("list_skill_versions", { skillId });
+    if (!isCurrentSkillHistoryRequest(skillKey, sequence)) {
+      return store.versionHistory[skillKey] ?? store.versionHistory[skillId] ?? [];
+    }
     store.versionHistory = {
       ...store.versionHistory,
-      [skillId]: response.entries,
+      [skillKey]: response.entries,
     };
     return response.entries;
   } catch {
-    return store.versionHistory[skillId] ?? [];
+    return store.versionHistory[skillKey] ?? store.versionHistory[skillId] ?? [];
+  }
+}
+
+async function reconcileAfterRestoreError(
+  skill: Skill,
+  skillKey: string,
+  versionId: string,
+): Promise<void> {
+  try {
+    // scanSkills has a global generation fence; loadSkillVersionHistory has a
+    // per-skill fence. Keep the restore lock through both so a renderer switch
+    // cannot start another write during reconciliation.
+    await scanSkills(false, true);
+    if (store.restoringVersionBySkill[skillKey] !== versionId) return;
+    await loadSkillVersionHistory(skill.id);
+  } catch (error) {
+    // Both refresh functions normally absorb their own failures. This is a
+    // final best-effort boundary that must not replace the original toast.
+    console.warn("Could not reconcile skill state after restore failure:", error);
   }
 }
 
@@ -1077,7 +1505,7 @@ export async function deleteSkillVersion(skill: Skill, versionId: string): Promi
       versionId,
     });
     if (!result.deleted) {
-      showToast("Delete failed");
+      showToast("Delete failed", "error");
       return false;
     }
 
@@ -1094,10 +1522,16 @@ export async function deleteSkillVersion(skill: Skill, versionId: string): Promi
         : s
     );
 
-    showToast("Archive removed");
+    if (result.archiveCleanupPending) {
+      // Logical deletion and config persistence succeeded. Do not retry or
+      // re-index the unreferenced file; surface the bounded cleanup warning.
+      showToast("Archive removed; file cleanup is still pending", "error");
+    } else {
+      showToast("Archive removed");
+    }
     return true;
   } catch (e) {
-    showToast(`Delete failed: ${e}`);
+    showToast(`Delete failed: ${e}`, "error");
     return false;
   }
 }
@@ -1113,29 +1547,50 @@ export async function readSkillSnapshot(
       versionId,
     });
   } catch (e) {
-    showToast(`Snapshot read failed: ${e}`);
+    showToast(`Snapshot read failed: ${e}`, "error");
     return null;
   }
 }
 
 /** Restore a specific version snapshot for a skill */
 export async function restoreSkillVersion(skill: Skill, versionId: string): Promise<boolean> {
+  const skillKey = skillStateKey(skill.id);
+  // This guard is intentionally in the store, not a component, so callers
+  // cannot bypass it by changing between grouped and tree renderers.
+  if (store.restoringVersionBySkill[skillKey] !== undefined) return false;
+
+  store.restoringVersionBySkill = {
+    ...store.restoringVersionBySkill,
+    [skillKey]: versionId,
+  };
+
   try {
     const result: RestoreSkillVersionResult = await invoke("restore_skill_version", {
       skillId: skill.id,
       versionId,
     });
     if (result.restored) {
-      await scanSkills(true);
+      // A restore changes the file behind a cached preview. Force a real
+      // foreground scan so the list and future modal reads are fresh.
+      await scanSkills(false, true);
       await loadSkillVersionHistory(skill.id);
       showToast("Skill restored from snapshot");
       return true;
     }
-    showToast("Restore failed");
+    showToast("Restore failed", "error");
+    await reconcileAfterRestoreError(skill, skillKey, versionId);
     return false;
   } catch (e) {
-    showToast(`Restore failed: ${e}`);
+    showToast(`Restore failed: ${e}`, "error");
+    await reconcileAfterRestoreError(skill, skillKey, versionId);
     return false;
+  } finally {
+    // Retain independent in-flight restores, but release this skill even if an
+    // unexpected error occurs while refreshing the last-good UI state.
+    if (store.restoringVersionBySkill[skillKey] === versionId) {
+      const { [skillKey]: _completed, ...remaining } = store.restoringVersionBySkill;
+      store.restoringVersionBySkill = remaining;
+    }
   }
 }
 
@@ -1150,7 +1605,7 @@ export async function setSkillInstallCommand(skillId: string, cmd: string): Prom
     );
     showToast(cmd ? "Install command saved" : "Install command cleared");
   } catch (e) {
-    showToast(`Failed to save install command: ${e}`);
+    showToast(`Failed to save install command: ${e}`, "error");
   }
 }
 
@@ -1229,8 +1684,7 @@ export async function openFullSkillModal(skill: Skill, preloadedContent?: string
     }
 
     store.fullSkillModalLoading = false;
-    store.fullSkillModalError =
-      e instanceof Error ? e.message : "Could not load full skill content";
+    store.fullSkillModalError = e instanceof Error ? e.message : String(e);
   }
 }
 

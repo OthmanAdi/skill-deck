@@ -6,6 +6,20 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Added a fail-closed, tag-driven Windows x64 release workflow. It creates a GitHub Release only after the executable and both installers are signed and their Authenticode signatures are verified.
+- Added an allowlist-based public-source export tool with exact destination validation and hard exclusions for private/process directories, build output, release binaries, and PDB files.
+
+### Changed
+- Relicensed the project source to Mozilla Public License 2.0 and aligned public author, publisher, package, application, release, and SBOM metadata to Ahmad Othman Ammar Adi. Third-party and model licenses remain unchanged.
+- Skill Deck now ships as one complete application. Chat, provider routing, and the bundled local-model workflow are available immediately.
+- Removed the former product-access and commerce subsystems while retaining source-bound release evidence, installer inspection, SBOM, signing, and third-party notice checks.
+- Updated public project metadata and documentation for the `OthmanAdi/skill-deck` repository and version 0.3.0 source tree.
+- Made German the primary repository language with a complete English README, accurate runtime screenshots, and clearer positioning around skill inventory, provider visibility, local model paths, and manual prompt-injection review.
+
+### Security
+- Public release automation has no unsigned fallback. Missing signing identity configuration or an invalid signature stops the workflow before publication.
+
 ## [0.1.6] - 2026-05-30
 
 ### Added
@@ -27,7 +41,7 @@ The format follows Keep a Changelog and this project uses Semantic Versioning.
 - Canonical repository URL casing in package metadata.
 
 ### Security
-- The public release workflow refuses to build or publish when premium (pro) source is present or the tag ends with `-pro`.
+- The release workflow refuses to package source that does not match the declared artifact and compliance contracts.
 
 ## [0.1.5] - 2026-05-20
 

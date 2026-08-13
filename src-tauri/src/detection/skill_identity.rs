@@ -115,10 +115,7 @@ pub struct ConfigIdCollections<'a> {
     pub collapsed_tree_nodes: &'a mut HashSet<String>,
 }
 
-pub fn remap_config_ids_for_skills(
-    skills: &[Skill],
-    collections: ConfigIdCollections<'_>,
-) -> bool {
+pub fn remap_config_ids_for_skills(skills: &[Skill], collections: ConfigIdCollections<'_>) -> bool {
     let ConfigIdCollections {
         starred_skills,
         skill_icons,
@@ -296,7 +293,10 @@ pub fn dedupe_skills_by_source(skills: &mut Vec<Skill>) {
             }
 
             if candidate.source_agents.is_empty() {
-                if !source_agents.iter().any(|agent| agent == &candidate.agent_id) {
+                if !source_agents
+                    .iter()
+                    .any(|agent| agent == &candidate.agent_id)
+                {
                     source_agents.push(candidate.agent_id.clone());
                 }
             } else {
@@ -410,8 +410,12 @@ mod tests {
         assert_eq!(skills[0].source_paths.len(), 1);
         assert_eq!(skills[0].source_agents.len(), 2);
         // Both raw per-agent ids plus the pre-0.1.6 content-hash migration id.
-        assert!(skills[0].legacy_ids.contains(&"claude-code:session-handoff".to_string()));
-        assert!(skills[0].legacy_ids.contains(&"codex:session-handoff".to_string()));
+        assert!(skills[0]
+            .legacy_ids
+            .contains(&"claude-code:session-handoff".to_string()));
+        assert!(skills[0]
+            .legacy_ids
+            .contains(&"codex:session-handoff".to_string()));
         assert_eq!(skills[0].legacy_ids.len(), 3);
     }
 
@@ -487,7 +491,11 @@ mod tests {
         ];
 
         dedupe_skills_by_source(&mut skills);
-        assert_eq!(skills.len(), 2, "byte-identical files at different paths stay distinct");
+        assert_eq!(
+            skills.len(),
+            2,
+            "byte-identical files at different paths stay distinct"
+        );
     }
 
     #[test]
@@ -501,8 +509,16 @@ mod tests {
         std::fs::write(&path, "# shared\nbody").expect("write");
 
         let mut skills = vec![
-            make_skill("claude-code:shared", path.to_string_lossy().as_ref(), AgentId::ClaudeCode),
-            make_skill("codex:shared", path.to_string_lossy().as_ref(), AgentId::Codex),
+            make_skill(
+                "claude-code:shared",
+                path.to_string_lossy().as_ref(),
+                AgentId::ClaudeCode,
+            ),
+            make_skill(
+                "codex:shared",
+                path.to_string_lossy().as_ref(),
+                AgentId::Codex,
+            ),
         ];
 
         dedupe_skills_by_source(&mut skills);

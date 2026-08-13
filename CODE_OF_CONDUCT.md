@@ -1,4 +1,4 @@
-# Code of Conduct
+# Skill Deck Code of Conduct
 
 ## Our Commitment
 
@@ -25,7 +25,7 @@ Maintainers may remove comments, close threads, or restrict participation for vi
 
 ## Reporting
 
-If you experience or witness unacceptable behavior, report privately to project maintainers via GitHub private channels.
+If you experience or witness unacceptable behavior, report it privately to the maintainers through the contact options on the [maintainer profile](https://github.com/OthmanAdi). Do not publish personal information in an issue. Reports are reviewed confidentially to the extent practical.
 
 ## Attribution
 

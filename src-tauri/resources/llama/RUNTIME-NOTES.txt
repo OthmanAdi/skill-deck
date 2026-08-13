@@ -1,0 +1,30 @@
+Bundled inference runtime: llama.cpp llama-server (CPU-only, Windows x64)
+
+Source:   https://github.com/ggml-org/llama.cpp
+Release:  b10092 (pinned 2026-07-23)
+Asset:    llama-b10092-bin-win-cpu-x64.zip
+Zip SHA256: c842fa7dc90e32b327c62903f4310ef251a902c90ef5b3a6c01c6b675dce078e
+License:  MIT (https://github.com/ggml-org/llama.cpp/blob/3ce7da2c8/LICENSE)
+
+Contents staged here are the llama-server subset of that zip:
+llama-server.exe + llama-server-impl.dll + llama.dll + llama-common.dll +
+mtmd.dll + libomp140.x86_64.dll + ggml.dll + ggml-base.dll + ggml-rpc.dll +
+ggml-cpu-*.dll (per-microarchitecture kernels, picked at runtime).
+Other tools from the zip (llama-cli, llama-bench, quantize, ...) are not shipped.
+
+Verified on the build box: `llama-server.exe --version` ->
+  version: 10092 (3ce7da2c8), built with Clang 20.1.8 for Windows x86_64
+
+Spawned by src-tauri/src/harness/builtin.rs as:
+  llama-server.exe -m <model.gguf> --host 127.0.0.1 --port <free> --jinja -c 8192 --no-webui
+
+Downloaded model: Menlo Jan-nano 4B Q4_K_M
+Source:   https://huggingface.co/Menlo/Jan-nano-gguf
+Revision: 44c1024058604e95b4845fecde698f5f1a0c99e7
+File:     jan-nano-4b-Q4_K_M.gguf
+Size:     2497280448 bytes
+SHA256:   c345a1c0eda29e56c73c4c4c00035f28470e649cf4f551dea80a7baffe79a798
+License:  Apache-2.0 (repository model-card metadata)
+
+The model is downloaded on demand and is not embedded in the installer.
+The exact source revision, byte size, and SHA256 are enforced by the app.

@@ -168,7 +168,10 @@ fn truncate(value: &str, max: usize) -> String {
         return value.to_string();
     }
 
-    let mut out = value.chars().take(max.saturating_sub(1)).collect::<String>();
+    let mut out = value
+        .chars()
+        .take(max.saturating_sub(1))
+        .collect::<String>();
     out.push('…');
     out
 }

@@ -1,0 +1,14 @@
+{
+  "componentIds": [
+    "cargo:cssparser-macros@0.6.1",
+    "cargo:cssparser@0.36.0",
+    "cargo:dtoa-short@0.3.5",
+    "cargo:option-ext@0.2.0",
+    "cargo:selectors@0.36.1"
+  ],
+  "fileName": "Skill-Deck-0.3.0-MPL-Sources.zip",
+  "inventorySha256": "1674cf8fb8d040ca8f685aa95c05adef80293fa72a4e1dae7fd035bdc370b65a",
+  "schemaVersion": "skill-deck-legal-notice-source/v1",
+  "sha256": "b5c35243509bdc3ba2e7fdcf8c0af943efde6e7821f44703eb8ec622237e0247",
+  "sizeBytes": 680670
+}

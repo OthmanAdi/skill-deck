@@ -5,10 +5,15 @@ Thumbs.db
 # Dependencies
 node_modules
 
+# Python release/projection tooling bytecode (never stage)
+__pycache__/
+*.py[cod]
+
 # Build output
 /build
 /.svelte-kit
 /package
+/release-evidence/
 
 # Environment
 .env
@@ -43,6 +48,7 @@ SESSION_MEMORY.md
 llm.txt
 plan.html
 CHANGELOG_PLAN.md
+DESIGN.md
 FUTURE_IMPLEMENTATION_PLAN.md
 RELEASE_PLAN.md
 THEME_REDESIGN_TRACE.md
@@ -57,3 +63,12 @@ THEME_REDESIGN_TRACE.md
 
 # Stray GitHub API / path-keyed cache files accidentally written to the repo root
 /Users*.json
+
+# Scratch design-token output and local planning artifacts (local only)
+.tmp-tokens/
+plan.html
+
+# Local signing material must never be published.
+*.pkcs8
+k.der
+build.log

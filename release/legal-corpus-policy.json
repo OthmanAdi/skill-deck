@@ -1,0 +1,477 @@
+{
+  "schemaVersion": "skill-deck-legal-notice-policy/v1",
+  "target": "x86_64-pc-windows-msvc",
+  "componentRules": {
+    "cargo:alloc-stdlib@0.2.2": {
+      "expectedDeclaredLicense": "BSD-3-Clause",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE",
+          "path": "dropbox__rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+          "expectedSha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+          "sourceCommit": "6032b6a9b20e03737135c55a0270ccffcc1438ef"
+        }
+      ]
+    },
+    "cargo:arraydeque@0.5.1": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE"
+        ],
+        "MIT": [
+          "LICENSE"
+        ]
+      }
+    },
+    "cargo:brotli-decompressor@5.0.1": {
+      "expectedDeclaredLicense": "BSD-3-Clause/MIT",
+      "branchFiles": {
+        "BSD-3-Clause": [
+          "LICENSE"
+        ],
+        "MIT": [
+          "LICENSE"
+        ]
+      }
+    },
+    "cargo:cargo_toml@0.22.3": {
+      "expectedDeclaredLicense": "Apache-2.0 OR MIT",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE"
+        ],
+        "MIT": [
+          "LICENSE"
+        ]
+      }
+    },
+    "cargo:chrono@0.4.45": {
+      "expectedDeclaredLicense": "MIT OR Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE.txt"
+        ],
+        "MIT": [
+          "LICENSE.txt"
+        ]
+      }
+    },
+    "cargo:cssparser-macros@0.6.1": {
+      "expectedDeclaredLicense": "MPL-2.0",
+      "branchFiles": {
+        "MPL-2.0": [
+          "LICENSE"
+        ]
+      },
+      "sourceOffer": true
+    },
+    "cargo:cssparser@0.36.0": {
+      "expectedDeclaredLicense": "MPL-2.0",
+      "branchFiles": {
+        "MPL-2.0": [
+          "LICENSE"
+        ]
+      },
+      "sourceOffer": true
+    },
+    "cargo:defmt-parser@1.0.0": {
+      "expectedDeclaredLicense": "MIT OR Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE-APACHE",
+          "path": "knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+          "expectedSha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/knurling-rs/defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+          "sourceCommit": "4a8cdb44891ed57b8ff5a023b6bec7137c48708f"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+          "expectedSha256": "0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/knurling-rs/defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+          "sourceCommit": "4a8cdb44891ed57b8ff5a023b6bec7137c48708f"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:dtoa-short@0.3.5": {
+      "expectedDeclaredLicense": "MPL-2.0",
+      "branchFiles": {
+        "MPL-2.0": [
+          "LICENSE"
+        ]
+      },
+      "sourceOffer": true
+    },
+    "cargo:dunce@1.0.5": {
+      "expectedDeclaredLicense": "CC0-1.0 OR MIT-0 OR Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE"
+        ],
+        "CC0-1.0": [
+          "LICENSE"
+        ],
+        "MIT-0": [
+          "LICENSE"
+        ]
+      }
+    },
+    "cargo:ident_case@1.0.1": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE"
+        ],
+        "MIT": [
+          "LICENSE"
+        ]
+      }
+    },
+    "cargo:option-ext@0.2.0": {
+      "expectedDeclaredLicense": "MPL-2.0",
+      "branchFiles": {
+        "MPL-2.0": [
+          "LICENSE.txt"
+        ]
+      },
+      "sourceOffer": true
+    },
+    "cargo:ryu@1.0.23": {
+      "expectedDeclaredLicense": "Apache-2.0 OR BSL-1.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "BSL-1.0": [
+          "LICENSE-BOOST"
+        ]
+      }
+    },
+    "cargo:selectors@0.36.1": {
+      "expectedDeclaredLicense": "MPL-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "MPL-2.0.txt",
+          "path": "spdx__license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+          "expectedSha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/spdx/license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+          "sourceCommit": "5bf6d9610255540bfbee6890765a616042bf1e11"
+        }
+      ],
+      "branchFiles": {
+        "MPL-2.0": [
+          "MPL-2.0.txt"
+        ]
+      },
+      "sourceOffer": true
+    },
+    "cargo:siphasher@1.0.3": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "COPYING"
+        ],
+        "MIT": [
+          "COPYING"
+        ]
+      }
+    },
+    "cargo:tauri-plugin@2.6.2": {
+      "expectedDeclaredLicense": "Apache-2.0 OR MIT",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE_APACHE-2.0",
+          "path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+          "expectedSha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+          "sourceCommit": "499df79be65ef8c0670abc0207cd9e37b55d8491"
+        },
+        {
+          "name": "LICENSE_MIT",
+          "path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+          "expectedSha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+          "sourceCommit": "499df79be65ef8c0670abc0207cd9e37b55d8491"
+        },
+        {
+          "name": "LICENSE.spdx",
+          "path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+          "expectedSha256": "5e834fe9788c524210deda859c46a550ffa5aa0cba9ea0572f0d81120e97c008",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+          "sourceCommit": "499df79be65ef8c0670abc0207cd9e37b55d8491"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE_APACHE-2.0"
+        ],
+        "MIT": [
+          "LICENSE_MIT"
+        ]
+      }
+    },
+    "cargo:unic-char-property@0.9.0": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "COPYRIGHT.md",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "expectedSha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+          "kind": "copyright",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-APACHE",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "expectedSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "expectedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:unic-char-range@0.9.0": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "COPYRIGHT.md",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "expectedSha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+          "kind": "copyright",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-APACHE",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "expectedSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "expectedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:unic-common@0.9.0": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "COPYRIGHT.md",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "expectedSha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+          "kind": "copyright",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-APACHE",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "expectedSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "expectedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:unic-ucd-ident@0.9.0": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "COPYRIGHT.md",
+          "path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+          "expectedSha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+          "kind": "copyright",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+          "sourceCommit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9"
+        },
+        {
+          "name": "LICENSE-APACHE",
+          "path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+          "expectedSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+          "sourceCommit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+          "expectedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+          "sourceCommit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:unic-ucd-version@0.9.0": {
+      "expectedDeclaredLicense": "MIT/Apache-2.0",
+      "supplementalLegalFiles": [
+        {
+          "name": "COPYRIGHT.md",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "expectedSha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+          "kind": "copyright",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-APACHE",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "expectedSha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        },
+        {
+          "name": "LICENSE-MIT",
+          "path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "expectedSha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+          "sourceCommit": "5878605364af97a3358368a6eaef02104af2e016"
+        }
+      ],
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE-APACHE"
+        ],
+        "MIT": [
+          "LICENSE-MIT"
+        ]
+      }
+    },
+    "cargo:webview2-com-macros@0.8.1": {
+      "expectedDeclaredLicense": "MIT",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE",
+          "path": "wravery__webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+          "expectedSha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/wravery/webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+          "sourceCommit": "dffa41a8a46d3f5565eefbff2de57d38d399f158"
+        }
+      ]
+    },
+    "cargo:webview2-com-sys@0.38.2": {
+      "expectedDeclaredLicense": "MIT",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE",
+          "path": "wravery__webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+          "expectedSha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+          "sourceCommit": "b74dc5e2b394044bea5191052868ce7a106c202c"
+        }
+      ]
+    },
+    "cargo:webview2-com@0.38.2": {
+      "expectedDeclaredLicense": "MIT",
+      "supplementalLegalFiles": [
+        {
+          "name": "LICENSE",
+          "path": "wravery__webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+          "expectedSha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+          "kind": "license",
+          "sourceUrl": "https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+          "sourceCommit": "b74dc5e2b394044bea5191052868ce7a106c202c"
+        }
+      ]
+    },
+    "cargo:yaml-rust2@0.8.1": {
+      "expectedDeclaredLicense": "MIT OR Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE"
+        ],
+        "MIT": [
+          "LICENSE"
+        ]
+      }
+    },
+    "npm:@tauri-apps/plugin-opener@2.5.3": {
+      "expectedDeclaredLicense": "MIT OR Apache-2.0",
+      "branchFiles": {
+        "Apache-2.0": [
+          "LICENSE.spdx"
+        ],
+        "MIT": [
+          "LICENSE.spdx"
+        ]
+      }
+    }
+  }
+}

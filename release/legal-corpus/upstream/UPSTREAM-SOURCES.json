@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "scope": "Pinned upstream repository-root legal supplements for Skill Deck Free Windows Rust components whose published crates omit top-level legal files.",
+  "files": [
+    {
+      "stored_path": "dropbox__rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+      "component_ids": [
+        "alloc-stdlib@0.2.2"
+      ],
+      "declared_license": "BSD-3-Clause",
+      "repository": "dropbox/rust-alloc-no-stdlib",
+      "commit": "6032b6a9b20e03737135c55a0270ccffcc1438ef",
+      "source_path": "LICENSE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/dropbox/rust-alloc-no-stdlib/6032b6a9b20e03737135c55a0270ccffcc1438ef/LICENSE",
+      "source_git_blob_sha1": "cd496ba72eb37e83a44958358d1f89a8a28cbc15",
+      "remote_raw_sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+      "stored_sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+      "remote_bytes": 1483,
+      "stored_bytes": 1483,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+      "component_ids": [
+        "defmt-parser@1.0.0"
+      ],
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "knurling-rs/defmt",
+      "commit": "4a8cdb44891ed57b8ff5a023b6bec7137c48708f",
+      "source_path": "LICENSE-APACHE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/knurling-rs/defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-APACHE",
+      "source_git_blob_sha1": "11069edd79019f7dafbe3138841cf289209270dd",
+      "remote_raw_sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+      "stored_sha256": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
+      "remote_bytes": 10850,
+      "stored_bytes": 10850,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "knurling-rs__defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+      "component_ids": [
+        "defmt-parser@1.0.0"
+      ],
+      "declared_license": "MIT OR Apache-2.0",
+      "repository": "knurling-rs/defmt",
+      "commit": "4a8cdb44891ed57b8ff5a023b6bec7137c48708f",
+      "source_path": "LICENSE-MIT",
+      "pinned_raw_url": "https://raw.githubusercontent.com/knurling-rs/defmt/4a8cdb44891ed57b8ff5a023b6bec7137c48708f/LICENSE-MIT",
+      "source_git_blob_sha1": "e68a7ab37c8accca023db5f1505d48e4375d4324",
+      "remote_raw_sha256": "2710a622a896bba67356913d4d0492cab5465f61b2ecce6d880aeb483834fb50",
+      "stored_sha256": "0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187",
+      "remote_bytes": 1053,
+      "stored_bytes": 1054,
+      "normalization_note": "final LF appended; UTF-8 text otherwise unchanged."
+    },
+    {
+      "stored_path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+      "component_ids": [
+        "tauri-plugin@2.6.2"
+      ],
+      "declared_license": "Apache-2.0 OR MIT",
+      "repository": "tauri-apps/tauri",
+      "commit": "499df79be65ef8c0670abc0207cd9e37b55d8491",
+      "source_path": "LICENSE.spdx",
+      "pinned_raw_url": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE.spdx",
+      "source_git_blob_sha1": "4080281f12fc44a831babb7bb4f531aeb070078b",
+      "remote_raw_sha256": "5e834fe9788c524210deda859c46a550ffa5aa0cba9ea0572f0d81120e97c008",
+      "stored_sha256": "5e834fe9788c524210deda859c46a550ffa5aa0cba9ea0572f0d81120e97c008",
+      "remote_bytes": 889,
+      "stored_bytes": 889,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+      "component_ids": [
+        "tauri-plugin@2.6.2"
+      ],
+      "declared_license": "Apache-2.0 OR MIT",
+      "repository": "tauri-apps/tauri",
+      "commit": "499df79be65ef8c0670abc0207cd9e37b55d8491",
+      "source_path": "LICENSE_APACHE-2.0",
+      "pinned_raw_url": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_APACHE-2.0",
+      "source_git_blob_sha1": "f433b1a53f5b830a205fd2df78e2b34974656c7b",
+      "remote_raw_sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "stored_sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+      "remote_bytes": 10174,
+      "stored_bytes": 10174,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "tauri-apps__tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+      "component_ids": [
+        "tauri-plugin@2.6.2"
+      ],
+      "declared_license": "Apache-2.0 OR MIT",
+      "repository": "tauri-apps/tauri",
+      "commit": "499df79be65ef8c0670abc0207cd9e37b55d8491",
+      "source_path": "LICENSE_MIT",
+      "pinned_raw_url": "https://raw.githubusercontent.com/tauri-apps/tauri/499df79be65ef8c0670abc0207cd9e37b55d8491/LICENSE_MIT",
+      "source_git_blob_sha1": "b08530d59433b3060f4fad8751ac2610c0b0aff3",
+      "remote_raw_sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "stored_sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d",
+      "remote_bytes": 1090,
+      "stored_bytes": 1090,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+      "component_ids": [
+        "unic-char-property@0.9.0",
+        "unic-char-range@0.9.0",
+        "unic-common@0.9.0",
+        "unic-ucd-version@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "5878605364af97a3358368a6eaef02104af2e016",
+      "source_path": "COPYRIGHT.md",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md",
+      "source_git_blob_sha1": "0322ceec0b8f15aa2d74a6173c07cc8c6f3764b3",
+      "remote_raw_sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+      "stored_sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+      "remote_bytes": 608,
+      "stored_bytes": 608,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+      "component_ids": [
+        "unic-char-property@0.9.0",
+        "unic-char-range@0.9.0",
+        "unic-common@0.9.0",
+        "unic-ucd-version@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "5878605364af97a3358368a6eaef02104af2e016",
+      "source_path": "LICENSE-APACHE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-APACHE",
+      "source_git_blob_sha1": "16fe87b06e802f094b3fbb0894b137bca2b16ef1",
+      "remote_raw_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "stored_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "remote_bytes": 10847,
+      "stored_bytes": 10847,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+      "component_ids": [
+        "unic-char-property@0.9.0",
+        "unic-char-range@0.9.0",
+        "unic-common@0.9.0",
+        "unic-ucd-version@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "5878605364af97a3358368a6eaef02104af2e016",
+      "source_path": "LICENSE-MIT",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT",
+      "source_git_blob_sha1": "31aa79387f27e730e33d871925e152e35e428031",
+      "remote_raw_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "stored_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "remote_bytes": 1023,
+      "stored_bytes": 1023,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+      "component_ids": [
+        "unic-ucd-ident@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9",
+      "source_path": "COPYRIGHT.md",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/COPYRIGHT.md",
+      "source_git_blob_sha1": "0322ceec0b8f15aa2d74a6173c07cc8c6f3764b3",
+      "remote_raw_sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+      "stored_sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+      "remote_bytes": 608,
+      "stored_bytes": 608,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+      "component_ids": [
+        "unic-ucd-ident@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9",
+      "source_path": "LICENSE-APACHE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-APACHE",
+      "source_git_blob_sha1": "16fe87b06e802f094b3fbb0894b137bca2b16ef1",
+      "remote_raw_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "stored_sha256": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+      "remote_bytes": 10847,
+      "stored_bytes": 10847,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "open-i18n__rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+      "component_ids": [
+        "unic-ucd-ident@0.9.0"
+      ],
+      "declared_license": "MIT/Apache-2.0",
+      "repository": "open-i18n/rust-unic",
+      "commit": "8a6ce83063d90b91ae2ce59eddb803edd393fca9",
+      "source_path": "LICENSE-MIT",
+      "pinned_raw_url": "https://raw.githubusercontent.com/open-i18n/rust-unic/8a6ce83063d90b91ae2ce59eddb803edd393fca9/LICENSE-MIT",
+      "source_git_blob_sha1": "31aa79387f27e730e33d871925e152e35e428031",
+      "remote_raw_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "stored_sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "remote_bytes": 1023,
+      "stored_bytes": 1023,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "wravery__webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+      "component_ids": [
+        "webview2-com-macros@0.8.1"
+      ],
+      "declared_license": "MIT",
+      "repository": "wravery/webview2-rs",
+      "commit": "dffa41a8a46d3f5565eefbff2de57d38d399f158",
+      "source_path": "LICENSE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/wravery/webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+      "source_git_blob_sha1": "de9a7e660e173136b351982a34f715af424ff812",
+      "remote_raw_sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+      "stored_sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+      "remote_bytes": 1067,
+      "stored_bytes": 1067,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    },
+    {
+      "stored_path": "spdx__license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+      "component_ids": [
+        "selectors@0.36.1"
+      ],
+      "declared_license": "MPL-2.0",
+      "repository": "spdx/license-list-data",
+      "commit": "5bf6d9610255540bfbee6890765a616042bf1e11",
+      "source_path": "text/MPL-2.0.txt",
+      "pinned_raw_url": "https://raw.githubusercontent.com/spdx/license-list-data/5bf6d9610255540bfbee6890765a616042bf1e11/text/MPL-2.0.txt",
+      "source_git_blob_sha1": "ee6256cdb62a765749a71aae3abea32884301cd1",
+      "remote_raw_sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172",
+      "stored_sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+      "remote_bytes": 16727,
+      "stored_bytes": 16726,
+      "normalization_note": "One trailing ASCII space on source line 38 removed; UTF-8, LF line endings, and final LF otherwise preserved.",
+      "provenance_kind": "canonical SPDX License List text supplement",
+      "provenance_note": "The pinned selectors@0.36.1 Stylo source tree declares MPL-2.0 but contains no repository-root or selectors-subtree legal file. This is canonical MPL-2.0 text from the SPDX License List and is not represented as package-bundled content.",
+      "package_evidence": {
+        "repository": "servo/stylo",
+        "commit": "635e1a19d02960588a00e189bd4bd5bdb150ec3d",
+        "path_in_vcs": "selectors",
+        "declared_license": "MPL-2.0",
+        "pinned_root_tree_api_url": "https://api.github.com/repos/servo/stylo/git/trees/635e1a19d02960588a00e189bd4bd5bdb150ec3d",
+        "pinned_selectors_tree_api_url": "https://api.github.com/repos/servo/stylo/git/trees/0b3fc126c202ab74a0b2c6895732426bf96e4f1e"
+      }
+    },
+    {
+      "stored_path": "wravery__webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+      "component_ids": [
+        "webview2-com@0.38.2",
+        "webview2-com-sys@0.38.2"
+      ],
+      "declared_license": "MIT",
+      "repository": "wravery/webview2-rs",
+      "commit": "b74dc5e2b394044bea5191052868ce7a106c202c",
+      "source_path": "LICENSE",
+      "pinned_raw_url": "https://raw.githubusercontent.com/wravery/webview2-rs/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE",
+      "source_git_blob_sha1": "de9a7e660e173136b351982a34f715af424ff812",
+      "remote_raw_sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+      "stored_sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+      "remote_bytes": 1067,
+      "stored_bytes": 1067,
+      "normalization_note": "Source already UTF-8 with LF line endings and final LF; stored bytes unchanged."
+    }
+  ],
+  "unresolved": []
+}

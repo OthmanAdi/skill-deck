@@ -1,14 +1,31 @@
 [package]
 name = "skill-deck"
-version = "0.1.7"
-description = "Universal coding agent skill browser"
-authors = ["Ahmad Adi"]
+version = "0.3.0"
+description = "Local-first coding agent skill browser and on-device agent harness"
+authors = ["Ahmad Othman Ammar Adi"]
 edition = "2021"
-license = "MIT"
+license = "MPL-2.0"
+default-run = "skill-deck"
+
+[[bin]]
+name = "skill-deck"
+path = "src/main.rs"
 
 [lib]
 name = "skill_deck_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[example]]
+name = "harness-cli"
+path = "examples/harness_cli.rs"
+required-features = ["developer-tools"]
+
+[features]
+default = []
+# Headless diagnostics are operator-only Cargo examples.
+# Keeping them out of Cargo's bin target set prevents Tauri from treating them
+# as customer bundle executables.
+developer-tools = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -16,6 +33,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # --- Tauri core ---
 tauri = { version = "2", features = ["tray-icon"] }
+# Must be registered before all other plugins so a secondary process exits
+# during plugin setup.
+tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-fs = "2"
@@ -36,7 +56,7 @@ gray_matter = "0.2"
 
 # --- Error handling ---
 thiserror = "2"
-anyhow = "1"
+anyhow = "1.0.103"
 
 # --- Logging ---
 log = "0.4"
@@ -50,15 +70,37 @@ walkdir = "2"
 # --- Pattern matching ---
 regex = "1"
 
-# --- Hashing (snapshot integrity) ---
+# --- Hashing (snapshot + built-in model integrity) ---
 sha2 = "0.10"
 
 # --- HTTP client (for update checking via GitHub API + AI providers) ---
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
-# --- Time + ids (shared by archive history + future features) ---
+# --- Time + ids (shared by archive history + harness) ---
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+
+# --- ReAct harness ---
+# rig-core gives us provider abstraction (Ollama + Azure OpenAI native), Tool trait,
+# PromptHook + ToolCallHookAction middleware, streaming, dynamic_context for skill RAG,
+# and InMemoryVectorStore. Native TLS avoids shipping aws-lc-sys native build paths.
+# No SSE / ndjson hand-rolling.
+rig-core = { version = "0.35", default-features = false, features = [
+  "reqwest",
+  "native-tls",
+] }
+# tiktoken-rs covers OpenAI-family token counting (o200k_base + cl100k_base).
+# Ollama models use the native /api/chat prompt_eval_count for ground truth.
+tiktoken-rs = "0.9"
+# schemars derives JSON schema for tool argument types (rig consumes Value, this saves
+# us from hand-writing every parameters object).
+schemars = "0.8"
+# clap for the harness-cli binary subcommands (models, tokens, health, tools, chat, eval, …).
+clap = { version = "4", features = ["derive"] }
+# async-trait + futures-util are re-added because the harness needs them directly
+# (rig also uses them transitively, but our own traits + stream collectors call them).
+async-trait = "0.1"
+futures-util = "0.3"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [

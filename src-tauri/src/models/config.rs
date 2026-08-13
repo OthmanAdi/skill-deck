@@ -109,6 +109,22 @@ pub struct AppConfig {
     /// Collapsed skill node ids in tree view
     #[serde(default)]
     pub collapsed_tree_nodes: HashSet<String>,
+
+    /// Configured harness providers (Ollama, Azure).
+    #[serde(default)]
+    pub harness_providers: Vec<crate::harness::config::ProviderConfig>,
+
+    /// Selected provider id.
+    #[serde(default)]
+    pub harness_active_provider: Option<String>,
+
+    /// Selected model id (must belong to the active provider).
+    #[serde(default)]
+    pub harness_active_model: Option<String>,
+
+    /// Tunable harness settings (compaction floor, max turns, web search provider, etc).
+    #[serde(default)]
+    pub harness_settings: crate::harness::config::HarnessSettings,
 }
 
 /// Cached result of an update check for a single skill
@@ -200,6 +216,10 @@ impl Default for AppConfig {
             max_skill_history_entries: default_max_skill_history_entries(),
             collapsed_agents: HashSet::new(),
             collapsed_tree_nodes: HashSet::new(),
+            harness_providers: Vec::new(),
+            harness_active_provider: None,
+            harness_active_model: None,
+            harness_settings: Default::default(),
         }
     }
 }
@@ -222,4 +242,21 @@ fn default_skill_sort_mode() -> String {
 
 fn default_max_skill_history_entries() -> usize {
     40
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppConfig;
+
+    #[test]
+    fn stale_license_config_is_ignored() {
+        let mut persisted = serde_json::to_value(AppConfig::default()).expect("serialize defaults");
+        persisted["license"] = serde_json::json!({
+            "validateUrl": "https://example.invalid/validate"
+        });
+        let config: AppConfig = serde_json::from_value(persisted)
+            .expect("unknown legacy license fields should remain readable");
+
+        assert_eq!(config.hotkey, "CommandOrControl+Shift+K");
+    }
 }

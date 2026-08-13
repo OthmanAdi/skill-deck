@@ -52,6 +52,7 @@ pub enum UpdateComparison {
 fn github_owner_repo_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
+        // Infallible: compile-time literal pattern.
         Regex::new(r"^([\w.\-]+)/([\w.\-]+)$").expect("github owner/repo shorthand regex")
     })
 }
@@ -84,10 +85,7 @@ fn parse_github_repo_ref(input: &str) -> Result<GithubRepoRef, String> {
         }
 
         if !github_first_segment_is_repo(&owner) {
-            return Err(format!(
-                "{} is a GitHub site path, not a repository",
-                owner
-            ));
+            return Err(format!("{} is a GitHub site path, not a repository", owner));
         }
 
         return Ok(GithubRepoRef { owner, repo });

@@ -1,29 +1,40 @@
 <!--
   @agent-context: Registry / marketplace browser tab. Searches multiple
   marketplaces (Skills.sh, ClawHub) via a uniform provider abstraction in the
-  Rust backend. Each result card exposes:
-    - copy install command (clipboard)
+  Rust backend. Each result row exposes:
+    - copy install command (clipboard, toast kind 'ok' / 'error')
     - open source URL (origin repo, opens in default browser)
     - open marketplace page URL (skills.sh / clawhub.ai listing)
     - copy reference (pseudo-skill path)
 
-  Design mirrors SkillCard.svelte: glass-card surfaces, accent badges, kind
-  iconography, hover lift, focus ring.
+  PHOSPHOR (DESIGN 8): flat surface-1 rows on the 4px grid, hairline dividers,
+  a subtle surface-2 hover tint (no glass, no lift). The provider selector is a
+  segmented control whose active tab carries the one accent as small text
+  (--color-accent-text); the rest stay quiet. Source and kind render as
+  <Badge variant="meta"> chips; installs / date / score fold into one muted
+  tabular stats line so the row never pill-floods. Copy install is the single
+  emphasized row action (btn-secondary); Source / Listing / Copy ref stay
+  btn-ghost. Loading shows skeleton rows on the shared skeleton-shimmer; the
+  error state gives an honest headline + reason + Retry. Buttons / inputs use
+  the .btn-* / .field / .seg primitives so press feedback + focus rings come
+  from the system, and the one <Spinner/> replaces the old inline refresh-spin.
 -->
 <script lang="ts">
   import { openUrl } from "@tauri-apps/plugin-opener";
 
+  import Badge from "./ui/Badge.svelte";
+  import Spinner from "./ui/Spinner.svelte";
   import {
     copySkillReference,
     labelForProvider,
     searchMarketplace,
+    setRegistryQuery,
     setRegistryProvider,
     showToast,
     store,
   } from "$lib/stores/skills.svelte";
   import type {
     RegistryItem,
-    RegistryProviderId,
     RegistryProviderSelection,
     Skill,
   } from "$lib/types";
@@ -33,6 +44,9 @@
     { id: "claw-hub", label: "ClawHub", hint: "OpenClaw community registry" },
     { id: "all", label: "All sources", hint: "Fan-out search across every hub" },
   ];
+
+  // Placeholder rows while a search is in flight (foundation skeleton-shimmer).
+  const SKELETON_ROWS = [0, 1, 2, 3];
 
   function buildPseudoSkill(item: RegistryItem): Skill {
     return {
@@ -90,9 +104,9 @@
   async function copyInstallCommand(item: RegistryItem) {
     try {
       await navigator.clipboard.writeText(item.installCommand);
-      showToast("Copied install command");
+      showToast("Copied install command", "ok");
     } catch {
-      showToast("Could not copy install command");
+      showToast("Could not copy install command", "error");
     }
   }
 
@@ -106,7 +120,7 @@
       await openUrl(url);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      showToast(`${label}: ${message}`);
+      showToast(`${label}: ${message}`, "error");
     }
   }
 
@@ -124,15 +138,15 @@
     return source.trim().charAt(0).toUpperCase() || "?";
   }
 
-  function providerBadgeColor(provider: RegistryProviderId): string {
-    switch (provider) {
-      case "skills-sh":
-        return "var(--color-accent)";
-      case "claw-hub":
-        return "#6dbf9f";
-      default:
-        return "var(--color-text-muted)";
-    }
+  // Fold the popularity / freshness / relevance numbers into one muted,
+  // tabular line instead of three separate pills (DESIGN 8: at most 2 meta
+  // chips + no pill flooding). Every value stays visible; nothing is dropped.
+  function metaStats(item: RegistryItem): string {
+    const parts: string[] = [];
+    if (item.installs > 0) parts.push(`${item.installs.toLocaleString()} installs`);
+    if (item.updatedAt) parts.push(`updated ${item.updatedAt.slice(0, 10)}`);
+    if (item.score !== null && item.score > 0) parts.push(`score ${item.score.toFixed(2)}`);
+    return parts.join(" · ");
   }
 </script>
 
@@ -143,31 +157,17 @@
     style="background: var(--color-surface-1); border-color: var(--color-border);"
   >
     <!-- Provider segment control -->
-    <div class="flex flex-wrap items-center gap-1 mb-2" role="tablist" aria-label="Registry source">
+    <div class="mb-2 flex flex-wrap items-center gap-1" role="tablist" aria-label="Registry source">
       {#each PROVIDER_OPTIONS as option (option.id)}
         {@const isActive = store.registryProvider === option.id}
         <button
           type="button"
           role="tab"
           aria-selected={isActive}
-          class="instant-tooltip group flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium
-            transition-all duration-150"
-          style="
-            border-color: {isActive ? 'var(--color-border-active)' : 'var(--color-border)'};
-            background: {isActive ? 'var(--color-accent-subtle)' : 'var(--color-surface-2)'};
-            color: {isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)'};
-          "
+          class="seg hit-expand instant-tooltip"
           data-tooltip={option.hint}
           onclick={() => setRegistryProvider(option.id)}
         >
-          <span
-            class="h-1.5 w-1.5 rounded-full"
-            style="background: {isActive
-              ? 'var(--color-accent)'
-              : option.id === 'all'
-                ? 'var(--color-text-muted)'
-                : providerBadgeColor(option.id as RegistryProviderId)};"
-          ></span>
           {option.label}
         </button>
       {/each}
@@ -177,49 +177,49 @@
     <div class="flex items-center gap-2">
       <input
         type="text"
-        class="flex-1 rounded-md border px-2 py-1.5 text-[11px]
-          focus:outline-none focus:border-[var(--color-accent-muted)]"
-        style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-primary);"
-        bind:value={store.registryQuery}
+        class="field flex-1"
+        value={store.registryQuery}
         placeholder="Search {labelForProvider(store.registryProvider)} — rust, react, testing..."
+        oninput={(event) => setRegistryQuery(event.currentTarget.value)}
         onkeydown={handleKeydown}
       />
       <button
         type="button"
-        class="rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors duration-150"
-        style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+        class="btn-secondary hit-expand"
         onclick={() => void searchMarketplace()}
         disabled={store.registryLoading}
       >
-        {store.registryLoading ? "Searching..." : "Search"}
+        {#if store.registryLoading}
+          <Spinner size={12} label="Searching" />
+          Searching...
+        {:else}
+          Search
+        {/if}
       </button>
     </div>
 
     <!-- Status line -->
-    <div class="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-[var(--color-text-muted)]">
+    <div class="mt-2 flex items-center justify-between gap-2 text-2xs text-[var(--color-text-muted)]">
       {#if store.registryLastSearchedQuery.length >= 2}
-        <span>
+        <span class="tabular-nums">
           {store.registryResultCount} results across {labelForProvider(store.registryLastSearchedProvider)}
           {#if store.registryDurationMs > 0}
-            • {store.registryDurationMs}ms
+            · {store.registryDurationMs}ms
           {/if}
         </span>
         {#if store.registryProvider === "all" && store.registryProviderOutcomes.length > 0}
-          <span class="flex items-center gap-1.5">
+          <span class="flex flex-wrap items-center gap-1">
             {#each store.registryProviderOutcomes as outcome (outcome.provider)}
               <span
-                class="instant-tooltip flex items-center gap-1 rounded px-1.5 py-0.5"
-                style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
+                class="badge-meta instant-tooltip"
                 data-tooltip={outcome.error ?? `${outcome.response?.items.length ?? 0} from ${labelForProvider(outcome.provider)}`}
               >
                 <span
-                  class="h-1 w-1 rounded-full"
-                  style="background: {outcome.error
-                    ? 'var(--color-error)'
-                    : providerBadgeColor(outcome.provider)};"
+                  class="mr-1 inline-block h-1.5 w-1.5 rounded-full"
+                  style="background: {outcome.error ? 'var(--color-error)' : 'var(--color-ok)'};"
                 ></span>
-                <span>{labelForProvider(outcome.provider)}</span>
-                <span class="tabular-nums">{outcome.response?.items.length ?? 0}</span>
+                {labelForProvider(outcome.provider)}
+                <span class="ml-1 tabular-nums">{outcome.response?.items.length ?? 0}</span>
               </span>
             {/each}
           </span>
@@ -236,33 +236,66 @@
     style="background: var(--color-surface-1); border-color: var(--color-border);"
   >
     {#if store.registryLoading}
-      <div class="flex items-center gap-2 px-3 py-4 text-[11px] text-[var(--color-text-muted)]">
-        <div
-          class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent"
-          style="animation: refresh-spin 0.7s linear infinite;"
-        ></div>
-        Searching {labelForProvider(store.registryProvider)}...
+      <!-- Loading skeletons (DESIGN 7 shimmer) -->
+      <div class="divide-y" style="border-color: var(--color-border);">
+        {#each SKELETON_ROWS as row (row)}
+          <div class="flex gap-3 px-3 py-3">
+            <div class="sk-avatar h-9 w-9 shrink-0"></div>
+            <div class="min-w-0 flex-1 space-y-2 py-1">
+              <div class="sk h-3 w-1/3"></div>
+              <div class="sk h-2 w-3/5"></div>
+              <div class="flex gap-2 pt-1">
+                <div class="sk h-4 w-16"></div>
+                <div class="sk h-4 w-12"></div>
+              </div>
+            </div>
+          </div>
+        {/each}
       </div>
-    {:else if store.registryError}
-      <div class="px-3 py-4 text-[11px] text-[var(--color-error)]">{store.registryError}</div>
+    {:else if store.registryError && store.registryItems.length === 0}
+      <div class="flex flex-col items-start gap-2 px-3 py-4">
+        <p class="text-xs font-medium text-[var(--color-error)]">
+          Couldn't reach {labelForProvider(store.registryAttemptedProvider)}
+        </p>
+        <p class="text-2xs text-pretty text-[var(--color-text-muted)]">{store.registryError}</p>
+        <button
+          type="button"
+          class="btn-secondary btn-sm hit-expand"
+          onclick={() => void searchMarketplace()}
+        >
+          Retry search
+        </button>
+      </div>
     {:else if store.registryLastSearchedQuery.length < 2}
-      <div class="px-3 py-4 text-[11px] text-[var(--color-text-muted)]">
+      <div class="px-3 py-4 text-xs text-[var(--color-text-muted)]">
         Start with a keyword like rust, svelte, testing, or docker.
       </div>
     {:else if store.registryItems.length === 0}
-      <div class="px-3 py-4 text-[11px] text-[var(--color-text-muted)]">
+      <div class="px-3 py-4 text-xs text-[var(--color-text-muted)]">
         No matching items in {labelForProvider(store.registryLastSearchedProvider)}.
       </div>
     {:else}
+      {#if store.registryError}
+        <div
+          class="flex items-center gap-2 border-b px-3 py-2 text-2xs text-[var(--color-warn)]"
+          style="border-color: var(--color-border); background: var(--color-warn-subtle);"
+          role="status"
+        >
+          <span aria-hidden="true">!</span>
+          <span>Latest search failed. Showing the last successful results.</span>
+          <button type="button" class="btn-ghost btn-sm hit-expand ml-auto" onclick={() => void searchMarketplace()}>Retry</button>
+        </div>
+      {/if}
       <div class="divide-y" style="border-color: var(--color-border);">
         {#each store.registryItems as item (item.provider + ":" + item.id)}
           {@const sourceHost = prettyHost(item.sourceUrl)}
           {@const homepageHost = prettyHost(item.homepageUrl)}
-          <article class="group flex w-full gap-3 px-3 py-2.5">
+          {@const stats = metaStats(item)}
+          <article class="reg-row flex w-full gap-3 px-3 py-3">
             <!-- Avatar -->
             <div
-              class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg
-                text-[12px] font-semibold text-[var(--color-text-secondary)]"
+              class="instant-tooltip relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md
+                text-sm font-semibold text-[var(--color-text-secondary)]"
               style="background: var(--color-surface-3); border: 1px solid var(--color-border);"
               data-tooltip={item.author ?? item.authorHandle ?? "Unknown author"}
             >
@@ -280,108 +313,42 @@
             </div>
 
             <div class="min-w-0 flex-1">
-              <!-- Header -->
-              <div class="flex items-start justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-1.5">
-                    <h3
-                      class="truncate text-[12px] font-medium leading-snug text-[var(--color-text-primary)]"
-                    >
-                      {item.name}
-                    </h3>
-                    {#if item.version}
-                      <span
-                        class="rounded-md border px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--color-text-secondary)]"
-                        style="border-color: var(--color-border); background: var(--color-surface-3);"
-                      >
-                        v{item.version}
-                      </span>
-                    {/if}
-                  </div>
-                  <p class="truncate text-[10px] text-[var(--color-text-muted)]">
-                    {item.id}
-                    {#if item.author}
-                      <span class="text-[var(--color-text-muted)]">· by {item.author}</span>
-                    {/if}
-                  </p>
-                </div>
-
-                <div class="flex shrink-0 items-center gap-1">
-                  {#if item.installs > 0}
-                    <span
-                      class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] tabular-nums"
-                      style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
-                      data-tooltip="Total installs reported by the marketplace"
-                    >
-                      {item.installs.toLocaleString()}
-                    </span>
-                  {/if}
-                </div>
+              <!-- Name + version -->
+              <div class="flex items-center gap-2">
+                <h3 class="truncate text-sm font-medium leading-snug text-[var(--color-text-primary)]">
+                  {item.name}
+                </h3>
+                {#if item.version}
+                  <span class="shrink-0 text-2xs tabular-nums text-[var(--color-text-muted)]">
+                    v{item.version}
+                  </span>
+                {/if}
               </div>
+              <p class="truncate text-2xs text-[var(--color-text-muted)]">
+                {item.id}{#if item.author} · by {item.author}{/if}
+              </p>
 
               {#if item.description}
-                <p
-                  class="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[var(--color-text-secondary)]"
-                >
+                <p class="mt-2 line-clamp-2 text-xs leading-relaxed text-pretty text-[var(--color-text-secondary)]">
                   {item.description}
                 </p>
               {/if}
 
-              <!-- Metadata row -->
-              <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                <span
-                  class="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-medium"
-                  style="
-                    background: var(--color-surface-2);
-                    color: var(--color-text-secondary);
-                    border: 1px solid var(--color-border);
-                  "
-                >
-                  <span
-                    class="h-1 w-1 rounded-full"
-                    style="background: {providerBadgeColor(item.provider)};"
-                  ></span>
-                  {labelForProvider(item.provider)}
-                </span>
-
-                <span
-                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium"
-                  style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-muted);"
-                  data-tooltip="Artifact kind reported by this marketplace"
-                >
-                  {item.kind}
-                </span>
-
-                {#if item.updatedAt}
-                  <span
-                    class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] text-[var(--color-text-muted)]"
-                    style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                    data-tooltip={item.updatedAt}
-                  >
-                    {item.updatedAt.slice(0, 10)}
-                  </span>
-                {/if}
-
-                {#if item.score !== null && item.score !== undefined && item.score > 0}
-                  <span
-                    class="instant-tooltip rounded-md px-1.5 py-0.5 text-[9px] tabular-nums text-[var(--color-text-muted)]"
-                    style="background: var(--color-surface-2); border: 1px solid var(--color-border);"
-                    data-tooltip="Relevance score reported by this marketplace"
-                  >
-                    score {item.score.toFixed(2)}
-                  </span>
+              <!-- Source + kind badges + folded stats -->
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-2xs text-[var(--color-text-muted)]">
+                <Badge variant="meta">{labelForProvider(item.provider)}</Badge>
+                <Badge variant="meta">{item.kind}</Badge>
+                {#if stats}
+                  <span class="tabular-nums">{stats}</span>
                 {/if}
               </div>
 
               <!-- Source links + actions -->
-              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              <div class="mt-2 flex flex-wrap items-center gap-2">
                 {#if item.sourceUrl}
                   <button
                     type="button"
-                    class="instant-tooltip flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
-                      transition-colors duration-150
-                      hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
-                    style="border-color: var(--color-border); color: var(--color-text-secondary);"
+                    class="btn-ghost btn-sm hit-expand instant-tooltip"
                     onclick={() => openExternalUrl(item.sourceUrl, "Open source failed")}
                     data-tooltip="Open the original source — {item.sourceUrl}"
                   >
@@ -405,10 +372,7 @@
                 {#if item.homepageUrl}
                   <button
                     type="button"
-                    class="instant-tooltip flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium
-                      transition-colors duration-150
-                      hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
-                    style="border-color: var(--color-border); color: var(--color-text-secondary);"
+                    class="btn-ghost btn-sm hit-expand instant-tooltip"
                     onclick={() => openExternalUrl(item.homepageUrl, "Open hub page failed")}
                     data-tooltip="Open marketplace listing — {item.homepageUrl}"
                   >
@@ -431,20 +395,15 @@
 
                 <button
                   type="button"
-                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
-                    hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
-                  style="border-color: var(--color-border); color: var(--color-text-secondary);"
+                  class="btn-secondary btn-sm hit-expand"
                   onclick={() => copyInstallCommand(item)}
-                  data-tooltip="Copy the install command to the clipboard"
                 >
                   Copy install
                 </button>
 
                 <button
                   type="button"
-                  class="instant-tooltip rounded-md border px-1.5 py-0.5 text-[9px] font-medium transition-colors duration-150
-                    hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
-                  style="border-color: var(--color-border); color: var(--color-text-secondary);"
+                  class="btn-ghost btn-sm hit-expand instant-tooltip"
                   onclick={() => copyReference(item)}
                   data-tooltip="Copy the marketplace reference (pseudo-skill path)"
                 >
@@ -454,7 +413,7 @@
 
               <!-- Install command preview -->
               <p
-                class="instant-tooltip mt-1.5 truncate font-mono text-[9px] text-[var(--color-text-muted)]"
+                class="install-preview instant-tooltip mt-2 truncate rounded-sm px-2 py-1 text-2xs text-[var(--color-text-muted)]"
                 data-tooltip={item.installCommand}
               >
                 {item.installCommand}
@@ -466,3 +425,76 @@
     {/if}
   </div>
 </div>
+
+<style>
+  /* Segmented provider selector. Active tab carries the one accent as AA-safe
+     small text (--color-accent-text); the rest stay quiet. Named-property
+     transitions + scale(0.96) press feedback from the system vocabulary — never
+     transition: all. */
+  .seg {
+    display: inline-flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 8px;
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--color-text-secondary);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition-property: background-color, border-color, color, scale;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-standard);
+  }
+  .seg:hover {
+    background: var(--color-surface-3);
+    color: var(--color-text-primary);
+    border-color: var(--color-border-hover);
+  }
+  .seg:active {
+    scale: 0.96;
+  }
+  .seg[aria-selected="true"] {
+    background: var(--color-accent-subtle);
+    border-color: var(--color-border-active);
+    color: var(--color-accent-text);
+  }
+
+  /* Subtle row hover — surface tint only, no lift, no glass (DESIGN 8). */
+  .reg-row {
+    transition: background-color var(--motion-base) var(--ease-standard);
+  }
+  .reg-row:hover {
+    background: var(--color-surface-2);
+  }
+
+  /* Loading skeletons ride the shared skeleton-shimmer keyframe (DESIGN 7). */
+  .sk,
+  .sk-avatar {
+    background: var(--color-surface-3);
+    animation: skeleton-shimmer 1.8s ease-in-out infinite;
+  }
+  .sk {
+    border-radius: var(--radius-xs);
+  }
+  .sk-avatar {
+    border-radius: var(--radius-md);
+  }
+
+  /* Install command preview — the one mono voice, quiet carbon code bar. */
+  .install-preview {
+    font-family: var(--font-ui);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sk,
+    .sk-avatar {
+      animation-duration: 0.01ms;
+    }
+  }
+</style>

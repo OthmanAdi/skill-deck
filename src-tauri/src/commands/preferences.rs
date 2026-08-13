@@ -68,12 +68,8 @@ fn is_hotkey_shape_valid(hotkey: &str) -> bool {
 
 fn normalize_skill_sort_mode(input: &str) -> String {
     match input.trim() {
-        "installed-newest"
-        | "installed-oldest"
-        | "archived-most"
-        | "archived-recent"
-        | "updated-newest"
-        | "default" => input.trim().to_string(),
+        "installed-newest" | "installed-oldest" | "archived-most" | "archived-recent"
+        | "updated-newest" | "default" => input.trim().to_string(),
         _ => "default".to_string(),
     }
 }
@@ -169,14 +165,34 @@ fn config_path() -> PathBuf {
     path
 }
 
-/// Load config from disk, or create default
+/// Load config from disk, or create default.
+///
+/// Corruption tolerance: a config.json that no longer parses is renamed to
+/// `config.json.corrupt` (data preserved for inspection, never deleted) and
+/// the app starts with defaults. The old behavior parsed-or-defaulted
+/// silently, which meant the next save WIPED the user's unreadable-but-real
+/// config with defaults.
 pub fn load_config() -> AppConfig {
     let path = config_path();
     if path.exists() {
-        let mut config: AppConfig = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let raw = std::fs::read_to_string(&path).ok();
+        let parsed: Option<AppConfig> =
+            raw.as_deref().and_then(|s| match serde_json::from_str(s) {
+                Ok(cfg) => Some(cfg),
+                Err(e) => {
+                    warn!(
+                        "config.json is corrupt ({}); quarantining as .corrupt and starting fresh",
+                        e
+                    );
+                    let corrupt = path.with_extension("json.corrupt");
+                    let _ = std::fs::remove_file(&corrupt);
+                    if let Err(re) = std::fs::rename(&path, &corrupt) {
+                        warn!("failed to quarantine corrupt config: {}", re);
+                    }
+                    None
+                }
+            });
+        let mut config: AppConfig = parsed.unwrap_or_default();
 
         config.theme = match config.theme.as_str() {
             "system" | "dark" | "light" => config.theme,
@@ -206,87 +222,124 @@ pub fn load_config() -> AppConfig {
     }
 }
 
-/// Persist config to disk (public for use by other command modules)
+/// Persist config to disk (public for use by other command modules).
+/// Atomic: temp file + rename, so a crash mid-save can never leave a
+/// half-written config.json (which would then be quarantined on next start).
 pub fn save_config(config: &AppConfig) -> Result<(), String> {
     let path = config_path();
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
-    std::fs::write(&path, json)
-        .map_err(|e| format!("Failed to write config {}: {}", path.to_string_lossy(), e))
+    crate::harness::session::atomic_write(&path, &json)
+        .map_err(|e| format!("Failed to write config {}: {:#}", path.to_string_lossy(), e))
 }
 
-/// Toggle star status for a skill
-#[tauri::command]
-pub fn toggle_star(state: State<ConfigState>, skill_id: String) -> bool {
-    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-
-    let canonical_skill_id = {
-        let mut temp = config.clone();
-        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
-        scan.skills
-            .iter()
-            .find(|skill| {
-                skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == &skill_id)
-            })
-            .map(|skill| skill.id.clone())
-            .unwrap_or(skill_id.clone())
-    };
-
-    let legacy_ids = {
-        let mut temp = config.clone();
-        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
-        scan.skills
-            .iter()
-            .find(|skill| skill.id == canonical_skill_id)
-            .map(|skill| skill.legacy_ids.clone())
-            .unwrap_or_default()
-    };
-
-    let is_starred = if config.starred_skills.contains(&canonical_skill_id)
-        || config.starred_skills.contains(&skill_id)
-    {
-        config.starred_skills.remove(&canonical_skill_id);
-        config.starred_skills.remove(&skill_id);
-        for legacy in &legacy_ids {
+/// Apply one explicit starred state while normalising legacy aliases.
+///
+/// Keeping this mutation separate from the IPC command makes its ordering
+/// contract testable: callers that know the desired final state never depend
+/// on when two toggle requests happen to acquire the config mutex.
+fn apply_starred_state(
+    config: &mut AppConfig,
+    canonical_skill_id: &str,
+    requested_skill_id: &str,
+    legacy_ids: &[String],
+    desired_starred: bool,
+) -> bool {
+    if desired_starred {
+        // A canonical ID is the sole persisted representation. Remove stale
+        // aliases first so an old scan cannot leave duplicate preferences.
+        config.starred_skills.remove(requested_skill_id);
+        for legacy in legacy_ids {
+            config.starred_skills.remove(legacy);
+        }
+        config.starred_skills.insert(canonical_skill_id.to_string());
+        true
+    } else {
+        config.starred_skills.remove(canonical_skill_id);
+        config.starred_skills.remove(requested_skill_id);
+        for legacy in legacy_ids {
             config.starred_skills.remove(legacy);
         }
         false
-    } else {
-        config.starred_skills.insert(canonical_skill_id);
-        true
-    };
-    if let Err(e) = save_config(&config) {
-        warn!("Failed to persist starred state: {}", e);
     }
-    is_starred
+}
+
+/// Set star status for a skill.
+///
+/// `desired_starred` is optional for compatibility with older webviews. New
+/// clients always send it, which turns rapid clicks into ordered set-state
+/// writes instead of relying on backend scheduling of two inverse toggles.
+#[tauri::command]
+pub fn toggle_star(
+    state: State<ConfigState>,
+    catalog: State<crate::commands::skills::SkillCatalogState>,
+    skill_id: String,
+    desired_starred: Option<bool>,
+) -> Result<bool, String> {
+    let lookup = crate::commands::skills::scan_for_lookup(&state, &catalog).ok();
+    let canonical_skill_id = lookup
+        .as_ref()
+        .map(|lookup| lookup.canonical_id(&skill_id))
+        .unwrap_or_else(|| skill_id.clone());
+    let legacy_ids = lookup
+        .as_ref()
+        .and_then(|lookup| lookup.skill(&canonical_skill_id))
+        .map(|skill| skill.legacy_ids.clone())
+        .unwrap_or_default();
+
+    let mut config = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+    let currently_starred = config.starred_skills.contains(&canonical_skill_id)
+        || config.starred_skills.contains(&skill_id)
+        || legacy_ids
+            .iter()
+            .any(|legacy| config.starred_skills.contains(legacy));
+    let desired_starred = desired_starred.unwrap_or(!currently_starred);
+    let previous_starred_skills = config.starred_skills.clone();
+    let is_starred = apply_starred_state(
+        &mut config,
+        &canonical_skill_id,
+        &skill_id,
+        &legacy_ids,
+        desired_starred,
+    );
+    if let Err(e) = save_config(&config) {
+        // Do not leave process memory claiming a preference that could not be
+        // persisted. The next scan and next launch therefore agree.
+        config.starred_skills = previous_starred_skills;
+        return Err(format!("Failed to persist starred state: {e}"));
+    }
+    drop(config);
+    catalog.invalidate();
+    Ok(is_starred)
 }
 
 /// Set a custom icon for a skill
 #[tauri::command]
-pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String) {
-    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+pub fn set_skill_icon(
+    state: State<ConfigState>,
+    catalog: State<crate::commands::skills::SkillCatalogState>,
+    skill_id: String,
+    icon: String,
+) {
+    let lookup = crate::commands::skills::scan_for_lookup(&state, &catalog).ok();
+    let canonical_skill_id = lookup
+        .as_ref()
+        .map(|lookup| lookup.canonical_id(&skill_id))
+        .unwrap_or_else(|| skill_id.clone());
+    let legacy_ids = lookup
+        .as_ref()
+        .and_then(|lookup| lookup.skill(&canonical_skill_id))
+        .map(|skill| skill.legacy_ids.clone())
+        .unwrap_or_default();
 
-    let canonical_skill_id = {
-        let mut temp = config.clone();
-        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
-        scan.skills
-            .iter()
-            .find(|skill| {
-                skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == &skill_id)
-            })
-            .map(|skill| skill.id.clone())
-            .unwrap_or(skill_id.clone())
-    };
-
-    let legacy_ids = {
-        let mut temp = config.clone();
-        let (scan, _) = crate::commands::skills::scan_with_config(&mut temp);
-        scan.skills
-            .iter()
-            .find(|skill| skill.id == canonical_skill_id)
-            .map(|skill| skill.legacy_ids.clone())
-            .unwrap_or_default()
-    };
+    let mut config = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
 
     let normalized = icon.trim();
     if normalized.is_empty() {
@@ -303,12 +356,32 @@ pub fn set_skill_icon(state: State<ConfigState>, skill_id: String, icon: String)
     if let Err(e) = save_config(&config) {
         warn!("Failed to persist skill icon: {}", e);
     }
+    drop(config);
+    catalog.invalidate();
 }
 
-/// Get the current app configuration
+/// Get the current app configuration.
+/// Secrets hygiene: provider API keys and the web-search key are BLANKED in
+/// the returned copy — `get_config` serializes into the webview where DevTools
+/// can read it, and no frontend path consumes keys from here (provider setup
+/// goes through `harness_list_providers`, which masks). Persisted config on
+/// disk keeps the real values.
 #[tauri::command]
 pub fn get_config(state: State<ConfigState>) -> AppConfig {
-    state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
+    let mut config = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    for provider in config.harness_providers.iter_mut() {
+        if provider.api_key.is_some() {
+            provider.api_key = Some("••••".into());
+        }
+    }
+    if config.harness_settings.web_search_api_key.is_some() {
+        config.harness_settings.web_search_api_key = Some("••••".into());
+    }
+    config
 }
 
 /// Update the global hotkey
@@ -362,14 +435,20 @@ pub fn set_hotkey<R: Runtime>(
 /// Get all starred skill IDs
 #[tauri::command]
 pub fn get_starred_skills(state: State<ConfigState>) -> Vec<String> {
-    let config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let config = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     config.starred_skills.iter().cloned().collect()
 }
 
 /// Set the active theme mode by name ("system", "dark", or "light")
 #[tauri::command]
 pub fn set_theme(state: State<ConfigState>, theme: String) {
-    let mut config = state.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let mut config = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     config.theme = match theme.as_str() {
         "system" | "dark" | "light" => theme,
         "obsidian" => "dark".to_string(),
@@ -384,7 +463,11 @@ pub fn set_theme(state: State<ConfigState>, theme: String) {
 /// Replace the set of project roots scanned for project-scoped skills.
 /// Blank entries are dropped; the list is de-duplicated while preserving order.
 #[tauri::command]
-pub fn set_project_roots(state: State<ConfigState>, roots: Vec<String>) -> Result<Vec<String>, String> {
+pub fn set_project_roots(
+    state: State<ConfigState>,
+    catalog: State<crate::commands::skills::SkillCatalogState>,
+    roots: Vec<String>,
+) -> Result<Vec<String>, String> {
     let mut cleaned: Vec<String> = Vec::new();
     for raw in roots {
         let trimmed = raw.trim().replace('\\', "/");
@@ -400,6 +483,34 @@ pub fn set_project_roots(state: State<ConfigState>, roots: Vec<String>) -> Resul
         .map_err(|_| "Failed to lock config state".to_string())?;
     config.project_roots = cleaned.clone();
     save_config(&config)?;
+    drop(config);
+    catalog.invalidate();
+    Ok(cleaned)
+}
+
+/// Replace custom files and directories included in the configured scan domain.
+#[tauri::command]
+pub fn set_custom_scan_paths(
+    state: State<ConfigState>,
+    catalog: State<crate::commands::skills::SkillCatalogState>,
+    paths: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let mut cleaned = Vec::new();
+    for raw in paths {
+        let trimmed = raw.trim().replace('\\', "/");
+        if !trimmed.is_empty() && !cleaned.contains(&trimmed) {
+            cleaned.push(trimmed);
+        }
+    }
+
+    let mut config = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?;
+    config.custom_scan_paths = cleaned.clone();
+    save_config(&config)?;
+    drop(config);
+    catalog.invalidate();
     Ok(cleaned)
 }
 
@@ -527,4 +638,76 @@ pub fn set_collapsed_tree_nodes(
 
     save_config(&config)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{mpsc, Arc, Barrier, Mutex};
+    use std::thread;
+
+    #[test]
+    fn explicit_star_state_normalizes_legacy_ids() {
+        let mut config = AppConfig::default();
+        config.starred_skills.insert("old-skill-id".to_string());
+
+        assert!(apply_starred_state(
+            &mut config,
+            "canonical-skill-id",
+            "requested-skill-id",
+            &["old-skill-id".to_string()],
+            true,
+        ));
+        assert_eq!(config.starred_skills.len(), 1);
+        assert!(config.starred_skills.contains("canonical-skill-id"));
+
+        assert!(!apply_starred_state(
+            &mut config,
+            "canonical-skill-id",
+            "requested-skill-id",
+            &["old-skill-id".to_string()],
+            false,
+        ));
+        assert!(config.starred_skills.is_empty());
+    }
+
+    #[test]
+    fn explicit_star_writes_are_linearizable_when_requests_overlap() {
+        let config = Arc::new(Mutex::new(AppConfig::default()));
+        let first_applied = Arc::new(Barrier::new(2));
+        let release_first = Arc::new(Barrier::new(2));
+        let (second_started_tx, second_started_rx) = mpsc::channel();
+
+        let first_config = Arc::clone(&config);
+        let first_applied_signal = Arc::clone(&first_applied);
+        let release_first_signal = Arc::clone(&release_first);
+        let first = thread::spawn(move || {
+            let mut config = first_config.lock().expect("test config lock");
+            apply_starred_state(&mut config, "skill", "skill", &[], true);
+            first_applied_signal.wait();
+            release_first_signal.wait();
+        });
+
+        // The first request has acquired the shared state mutex and applied
+        // its desired value before the second request attempts its write.
+        first_applied.wait();
+        let second_config = Arc::clone(&config);
+        let second = thread::spawn(move || {
+            second_started_tx
+                .send(())
+                .expect("test coordination receiver");
+            let mut config = second_config.lock().expect("test config lock");
+            apply_starred_state(&mut config, "skill", "skill", &[], false);
+        });
+        second_started_rx.recv().expect("second request started");
+        release_first.wait();
+
+        first.join().expect("first writer");
+        second.join().expect("second writer");
+        assert!(!config
+            .lock()
+            .expect("test config lock")
+            .starred_skills
+            .contains("skill"));
+    }
 }

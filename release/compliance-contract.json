@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "skill-deck-release-compliance/v1",
+  "productId": "skill-deck",
+  "productVersion": "0.3.0",
+  "target": "x86_64-pc-windows-msvc",
+  "cycloneDxSpecVersion": "1.6",
+  "product": {
+    "packageName": "skill-deck",
+    "applicationName": "Skill Deck",
+    "copyrightHolder": "Ahmad Othman Ammar Adi",
+    "publisher": "Ahmad Othman Ammar Adi",
+    "license": "MPL-2.0",
+    "distributionModel": "single-unlocked-product",
+    "runtimeIncluded": true,
+    "modelProvisioning": "on-demand"
+  },
+  "llamaRuntime": {
+    "project": "llama.cpp",
+    "repository": "https://github.com/ggml-org/llama.cpp",
+    "release": "b10092",
+    "commit": "3ce7da2c852c538c4c5f9806da27029cf8c9cc4a",
+    "archive": "llama-b10092-bin-win-cpu-x64.zip",
+    "archiveSha256": "c842fa7dc90e32b327c62903f4310ef251a902c90ef5b3a6c01c6b675dce078e",
+    "license": "MIT",
+    "files": [
+      "RUNTIME-NOTES.txt",
+      "ggml-base.dll",
+      "ggml-cpu-alderlake.dll",
+      "ggml-cpu-cannonlake.dll",
+      "ggml-cpu-cascadelake.dll",
+      "ggml-cpu-cooperlake.dll",
+      "ggml-cpu-haswell.dll",
+      "ggml-cpu-icelake.dll",
+      "ggml-cpu-ivybridge.dll",
+      "ggml-cpu-piledriver.dll",
+      "ggml-cpu-sandybridge.dll",
+      "ggml-cpu-sapphirerapids.dll",
+      "ggml-cpu-skylakex.dll",
+      "ggml-cpu-sse42.dll",
+      "ggml-cpu-x64.dll",
+      "ggml-cpu-zen4.dll",
+      "ggml-rpc.dll",
+      "ggml.dll",
+      "libomp140.x86_64.dll",
+      "llama-common.dll",
+      "llama-server-impl.dll",
+      "llama-server.exe",
+      "llama.dll",
+      "mtmd.dll"
+    ]
+  },
+  "model": {
+    "name": "Jan-nano 4B Q4_K_M GGUF",
+    "repository": "https://huggingface.co/Menlo/Jan-nano-gguf",
+    "revision": "44c1024058604e95b4845fecde698f5f1a0c99e7",
+    "file": "jan-nano-4b-Q4_K_M.gguf",
+    "sizeBytes": 2497280448,
+    "sha256": "c345a1c0eda29e56c73c4c4c00035f28470e649cf4f551dea80a7baffe79a798",
+    "license": "Apache-2.0"
+  },
+  "noticeResources": {
+    "notice": "src-tauri/resources/THIRD_PARTY_NOTICES.txt",
+    "licenses": [
+      {
+        "path": "src-tauri/resources/licenses/llama.cpp-MIT.txt",
+        "requiredFragments": [
+          "MIT License",
+          "Copyright (c) 2023-2026 The ggml authors"
+        ]
+      },
+      {
+        "path": "src-tauri/resources/licenses/Jan-nano-Apache-2.0.txt",
+        "requiredFragments": [
+          "Apache License",
+          "Version 2.0, January 2004",
+          "END OF TERMS AND CONDITIONS"
+        ]
+      },
+      {
+        "path": "src-tauri/resources/licenses/Jan-nano-ATTRIBUTION.txt",
+        "requiredFragments": [
+          "Menlo/Jan-nano-gguf",
+          "44c1024058604e95b4845fecde698f5f1a0c99e7",
+          "c345a1c0eda29e56c73c4c4c00035f28470e649cf4f551dea80a7baffe79a798"
+        ]
+      }
+    ]
+  },
+  "manualLicenseReviewTokens": [
+    "CDLA-Permissive-2.0",
+    "MPL-2.0"
+  ]
+}

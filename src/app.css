@@ -1,41 +1,64 @@
 @import "tailwindcss";
+@source not "../src-tauri/target";
 
-/* Chat-edition typography: bundled locally, no CDN, no CSP grief. */
+/* PHOSPHOR typography: bundled locally, no CDN, no CSP grief.
+ * Geist Mono is the whole UI voice; Maple Mono carries display moments. */
 @import "@fontsource-variable/geist-mono/wght.css";
 @import "@fontsource/maple-mono/400.css";
 @import "@fontsource/maple-mono/500.css";
 @import "@fontsource/maple-mono/600.css";
 
 /*
- * @agent-context: Skill Deck unified theme system.
- * Theme modes: system, dark, light.
- * Resolved theme selectors: [data-theme="dark"] and [data-theme="light"].
+ * @agent-context: Skill Deck — PHOSPHOR design language (see DESIGN.md).
+ * One warm-carbon surface system, one amber accent, one mono typographic voice.
+ * Theme modes: system, dark, light. Dark is primary; light is re-derived, not
+ * mechanically inverted. Resolved selectors: [data-theme="dark"] / [data-theme="light"].
+ * Colors live as --t-* per theme; @theme maps --color-* -> --t-* so Tailwind
+ * utilities and raw var() refs both resolve. Type/space/radius/motion tokens are
+ * theme-invariant and live in @theme. THE REM FIX: root font-size is 16px and
+ * @theme sets --spacing:4px, so Tailwind h-6 = 24px true (was 19.5px under the
+ * old 13px root). All type comes from the explicit --text-* scale, never rem.
  */
 
 @theme {
+  /* ---- Surfaces (warm carbon / warm paper) ---- */
   --color-surface-0: var(--t-surface-0);
   --color-surface-1: var(--t-surface-1);
   --color-surface-2: var(--t-surface-2);
   --color-surface-3: var(--t-surface-3);
 
+  /* ---- Ink ---- */
   --color-text-primary: var(--t-text-primary);
   --color-text-secondary: var(--t-text-secondary);
   --color-text-muted: var(--t-text-muted);
 
-  --color-accent: var(--t-accent);
+  /* ---- Phosphor accent (amber) — the actionable thing, never decorative ---- */
+  --color-accent: var(--t-accent); /* fills, borders (>=3:1 vs surface-0) */
   --color-accent-hover: var(--t-accent-hover);
-  --color-accent-muted: var(--t-accent-muted);
-  --color-accent-subtle: var(--t-accent-subtle);
-  /* AA-contrast accent for small (<18px) TEXT — links, pills, active labels.
-     The fill/border/focus accent (#5e6ad2) is only ~4.05:1 and fails WCAG AA
-     for normal-size text, so text uses this lighter (dark) / darker (light)
-     variant instead. */
+  /* AA-contrast accent for small (<18px) TEXT — links, active labels, pills.
+     The fill accent is only UI-contrast (~3:1) and fails AA for normal text,
+     so text uses this lighter (dark) / darker (light) variant. */
   --color-accent-text: var(--t-accent-text);
+  --color-accent-subtle: var(--t-accent-subtle);
+  --color-accent-muted: var(--t-accent-muted);
+  --color-on-accent: var(--t-on-accent); /* text on accent + status fills */
 
+  /* ---- Borders (hairlines) ---- */
   --color-border: var(--t-border);
   --color-border-hover: var(--t-border-hover);
   --color-border-active: var(--t-border-active);
 
+  /* ---- Status trio (complete, both themes) + subtle chip twins ---- */
+  --color-ok: var(--t-ok);
+  --color-ok-subtle: var(--t-ok-subtle);
+  --color-warn: var(--t-warn);
+  --color-warn-subtle: var(--t-warn-subtle);
+  --color-error: var(--t-error);
+  --color-error-subtle: var(--t-error-subtle);
+  --color-starred: var(--t-starred);
+  --color-update-available: var(--t-update-available); /* = accent per DESIGN 3.3 */
+
+  /* ---- Agent hues — demoted to marks (desaturated, AA>=4.5 text on surface-1) ---- */
   --color-agent-claude: var(--t-agent-claude);
   --color-agent-cursor: var(--t-agent-cursor);
   --color-agent-copilot: var(--t-agent-copilot);
@@ -45,151 +68,230 @@
   --color-agent-cline: var(--t-agent-cline);
   --color-agent-aider: var(--t-agent-aider);
 
-  --color-update-available: var(--t-update-available);
-  --color-starred: var(--t-starred);
-  --color-error: var(--t-error);
-
+  /* ---- Effects ---- */
   --color-overlay-shadow: var(--t-overlay-shadow);
+  --color-scrim: var(--t-scrim);
   --color-search-glow: var(--t-search-glow);
-
   --color-code-bg: var(--t-code-bg);
   --color-code-border: var(--t-code-border);
+
+  /* ---- Theme-preview swatches (theme-INVARIANT by design) ----
+   * ThemeMenu's color-scheme dots must show the dark canvas even while the app
+   * is in light mode (and vice versa), so these mirror the surface-0 values as
+   * fixed literals instead of the theme-flipping --t-surface-* tokens. The ONE
+   * sanctioned place these canvas hexes exist outside the theme blocks. */
+  --color-swatch-dark: #0b0a08;
+  --color-swatch-light: #faf9f7;
+
+  /* ---- Typography — one mono voice ---- */
+  --font-ui: "Geist Mono Variable", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --font-display: "Maple Mono", "Geist Mono Variable", ui-monospace, monospace;
+
+  /* ---- Type scale (integer px + line-heights) ---- */
+  --text-2xs: 10px;
+  --text-2xs--line-height: 1.3;
+  --text-xs: 11px;
+  --text-xs--line-height: 1.45;
+  --text-sm: 12px;
+  --text-sm--line-height: 1.5;
+  --text-base: 13px;
+  --text-base--line-height: 1.55;
+  --text-lg: 15px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 18px;
+  --text-xl--line-height: 1.3;
+
+  /* ---- Spacing: 4px base grid (THE REM FIX) ---- */
+  --spacing: 4px;
+
+  /* ---- Radius (squarer — this is an instrument, not a bubble) ---- */
+  --radius-xs: 3px; /* chips, badges, kbd */
+  --radius-sm: 5px; /* buttons, inputs, small controls */
+  --radius-md: 8px; /* rows, cards, popovers */
+  --radius-lg: 12px; /* modals, panels, the window */
+
+  /* ---- Motion — one vocabulary ---- */
+  --motion-fast: 110ms; /* hover, press, toggles */
+  --motion-base: 170ms; /* fades, color, small slides */
+  --motion-enter: 230ms; /* overlay + modal entrances */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* crisp instrument */
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1); /* entrances only */
 }
 
-/* Dark baseline (Linear-inspired) */
+/* Dark baseline — the deck floats over dark terminals */
 :root,
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --t-surface-0: #010102;
-  --t-surface-1: #0f1011;
-  --t-surface-2: #141516;
-  --t-surface-3: #18191a;
+  --t-surface-0: #0b0a08;
+  --t-surface-1: #141210;
+  --t-surface-2: #1a1815;
+  --t-surface-3: #211e1a;
 
-  --t-text-primary: #f7f8f8;
-  --t-text-secondary: #d0d6e0;
-  --t-text-muted: #8a8f98;
+  --t-text-primary: #f4f1ec;
+  --t-text-secondary: #c9c4bb;
+  --t-text-muted: #8c867c;
 
-  --t-accent: #5e6ad2;
-  --t-accent-hover: #828fff;
-  --t-accent-muted: #7a7fad;
-  --t-accent-subtle: rgba(94, 106, 210, 0.16);
-  --t-accent-text: #828fff;
+  --t-accent: #d98e33;
+  --t-accent-hover: #e8a24a;
+  --t-accent-text: #ffb45e;
+  --t-accent-subtle: rgba(217, 142, 51, 0.14);
+  --t-accent-muted: #cf9a4d;
+  --t-on-accent: #171106;
 
-  --t-border: #23252a;
-  --t-border-hover: #34343a;
-  --t-border-active: rgba(94, 105, 209, 0.55);
+  --t-border: #2a2622;
+  --t-border-hover: #3a352f;
+  --t-border-active: rgba(217, 142, 51, 0.55);
 
-  --t-agent-claude: #f28c54;
-  --t-agent-cursor: #a58cff;
-  --t-agent-copilot: #57a0ff;
-  --t-agent-codex: #4dc8b0;
-  --t-agent-windsurf: #49bed9;
-  --t-agent-gemini: #d5b347;
-  --t-agent-cline: #d082d6;
-  --t-agent-aider: #82b36d;
-
-  --t-update-available: #27a644;
+  --t-ok: #63b576;
+  --t-ok-subtle: rgba(99, 181, 118, 0.15);
+  --t-warn: #d5b347;
+  --t-warn-subtle: rgba(213, 179, 71, 0.15);
+  --t-error: #e0685c;
+  --t-error-subtle: rgba(224, 104, 92, 0.15);
   --t-starred: #d5b347;
-  --t-error: #d45d5d;
+  --t-update-available: #d98e33;
 
-  --t-overlay-shadow: rgba(0, 0, 0, 0.56);
-  --t-search-glow: rgba(94, 106, 210, 0.22);
+  --t-agent-claude: #da936c;
+  --t-agent-cursor: #af9dee;
+  --t-agent-copilot: #70a3e6;
+  --t-agent-codex: #5fb6a5;
+  --t-agent-windsurf: #5fb0c3;
+  --t-agent-gemini: #c0a85c;
+  --t-agent-cline: #c58fc9;
+  --t-agent-aider: #86a878;
 
-  --t-code-bg: #0c0d0e;
-  --t-code-border: #23252a;
+  --t-overlay-shadow: rgba(12, 8, 2, 0.56);
+  --t-scrim: rgba(6, 4, 2, 0.6);
+  --t-search-glow: rgba(217, 142, 51, 0.22);
+
+  --t-code-bg: #1a1815;
+  --t-code-border: #2a2622;
+
+  --shadow-popover: 0 8px 24px -8px rgba(12, 8, 2, 0.55);
+  --shadow-modal: 0 24px 64px -16px rgba(12, 8, 2, 0.65);
 }
 
-/* Light inverse theme */
+/* Light — first-class sibling, re-derived from the same rules */
 [data-theme="light"] {
   color-scheme: light;
 
-  --t-surface-0: #ffffff;
-  --t-surface-1: #f5f6f6;
-  --t-surface-2: #f6f7f7;
-  --t-surface-3: #eceef0;
+  --t-surface-0: #faf9f7;
+  --t-surface-1: #f1efeb;
+  --t-surface-2: #eae7e1;
+  --t-surface-3: #e1ddd5;
 
-  --t-text-primary: #121316;
-  --t-text-secondary: #33363d;
-  --t-text-muted: #62666d;
+  --t-text-primary: #181512;
+  --t-text-secondary: #3d3831;
+  --t-text-muted: #6e675d;
 
-  --t-accent: #5e6ad2;
-  --t-accent-hover: #4d58bc;
-  --t-accent-muted: #5e69d1;
-  --t-accent-subtle: rgba(94, 106, 210, 0.12);
-  --t-accent-text: #4d58bc;
+  --t-accent: #ad5b13;
+  --t-accent-hover: #954e10;
+  --t-accent-text: #984d0e; /* AA for small text on every light surface: 5.9:1 s0 / 5.4 s1 / 5.0 s2 / 4.6 s3 */
+  --t-accent-subtle: rgba(180, 95, 20, 0.1);
+  --t-accent-muted: #9a5410;
+  --t-on-accent: #fdf8f2;
 
-  --t-border: #d6d9df;
-  --t-border-hover: #c6cbd3;
-  --t-border-active: rgba(94, 105, 209, 0.42);
+  --t-border: #dcd7cd;
+  --t-border-hover: #c9c2b4;
+  --t-border-active: rgba(173, 91, 19, 0.5);
 
-  --t-agent-claude: #bd5c2f;
-  --t-agent-cursor: #7f58d9;
-  --t-agent-copilot: #246dcd;
-  --t-agent-codex: #278f7e;
-  --t-agent-windsurf: #1b8aa5;
-  --t-agent-gemini: #947719;
-  --t-agent-cline: #a046a6;
-  --t-agent-aider: #5e8e49;
+  --t-ok: #22713a;
+  --t-ok-subtle: rgba(34, 113, 58, 0.12);
+  --t-warn: #846814;
+  --t-warn-subtle: rgba(132, 104, 20, 0.12);
+  --t-error: #a83226;
+  --t-error-subtle: rgba(168, 50, 38, 0.12);
+  --t-starred: #846814;
+  --t-update-available: #ad5b13;
 
-  --t-update-available: #25893c;
-  --t-starred: #947719;
-  --t-error: #b23b3b;
+  --t-agent-claude: #95583c;
+  --t-agent-cursor: #7354bd;
+  --t-agent-copilot: #3968a7;
+  --t-agent-codex: #317268;
+  --t-agent-windsurf: #2b7081;
+  --t-agent-gemini: #786628;
+  --t-agent-cline: #8d5192;
+  --t-agent-aider: #536f47;
 
-  --t-overlay-shadow: rgba(7, 10, 18, 0.16);
-  --t-search-glow: rgba(94, 106, 210, 0.16);
+  --t-overlay-shadow: rgba(28, 20, 8, 0.18);
+  --t-scrim: rgba(30, 24, 16, 0.28);
+  --t-search-glow: rgba(180, 95, 20, 0.16);
 
-  --t-code-bg: #eef0f2;
-  --t-code-border: #d6d9df;
+  --t-code-bg: #eae7e1;
+  --t-code-border: #dcd7cd;
+
+  --shadow-popover: 0 8px 24px -8px rgba(28, 20, 8, 0.18);
+  --shadow-modal: 0 24px 64px -16px rgba(28, 20, 8, 0.24);
 }
 
-/* Honor OS preference before JS resolves mode */
+/* Honor OS preference before JS resolves mode (full light block) */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     color-scheme: light;
-    --t-surface-0: #ffffff;
-    --t-surface-1: #f5f6f6;
-    --t-surface-2: #f6f7f7;
-    --t-surface-3: #eceef0;
-    --t-text-primary: #121316;
-    --t-text-secondary: #33363d;
-    --t-text-muted: #62666d;
-    --t-accent: #5e6ad2;
-    --t-accent-hover: #4d58bc;
-    --t-accent-muted: #5e69d1;
-    --t-accent-subtle: rgba(94, 106, 210, 0.12);
-    --t-accent-text: #4d58bc;
-    --t-border: #d6d9df;
-    --t-border-hover: #c6cbd3;
-    --t-border-active: rgba(94, 105, 209, 0.42);
-    --t-overlay-shadow: rgba(7, 10, 18, 0.16);
-    --t-search-glow: rgba(94, 106, 210, 0.16);
-    --t-code-bg: #eef0f2;
-    --t-code-border: #d6d9df;
+
+    --t-surface-0: #faf9f7;
+    --t-surface-1: #f1efeb;
+    --t-surface-2: #eae7e1;
+    --t-surface-3: #e1ddd5;
+
+    --t-text-primary: #181512;
+    --t-text-secondary: #3d3831;
+    --t-text-muted: #6e675d;
+
+    --t-accent: #ad5b13;
+    --t-accent-hover: #954e10;
+    --t-accent-text: #984d0e; /* AA for small text on every light surface: 5.9:1 s0 / 5.4 s1 / 5.0 s2 / 4.6 s3 */
+    --t-accent-subtle: rgba(180, 95, 20, 0.1);
+    --t-accent-muted: #9a5410;
+    --t-on-accent: #fdf8f2;
+
+    --t-border: #dcd7cd;
+    --t-border-hover: #c9c2b4;
+    --t-border-active: rgba(173, 91, 19, 0.5);
+
+    --t-ok: #22713a;
+    --t-ok-subtle: rgba(34, 113, 58, 0.12);
+    --t-warn: #846814;
+    --t-warn-subtle: rgba(132, 104, 20, 0.12);
+    --t-error: #a83226;
+    --t-error-subtle: rgba(168, 50, 38, 0.12);
+    --t-starred: #846814;
+    --t-update-available: #ad5b13;
+
+    --t-agent-claude: #95583c;
+    --t-agent-cursor: #7354bd;
+    --t-agent-copilot: #3968a7;
+    --t-agent-codex: #317268;
+    --t-agent-windsurf: #2b7081;
+    --t-agent-gemini: #786628;
+    --t-agent-cline: #8d5192;
+    --t-agent-aider: #536f47;
+
+    --t-overlay-shadow: rgba(28, 20, 8, 0.18);
+    --t-scrim: rgba(30, 24, 16, 0.28);
+    --t-search-glow: rgba(180, 95, 20, 0.16);
+
+    --t-code-bg: #eae7e1;
+    --t-code-border: #dcd7cd;
+
+    --shadow-popover: 0 8px 24px -8px rgba(28, 20, 8, 0.18);
+    --shadow-modal: 0 24px 64px -16px rgba(28, 20, 8, 0.24);
   }
 }
 
-:root {
-  font-family: "Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+/* Root: one mono voice everywhere. Inter (never bundled) and its dead
+ * font-feature-settings are deleted. Root font-size is 16px so Tailwind's
+ * 4px grid is true. */
+html {
+  font-size: 16px;
+}
+
+html,
+body {
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 13px;
-
-  /* Chat-edition fonts. Geist Mono for body / replies; Maple Mono for display + composer. */
-  --font-chat-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-chat-display: "Maple Mono", "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-
-  --motion-duration-fast: 120ms;
-  --motion-duration-base: 180ms;
-  --motion-duration-enter: 220ms;
-  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --motion-ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 body {
@@ -197,11 +299,23 @@ body {
   padding: 0;
   overflow: hidden;
   background: transparent;
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+}
+
+/* Keyboard users always see the phosphor. Mouse focus stays quiet. The outline
+ * follows each element's own border-radius in Chromium (WebView2), so we don't
+ * force a radius here. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Chrome (toolbars, tabs, buttons, badges) stays unselectable so drag + click
- * feels native. Chat content (bubbles, tool cards, composer) re-enables
- * selection via .selectable. */
+ * feels native. Chat content re-enables selection via .selectable. */
 .skill-list,
 .search-overlay,
 .topbar,
@@ -210,6 +324,9 @@ body {
 .session-row,
 button,
 .badge,
+.badge-agent,
+.badge-meta,
+.badge-signal,
 [role="button"] {
   user-select: none;
   -webkit-user-select: none;
@@ -222,7 +339,7 @@ button,
   cursor: text;
 }
 
-
+/* ---- Scrollbar (warm ink) ---- */
 .skill-list::-webkit-scrollbar {
   width: 4px;
 }
@@ -233,32 +350,51 @@ button,
 }
 
 .skill-list::-webkit-scrollbar-thumb {
-  background: rgba(247, 248, 248, 0.18);
+  background: rgba(244, 241, 236, 0.16);
   border-radius: 4px;
-  transition: background var(--motion-duration-base) var(--motion-ease-standard);
+  transition: background var(--motion-base) var(--ease-standard);
 }
 
 .skill-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(247, 248, 248, 0.3);
+  background: rgba(244, 241, 236, 0.28);
 }
 
 [data-theme="light"] .skill-list::-webkit-scrollbar-thumb {
-  background: rgba(24, 25, 26, 0.16);
+  background: rgba(24, 21, 18, 0.16);
 }
 
 [data-theme="light"] .skill-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(24, 25, 26, 0.28);
+  background: rgba(24, 21, 18, 0.28);
 }
 
-@keyframes overlay-enter {
+/* ================= Motion ================= */
+
+/* One spinner keyframe — consumed via <Spinner/> / .u-spinner. (The old
+ * `refresh-spin` compat alias is deleted; every callsite migrated.) */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* One pulse keyframe (opacity-only, GPU-cheap) — consumed via .u-pulse. (The
+ * old `breathe` compat alias is deleted; every callsite migrated.) */
+@keyframes u-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes u-fade-in {
   from {
     opacity: 0;
-    transform: translateY(12px) scale(0.985);
   }
-
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
@@ -267,7 +403,6 @@ button,
     opacity: 0;
     transform: translateY(4px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -279,7 +414,6 @@ button,
     opacity: 0;
     transform: translateY(6px);
   }
-
   to {
     opacity: 1;
     transform: translateY(0);
@@ -290,23 +424,11 @@ button,
   0% {
     opacity: 0.08;
   }
-
   50% {
     opacity: 0.16;
   }
-
   100% {
     opacity: 0.08;
-  }
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -314,39 +436,32 @@ button,
   0% {
     transform: scale(1);
   }
-
   40% {
     transform: scale(1.22);
   }
-
   100% {
     transform: scale(1);
   }
 }
 
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 0.6;
-    transform: scale(1);
+/* Shared popover/modal entrance — scale(0.98->1) + fade, one recipe. */
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
   }
-
-  50% {
+  to {
     opacity: 1;
-    transform: scale(1.22);
+    transform: scale(1);
   }
-}
-
-.overlay-enter {
-  animation: overlay-enter var(--motion-duration-enter) var(--motion-ease-emphasized) both;
 }
 
 .row-enter {
-  animation: row-enter var(--motion-duration-base) var(--motion-ease-standard) both;
+  animation: row-enter var(--motion-base) var(--ease-standard) both;
 }
 
 .card-enter {
-  animation: card-enter var(--motion-duration-base) var(--motion-ease-standard) both;
+  animation: card-enter var(--motion-base) var(--ease-standard) both;
 }
 
 .skeleton-card {
@@ -356,23 +471,31 @@ button,
 }
 
 .star-pop {
-  animation: star-pop 220ms var(--motion-ease-emphasized);
+  animation: star-pop 220ms var(--ease-emphasized);
 }
 
-.spin {
+.popover-enter {
+  animation: popover-in 140ms var(--ease-emphasized) both;
+  transform-origin: var(--popover-origin, top center);
+}
+
+/* One spinner utility — accent arc on a hairline track. Size/weight via props. */
+.u-spinner {
+  display: inline-block;
+  width: var(--spinner-size, 14px);
+  height: var(--spinner-size, 14px);
+  border: var(--spinner-weight, 2px) solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 9999px;
   animation: spin 0.7s linear infinite;
 }
 
-@keyframes refresh-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
+/* One pulse utility (opacity-only). */
+.u-pulse {
+  animation: u-pulse 2s var(--ease-standard) infinite;
 }
 
+/* Top/bottom fade so the scroll list dissolves into the deck edges. */
 .skill-list {
   mask-image: linear-gradient(
     to bottom,
@@ -390,17 +513,412 @@ button,
   );
 }
 
-/* Compare-mode diff rows in DiffModal — each cell holds a highlight.js HTML
- * span tree, so we set the base text color and font here. The .hljs-* token
- * colors layered on top come from the existing block lower in this file. */
+/* The reusable primitives live in @layer components so Tailwind utilities can
+ * override them (height, padding, width, disabling press via active:scale-100,
+ * etc.) — the intended Tailwind v4 escape hatch. */
+@layer components {
+
+/* ================= Buttons =================
+ * primary (accent fill), secondary (surface-2 + hairline), ghost (text only).
+ * Heights 28 (base) / 24 (.btn-sm). Radius-sm. Press scale 0.96. Named-property
+ * transitions only. Focus handled by the global :focus-visible rule. */
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition-property: background-color, border-color, color, box-shadow, scale;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border-color: var(--color-accent);
+}
+.btn-primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.btn-secondary {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+.btn-secondary:hover {
+  background: var(--color-surface-3);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.btn-ghost:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-ghost:active,
+.btn-icon:active {
+  scale: 0.96;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.btn-icon:disabled,
+.btn-primary[aria-disabled="true"],
+.btn-secondary[aria-disabled="true"],
+.btn-ghost[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  scale: 1;
+}
+
+/* 24px compact variant */
+.btn-sm {
+  height: 24px;
+  padding: 0 8px;
+  font-size: var(--text-xs);
+}
+
+/* Icon-only square. 28px is the compact visual default. Interactive surfaces
+ * that need the release target contract add .hit-expand below. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition-property: background-color, border-color, color, scale;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+.btn-icon:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+}
+
+.hit-expand {
+  position: relative;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+/* Native overlay command rail: one bounded grid at the actual 476px class.
+ * The brand stays anchored while action groups compact to icon-first controls;
+ * the catalogue, never the chrome, owns vertical scrolling. */
+.overlay-command-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 8px 12px;
+  position: relative;
+  z-index: 50;
+  overflow: visible;
+}
+
+.overlay-brand {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.overlay-command-actions,
+.overlay-priority-group {
+  flex-shrink: 0;
+}
+
+.overlay-command-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Every command action has a genuine 40px box. Adjacent controls therefore do
+ * not need overlapping pseudo hit targets, which would make pointer routing
+ * ambiguous in the compact native overlay. */
+.command-mode-control,
+.command-rail-control {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+}
+
+.overlay-priority-group {
+  height: 40px;
+  padding: 0;
+}
+
+/* ThemeMenu owns its trigger component, so apply the same actual geometry
+ * from the bounded command rail without coupling the two components. */
+.overlay-command-actions > :last-child .btn-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.scan-partial-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 4px 8px;
+  font-size: var(--text-2xs);
+  color: var(--color-warn);
+  background: var(--color-warn-subtle);
+  border: 1px solid var(--color-warn);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 520px) {
+  .overlay-command-strip {
+    gap: 4px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .overlay-command-actions {
+    gap: 4px;
+  }
+
+  .command-count {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .overlay-brand span {
+    display: none;
+  }
+}
+
+.command-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ================= Badges (DESIGN 8) =================
+ * agent  — bracketed mono, tinted text, hairline, transparent bg. Component
+ *          sets --badge-hue to a --color-agent-* token (never a literal).
+ * meta   — plain muted chip, surface-2, radius-xs.
+ * signal — the only filled one. Accent by default; status modifiers swap the
+ *          fill. on-accent text passes AA on every fill in both themes. */
+.badge-agent {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: 2px 5px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--badge-hue, var(--color-text-secondary));
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--badge-hue, var(--color-border)) 40%, transparent);
+}
+/* Bracketed identity mark: [claude]. Brackets are decorative (pseudo-element)
+ * so markup stays clean and no stray whitespace creeps in. .no-bracket opts out. */
+.badge-agent::before {
+  content: "[";
+  opacity: 0.7;
+}
+.badge-agent::after {
+  content: "]";
+  opacity: 0.7;
+}
+.badge-agent.no-bracket::before,
+.badge-agent.no-bracket::after {
+  content: none;
+}
+
+.badge-meta {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.badge-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  border: 1px solid var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+.badge-signal.is-ok {
+  background: var(--color-ok);
+  border-color: var(--color-ok);
+}
+.badge-signal.is-warn {
+  background: var(--color-warn);
+  border-color: var(--color-warn);
+}
+.badge-signal.is-error {
+  background: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* ================= Field (inputs / selects) =================
+ * height 28, surface-2, hairline, radius-sm, accent focus ring. */
+.field {
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition-property: background-color, border-color, box-shadow;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-standard);
+}
+.field::placeholder {
+  color: var(--color-text-muted);
+}
+.field:hover {
+  border-color: var(--color-border-hover);
+}
+.field:focus,
+.field:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-subtle);
+}
+
+/* ================= Kbd chip ================= */
+kbd,
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================= Floating layers (DESIGN 6, 8) ================= */
+.layer-popover {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+}
+
+.layer-modal {
+  background: var(--color-surface-0);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-modal);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--color-scrim);
+}
+
+/* Uppercase micro-labels (SKILL, section headers). */
+.u-caps {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/*
+ * Skill group container (card view). Flat carbon: surface-1 + hairline, no
+ * glassmorphism (DESIGN 6). (The `.skill-group-glass` compat shim is deleted;
+ * SkillTree.svelte consumes `.skill-group` directly.)
+ */
+.skill-group {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition-property: background-color, border-color;
+  transition-duration: var(--motion-base);
+  transition-timing-function: var(--ease-standard);
+}
+
+} /* end @layer components */
+
+/* Compare-mode diff rows in DiffModal — highlight.js span tree; base color +
+ * the one mono voice (JetBrains/SF Mono stacks retired). */
 .diff-code-cell {
-  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
+  font-family: var(--font-ui);
   color: var(--color-text-primary);
 }
 
 .skill-content-preview {
-  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
   line-height: 1.6;
   tab-size: 2;
   white-space: normal;
@@ -408,15 +926,16 @@ button,
   color: var(--color-text-secondary);
 }
 
+/* Modal panel — radius-lg + shadow-modal (DESIGN 6/8). */
 .full-skill-modal-panel {
-  border: 1px solid var(--color-border-hover);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   background: var(--color-surface-0);
-  box-shadow: 0 26px 56px -18px var(--color-overlay-shadow);
+  box-shadow: var(--shadow-modal);
 }
 
 .full-skill-content {
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.72;
 }
 
@@ -424,13 +943,10 @@ button,
   border-top: 1px solid var(--color-border);
 }
 
-/* `.instant-tooltip` is kept as a no-op marker class so existing markup
- * (cards, rows, badges) doesn't have to change. The old CSS pseudo-element
- * tooltip was clipped by `overflow: hidden` ancestors (every overlay panel,
- * modal, and chat shell), so we removed it. The actual tooltip is now
- * rendered as a body-portaled element by `src/lib/actions/tooltip.ts` via
- * event delegation on `[data-tooltip]`. Position stays relative so any
- * existing absolute-positioned children keep their anchor. */
+/* `.instant-tooltip` is a no-op marker; the real tooltip is body-portaled by
+ * src/lib/actions/tooltip.ts via [data-tooltip] delegation (the CSS
+ * pseudo-element was clipped by overflow:hidden ancestors). Relative position
+ * keeps any absolute children anchored. */
 .instant-tooltip {
   position: relative;
 }
@@ -440,42 +956,47 @@ button,
 }
 
 .emoji-avatar {
-  font-size: 1.18rem;
+  font-size: var(--text-lg);
   line-height: 1;
   transform: translateY(0.5px);
 }
 
 .letter-avatar {
-  font-size: 0.95rem;
+  font-size: var(--text-base);
   line-height: 1;
 }
 
 .skill-content-preview .skill-empty {
-  min-height: 0.65rem;
+  min-height: 10px;
 }
 
 .skill-content-preview .skill-frontmatter-row {
   display: flex;
-  gap: 0.3rem;
+  gap: 5px;
   align-items: baseline;
   flex-wrap: wrap;
 }
 
+/* === Skill-content preview + syntax theme ===============================
+ * Grouped with the hljs block as the code-token source (DESIGN 10 exemption).
+ * Warm-carbon code bg = surface-2 family; every dark selector has a
+ * contrast-checked light counterpart (>=4.5:1 on the code bg).
+ */
 .skill-content-preview .skill-fm-key,
 .skill-content-preview .fm-key {
-  color: #7fa4ff;
+  color: #8fb3f0;
   font-weight: 600;
 }
 
 .skill-content-preview .skill-fm-value,
 .skill-content-preview .fm-value {
-  color: #72b88d;
+  color: #83c496;
 }
 
 .skill-content-preview .skill-fm-delimiter,
 .skill-content-preview .fm-delimiter {
   color: var(--color-text-muted);
-  opacity: 0.45;
+  opacity: 0.55;
 }
 
 .skill-content-preview .skill-heading,
@@ -486,58 +1007,51 @@ button,
 
 .skill-content-preview .skill-heading-1,
 .skill-content-preview .skill-heading-2 {
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 
 .skill-content-preview .skill-list-item {
   display: flex;
-  gap: 0.45rem;
+  gap: 6px;
 }
 
 .skill-content-preview .skill-bullet-symbol,
 .skill-content-preview .skill-ordered-index,
 .skill-content-preview .md-bullet {
   color: var(--color-accent-muted);
-  min-width: 0.85rem;
+  min-width: 12px;
 }
 
 .skill-content-preview .skill-quote {
   border-left: 2px solid var(--color-border-hover);
-  padding-left: 0.5rem;
+  padding-left: 8px;
   color: var(--color-text-primary);
   opacity: 0.92;
 }
 
 .skill-content-preview .skill-rule {
   border-top: 1px solid var(--color-border-hover);
-  margin: 0.2rem 0;
+  margin: 4px 0;
 }
 
 .skill-content-preview .skill-code-fence {
   color: var(--color-text-muted);
   opacity: 0.8;
-  margin-top: 0.2rem;
+  margin-top: 4px;
 }
 
 .skill-content-preview .skill-code-line {
   color: var(--color-text-primary);
 }
 
-/* === Syntax highlighting (highlight.js) =================================
- * Theme reuses the palette already established for frontmatter (blue keys,
- * green values, accent for headings) so highlighted JSON / shell / Python
- * blends with the rest of the modal instead of clashing.
- * Class names follow the highlight.js v11 spec.
- */
-
 .skill-content-preview .skill-code-block {
-  margin: 0.35rem 0;
-  padding: 0.6rem 0.75rem;
+  margin: 6px 0;
+  padding: 10px 12px;
   border: 1px solid var(--color-code-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--color-code-bg);
-  font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", ui-monospace, monospace;
-  font-size: 11.5px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
   line-height: 1.55;
   white-space: pre;
   overflow-x: auto;
@@ -567,13 +1081,13 @@ button,
 .hljs-selector-tag,
 .hljs-type,
 .hljs-built_in {
-  color: #c891ff;
+  color: #c8a2ff;
 }
 
 .hljs-string,
 .hljs-doctag,
 .hljs-meta-string {
-  color: #72b88d;
+  color: #83c496;
 }
 
 .hljs-number,
@@ -587,7 +1101,7 @@ button,
 .hljs-property,
 .hljs-attribute,
 .hljs-template-variable {
-  color: #7fa4ff;
+  color: #8fb3f0;
 }
 
 .hljs-variable,
@@ -610,19 +1124,18 @@ button,
 }
 
 .hljs-meta,
-.hljs-meta-keyword,
-.hljs-deletion {
+.hljs-meta-keyword {
   color: var(--color-text-muted);
 }
 
 .hljs-addition {
-  color: #72b88d;
-  background: rgba(114, 184, 141, 0.1);
+  color: #83c496;
+  background: rgba(99, 181, 118, 0.1);
 }
 
 .hljs-deletion {
-  color: #e57373;
-  background: rgba(229, 115, 115, 0.1);
+  color: #e0685c;
+  background: rgba(224, 104, 92, 0.1);
 }
 
 .hljs-emphasis {
@@ -633,36 +1146,61 @@ button,
   font-weight: 700;
 }
 
+/* Light overrides — mirror EVERY dark selector list so no token is stranded
+ * on a dark-tuned color (the old subset left regexp / meta-string /
+ * template-variable illegible on light code bg). */
 [data-theme="light"] .hljs-keyword,
 [data-theme="light"] .hljs-selector-tag,
 [data-theme="light"] .hljs-type,
 [data-theme="light"] .hljs-built_in {
-  color: #8b3fb8;
+  color: #7c3fae;
 }
 
 [data-theme="light"] .hljs-string,
-[data-theme="light"] .hljs-doctag {
-  color: #2a7b52;
-}
-
-[data-theme="light"] .hljs-attr,
-[data-theme="light"] .hljs-property,
-[data-theme="light"] .hljs-attribute {
-  color: #355bb0;
+[data-theme="light"] .hljs-doctag,
+[data-theme="light"] .hljs-meta-string {
+  color: #28754e;
 }
 
 [data-theme="light"] .hljs-number,
 [data-theme="light"] .hljs-literal,
-[data-theme="light"] .hljs-symbol {
-  color: #c4661a;
+[data-theme="light"] .hljs-symbol,
+[data-theme="light"] .hljs-regexp {
+  color: #a4510e;
+}
+
+[data-theme="light"] .hljs-attr,
+[data-theme="light"] .hljs-property,
+[data-theme="light"] .hljs-attribute,
+[data-theme="light"] .hljs-template-variable {
+  color: #345eaa;
+}
+
+[data-theme="light"] .hljs-title,
+[data-theme="light"] .hljs-title.function_,
+[data-theme="light"] .hljs-section,
+[data-theme="light"] .hljs-name,
+[data-theme="light"] .hljs-selector-id,
+[data-theme="light"] .hljs-selector-class {
+  color: #9c4f0e;
+}
+
+[data-theme="light"] .hljs-addition {
+  color: #28754e;
+  background: rgba(34, 113, 58, 0.1);
+}
+
+[data-theme="light"] .hljs-deletion {
+  color: #a83226;
+  background: rgba(168, 50, 38, 0.1);
 }
 
 .skill-inline-code {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 0 0.25rem;
+  border-radius: var(--radius-xs);
+  padding: 0 4px;
   color: var(--color-text-primary);
-  background: rgba(127, 164, 255, 0.12);
+  background: var(--color-accent-subtle);
 }
 
 .skill-md-link {
@@ -672,7 +1210,7 @@ button,
 }
 
 .skill-md-link:hover {
-  color: var(--color-accent-muted);
+  color: var(--color-accent-hover);
 }
 
 .skill-strong {
@@ -690,20 +1228,10 @@ button,
 }
 
 .skill-truncate-note {
-  margin-top: 0.45rem;
-  font-size: 10px;
+  margin-top: 8px;
+  font-size: var(--text-2xs);
   color: var(--color-text-muted);
   opacity: 0.78;
-}
-
-[data-theme="light"] .skill-content-preview .skill-fm-key,
-[data-theme="light"] .skill-content-preview .fm-key {
-  color: #355bb0;
-}
-
-[data-theme="light"] .skill-content-preview .skill-fm-value,
-[data-theme="light"] .skill-content-preview .fm-value {
-  color: #2a7b52;
 }
 
 [draggable="true"] {
@@ -715,48 +1243,31 @@ button,
   cursor: grabbing;
 }
 
+/* Roving-focus row/card state (JS-driven, not :focus-visible). Inset ring so
+ * it isn't clipped on full-bleed rows; phosphor accent. */
 .row-focused,
 .card-focused {
-  outline: 2px solid var(--color-accent-muted);
+  outline: 2px solid var(--color-accent);
   outline-offset: -1px;
   border-radius: var(--radius-sm);
-}
-
-/*
- * Glass group container (card view).
- * Wraps a root skill and its visible sub skills so the user immediately reads
- * "these belong together". Translucent surface, hairline border, top edge
- * highlight, soft outer shadow, light backdrop blur for polish on Windows
- * where the WebView2 surface composites transparency cleanly.
- */
-.skill-group-glass {
-  background: rgba(247, 248, 248, 0.035);
-  border: 1px solid rgba(247, 248, 248, 0.07);
-  box-shadow:
-    inset 0 1px 0 0 rgba(247, 248, 248, 0.045),
-    0 10px 32px -14px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
-  transition:
-    background var(--motion-duration-base) var(--motion-ease-standard),
-    border-color var(--motion-duration-base) var(--motion-ease-standard);
-}
-
-[data-theme="light"] .skill-group-glass {
-  background: rgba(7, 10, 18, 0.025);
-  border: 1px solid rgba(7, 10, 18, 0.06);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
-    0 10px 32px -14px rgba(7, 10, 18, 0.08);
 }
 
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 1ms !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important; /* was missing — staggers still played out */
     animation-iteration-count: 1 !important;
-    transition-duration: 1ms !important;
+    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Entrances resolve to opacity-only — no 1ms transform jump. */
+  .row-enter,
+  .card-enter,
+  .popover-enter {
+    animation-name: u-fade-in !important;
+    transform: none !important;
   }
 }

@@ -69,7 +69,10 @@ pub fn scan_claude_plugins(home: &Path, agent: &AgentInfo) -> (Vec<Skill>, Vec<S
         Ok(list) => list,
         Err(e) => {
             errors.push(ScanError {
-                file_path: home.join(".claude/plugins/installed_plugins.json").to_string_lossy().to_string(),
+                file_path: home
+                    .join(".claude/plugins/installed_plugins.json")
+                    .to_string_lossy()
+                    .to_string(),
                 message: format!("plugin registry unreadable: {e}"),
             });
             return (skills, errors);
@@ -95,8 +98,8 @@ pub fn discover_plugin_installs(home: &Path) -> Result<Vec<PluginInstall>> {
 
     let raw = std::fs::read_to_string(&registry_path)
         .with_context(|| format!("read {}", registry_path.display()))?;
-    let parsed: InstalledPluginsFile = serde_json::from_str(&raw)
-        .with_context(|| format!("parse {}", registry_path.display()))?;
+    let parsed: InstalledPluginsFile =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", registry_path.display()))?;
 
     let enabled_set = read_enabled_plugins(home).unwrap_or_default();
 
@@ -105,10 +108,7 @@ pub fn discover_plugin_installs(home: &Path) -> Result<Vec<PluginInstall>> {
         let name = plugin_name_from_key(&key);
         // Default to enabled when the settings flag is missing — better to show
         // a freshly installed plugin than to silently hide it.
-        let enabled = enabled_set
-            .get(&key)
-            .copied()
-            .unwrap_or(true);
+        let enabled = enabled_set.get(&key).copied().unwrap_or(true);
 
         for record in records {
             let install_path = PathBuf::from(record.install_path);
@@ -151,10 +151,7 @@ fn plugin_name_from_key(key: &str) -> String {
 }
 
 /// Walk one plugin's install directory and parse every supported artifact.
-fn scan_single_plugin(
-    install: &PluginInstall,
-    agent: &AgentInfo,
-) -> (Vec<Skill>, Vec<ScanError>) {
+fn scan_single_plugin(install: &PluginInstall, agent: &AgentInfo) -> (Vec<Skill>, Vec<ScanError>) {
     let mut skills: Vec<Skill> = Vec::new();
     let mut errors: Vec<ScanError> = Vec::new();
 
@@ -202,7 +199,10 @@ fn scan_single_plugin(
     // two file existence checks per plugin and gives every hook a home in
     // the Hook bucket regardless of which convention the author chose.
     for hook_source in [
-        install.install_path.join(".claude-plugin").join("plugin.json"),
+        install
+            .install_path
+            .join(".claude-plugin")
+            .join("plugin.json"),
         install.install_path.join("hooks").join("hooks.json"),
     ] {
         if !hook_source.exists() {
@@ -278,8 +278,7 @@ fn annotate_plugin_origin(skill: &mut Skill, install: &PluginInstall) {
         if !existing.contains(':') {
             let stripped = existing.trim_start_matches('/');
             if !stripped.is_empty() {
-                skill.metadata.slash_command =
-                    Some(format!("/{}:{}", install.name, stripped));
+                skill.metadata.slash_command = Some(format!("/{}:{}", install.name, stripped));
             }
         }
     }
@@ -441,10 +440,7 @@ mod tests {
             &install_dir.join(".git/hooks/pre-commit.sample"),
             "#!/bin/sh\nexit 0",
         );
-        write(
-            &install_dir.join(".git/hooks/post-commit.md"),
-            "# fake",
-        );
+        write(&install_dir.join(".git/hooks/post-commit.md"), "# fake");
 
         write(
             &home.join(".claude/plugins/installed_plugins.json"),
@@ -537,7 +533,10 @@ mod tests {
             .filter_map(|s| s.metadata.hook_event.clone())
             .collect();
         assert!(hook_events.contains("Stop"), "hooks: {hook_events:?}");
-        assert!(hook_events.contains("Notification"), "hooks: {hook_events:?}");
+        assert!(
+            hook_events.contains("Notification"),
+            "hooks: {hook_events:?}"
+        );
     }
 
     #[test]
@@ -590,11 +589,20 @@ mod tests {
             .filter(|s| s.artifact_type == crate::models::ArtifactType::Hook)
             .filter_map(|s| s.metadata.hook_event.clone())
             .collect();
-        assert!(hook_events.contains("SessionStart"), "hooks: {hook_events:?}");
-        assert!(hook_events.contains("UserPromptSubmit"), "hooks: {hook_events:?}");
+        assert!(
+            hook_events.contains("SessionStart"),
+            "hooks: {hook_events:?}"
+        );
+        assert!(
+            hook_events.contains("UserPromptSubmit"),
+            "hooks: {hook_events:?}"
+        );
 
         // Plugin annotation propagates to hook artifacts too.
-        for skill in skills.iter().filter(|s| s.artifact_type == crate::models::ArtifactType::Hook) {
+        for skill in skills
+            .iter()
+            .filter(|s| s.artifact_type == crate::models::ArtifactType::Hook)
+        {
             assert!(skill.description.contains("[plugin: hooky@mkt]"));
         }
     }

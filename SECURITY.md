@@ -1,45 +1,52 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-Security fixes are applied to the latest release line.
+Security fixes are applied to the current source and latest release line.
 
 | Version | Supported |
 |---|---|
-| latest | yes |
-| older | no |
+| 0.3.x | Yes |
+| Earlier versions | No |
 
-## Reporting a Vulnerability
+Windows x64 is the only qualified binary target for 0.3.0. Source availability does not imply qualified packaging on other platforms.
 
-Please do not open public issues for security vulnerabilities.
+## Report a vulnerability
 
-Report privately by contacting the maintainer through GitHub security advisory flow for this repository.
+Do not open a public issue for a suspected vulnerability. Use the repository's [private security advisory form](https://github.com/OthmanAdi/skill-deck/security/advisories/new).
 
-When reporting, include:
-- affected version or commit
-- reproduction steps
-- expected vs actual behavior
-- impact assessment if known
+Include the affected version or commit, reproduction steps, expected and actual behavior, impact, and any suggested mitigation. Avoid including real secrets or unrelated personal data.
 
-## Response Targets
+Response targets:
 
-- Initial acknowledgment: within 72 hours
-- Triage decision: within 7 days
-- Fix timeline: depends on severity and complexity
+- Initial acknowledgement within 72 hours.
+- Triage decision within 7 days.
+- Remediation timing based on severity and complexity.
 
-## Scope Notes
+These are targets, not a service-level agreement.
 
-Areas with elevated security sensitivity:
-- Tauri IPC commands that access filesystem or window/input APIs
-- update-check network logic and provider validation
-- parser paths that expose command or hook payloads for copy workflows
+## Security-sensitive areas
 
-## Local Privacy Expectations
+- Tauri IPC commands that access the filesystem, window state, or global input.
+- Agent path resolution and the allowlist used to read or write discovered artifacts.
+- Parser handling for commands, hooks, prompts, and frontmatter.
+- Provider credentials, remote model requests, and web tools.
+- Managed model download origin restrictions, pinned hashes, and local sidecar lifecycle.
+- Marketplace and skill-update network requests.
+- Release signing, installer contents, SBOM generation, checksums, and build-path provenance.
 
-- Artifact parsing, discovery enrichment, and filtering are local-only operations.
-- Command and hook payloads are displayed and copied locally, they are never uploaded by Skill Deck.
-- Contributors should avoid adding sample docs or fixtures that include real secrets, tokens, or production endpoints.
+## Privacy boundaries
 
-## Disclosure
+Artifact discovery, parsing, filtering, preferences, snapshots, chat history, and harness telemetry are local operations. Skill Deck does not run a project telemetry service.
 
-After a fix is available, coordinated disclosure is preferred with a changelog entry under the Security section.
+Network access occurs when a user searches a marketplace, checks a skill's GitHub source, invokes web tools, downloads the managed Jan-nano model, or uses a configured remote AI provider. Content sent to a remote provider is governed by that provider's terms and privacy practices.
+
+Provider and web-search credentials are stored in the local application configuration and masked when configuration is returned to the interface. Contributors must preserve that boundary and must not add credentials to logs, errors, fixtures, screenshots, or diagnostic bundles.
+
+## Release integrity
+
+Official Windows artifacts must be Authenticode-signed, checked for prohibited build paths and PDB content, accompanied by checksums and release evidence, and produced by the tag workflow. The project does not publish unsigned binaries as official releases.
+
+## Coordinated disclosure
+
+After a fix is available, coordinated disclosure is preferred. Credit is offered when requested and appropriate, unless anonymity is requested.

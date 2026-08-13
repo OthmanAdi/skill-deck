@@ -12,6 +12,7 @@
 // 4. That's it — scanner.rs picks it up automatically
 
 pub mod claude_plugins;
+pub(crate) mod locations;
 pub mod registry;
 pub mod scanner;
 

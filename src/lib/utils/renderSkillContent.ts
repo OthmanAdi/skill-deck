@@ -118,6 +118,20 @@ function renderInline(input: string): string {
     return `<a class="skill-md-link" href="${safeHref}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   });
 
+  // Bare URL autolink — catches `https://...` that the model emitted without
+  // markdown syntax. Skip URLs already inside an attribute (preceded by
+  // `(`, `"`, `'`, `=`, `>`) so href values + markdown link bodies are not
+  // double-wrapped. Trailing punctuation (`.,;:!?)]>` ) is captured into a
+  // separate group and re-emitted outside the anchor so "see https://x.com."
+  // doesn't link the period.
+  output = output.replace(
+    /(^|[^("'=>])(https?:\/\/[^\s<>)\]"']+?)([.,;:!?)\]>]*)(?=\s|$|<)/g,
+    (_match, lead: string, url: string, trail: string) => {
+      const safeHref = sanitizeHref(url);
+      return `${lead}<a class="skill-md-link skill-md-link-auto" href="${safeHref}" target="_blank" rel="noopener noreferrer">${url}</a>${trail}`;
+    },
+  );
+
   output = output.replace(/\*\*([^*]+)\*\*/g, '<strong class="skill-strong">$1</strong>');
   output = output.replace(/__([^_]+)__/g, '<strong class="skill-strong">$1</strong>');
   output = output.replace(/\*([^*]+)\*/g, '<em class="skill-em">$1</em>');

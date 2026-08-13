@@ -141,6 +141,10 @@ pub enum AgentId {
     Crush,
     Amp,
     Antigravity,
+    AntigravityCli,
+    #[serde(rename = "astrbot")]
+    AstrBot,
+    AutohandCode,
     #[serde(rename = "openclaw")]
     OpenClaw,
     #[serde(rename = "codearts-agent")]
@@ -156,37 +160,59 @@ pub enum AgentId {
     DeepAgents,
     Dexto,
     Droid,
+    Eve,
     Firebender,
     #[serde(rename = "forgecode")]
     ForgeCode,
     Goose,
+    Grok,
+    HermesAgent,
+    InferenceSh,
+    Jazz,
     Junie,
     #[serde(rename = "iflow-cli")]
     IFlowCli,
     Kilo,
-    #[serde(rename = "kimi-cli")]
-    KimiCli,
+    Kimchi,
+    #[serde(rename = "kimi-code-cli", alias = "kimi-cli")]
+    KimiCodeCli,
     #[serde(rename = "kiro-cli")]
     KiroCli,
     Kode,
+    Lingma,
+    Loaf,
     #[serde(rename = "mcpjam")]
     McpJam,
     MistralVibe,
+    Moxby,
     Mux,
     Neovate,
+    Ona,
     Pi,
     Qoder,
+    QoderCn,
     #[serde(rename = "qwen-code")]
     QwenCode,
     Replit,
+    Reasonix,
     #[serde(rename = "rovodev")]
     RovoDev,
+    Terramind,
+    #[serde(rename = "tinycloud")]
+    Tinycloud,
     Trae,
     #[serde(rename = "trae-cn")]
     TraeCn,
     Warp,
+    Zed,
+    #[serde(rename = "zcode")]
+    ZCode,
     Zencoder,
+    #[serde(rename = "zenflow")]
+    Zenflow,
     Pochi,
+    #[serde(rename = "promptscript")]
+    PromptScript,
     Adal,
     /// For AGENTS.md files (universal, not agent-specific)
     Universal,

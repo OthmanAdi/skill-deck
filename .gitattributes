@@ -1,0 +1,10 @@
+# The Free public projection is byte-bound. Keep dependency locks, legal
+# sources, generated receipts, and test fixtures stable on Windows.
+.gitattributes text eol=lf
+LICENSE text eol=lf
+pnpm-lock.yaml text eol=lf
+release/free-notices-policy.json text eol=lf
+release/free-notices/** text eol=lf
+scripts/release-compliance/tests/fixtures/free-notices/** text eol=lf
+src-tauri/Cargo.lock text eol=lf
+src-tauri/free-notices/** text eol=lf

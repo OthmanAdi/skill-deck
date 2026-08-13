@@ -3,35 +3,70 @@
 use tauri::State;
 
 use crate::commands::preferences::ConfigState;
+use crate::commands::skills::{
+    read_skill_file_in_scope, read_skill_file_with_binding_in_scope, scan_for_lookup,
+    scan_for_mutation, write_skill_file_in_scope, CatalogLookup, SkillCatalogState,
+};
 use crate::detection::marketplaces::{
     self, MarketplaceSearchResponse, ProviderId, ProviderSearchOutcome,
 };
 use crate::detection::{skill_history, update_checker};
-use crate::models::{SkillVersionEntry, UpdateErrorKind};
+use crate::models::{AppConfig, SkillVersionEntry, UpdateErrorKind};
 
-fn scan_for_commands(state: &State<'_, ConfigState>) -> Result<crate::models::ScanResult, String> {
-    let (scan, config_changed, config_snapshot) = {
-        let mut config = state
-            .0
-            .lock()
-            .map_err(|_| "Failed to lock config state".to_string())?;
-        let (scan, changed) = crate::commands::skills::scan_with_config(&mut config);
-        (scan, changed, config.clone())
-    };
+static RESTORE_MUTATION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    if config_changed {
-        let _ = crate::commands::preferences::save_config(&config_snapshot);
-    }
-
-    Ok(scan)
+fn scan_for_commands(
+    state: &State<'_, ConfigState>,
+    catalog: &State<'_, SkillCatalogState>,
+) -> Result<CatalogLookup, String> {
+    scan_for_lookup(state, catalog)
 }
 
-fn resolve_canonical_skill_id(scan: &crate::models::ScanResult, skill_id: &str) -> String {
-    scan.skills
-        .iter()
-        .find(|skill| skill.id == skill_id || skill.legacy_ids.iter().any(|legacy| legacy == skill_id))
-        .map(|skill| skill.id.clone())
-        .unwrap_or_else(|| skill_id.to_string())
+fn resolve_canonical_skill_id(scan: &CatalogLookup, skill_id: &str) -> String {
+    scan.canonical_id(skill_id)
+}
+
+/// The only mutable roots that can extend the destructive file scope. A
+/// restore authorizes its scan, binding, and write against one exact snapshot
+/// of these lists, and refuses the operation if that scope changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RestoreScope {
+    project_roots: Vec<String>,
+    custom_scan_paths: Vec<String>,
+}
+
+impl From<&AppConfig> for RestoreScope {
+    fn from(config: &AppConfig) -> Self {
+        Self {
+            project_roots: config.project_roots.clone(),
+            custom_scan_paths: config.custom_scan_paths.clone(),
+        }
+    }
+}
+
+fn ensure_restore_scope_is_current(
+    expected: &RestoreScope,
+    config: &AppConfig,
+) -> Result<(), String> {
+    if expected.project_roots != config.project_roots
+        || expected.custom_scan_paths != config.custom_scan_paths
+    {
+        return Err(
+            "Restore scope changed during the operation; retry from the current catalog"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn rollback_restore_transaction(
+    config: &mut AppConfig,
+    original_config: &AppConfig,
+    staged_entry: &SkillVersionEntry,
+) -> Result<(), String> {
+    crate::commands::preferences::save_config(original_config)?;
+    skill_history::rollback_staged_snapshot(config, original_config, staged_entry);
+    Ok(())
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -67,25 +102,19 @@ pub struct AggregatedMarketplaceResponse {
     pub providers: Vec<ProviderSearchOutcome>,
 }
 
-fn scan_skill_file_path(state: &State<'_, ConfigState>, skill_id: &str) -> Result<String, String> {
-    let scan = scan_for_commands(state)?;
+fn scan_skill_file_path(scan: &CatalogLookup, skill_id: &str) -> Result<String, String> {
     let skill = scan
-        .skills
-        .into_iter()
-        .find(|s| s.id == skill_id || s.legacy_ids.iter().any(|legacy| legacy == skill_id))
+        .skill(skill_id)
         .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
-    Ok(skill.file_path)
+    Ok(skill.file_path.clone())
 }
 
 fn read_repo_and_remote_ref_for_skill(
-    state: &State<'_, ConfigState>,
+    scan: &CatalogLookup,
     skill_id: &str,
 ) -> Result<(Option<String>, Option<String>), String> {
-    let scan = scan_for_commands(state)?;
     let skill = scan
-        .skills
-        .into_iter()
-        .find(|s| s.id == skill_id || s.legacy_ids.iter().any(|legacy| legacy == skill_id))
+        .skill(skill_id)
         .ok_or_else(|| "Skill not found in allowed scan scope".to_string())?;
 
     let version = skill.metadata.version.clone();
@@ -100,24 +129,18 @@ fn read_repo_and_remote_ref_for_skill(
             .and_then(|value| value.as_str())
             .map(|s| s.to_string())
     };
-    Ok((skill.metadata.repository_url, remote_ref))
-}
-
-fn write_skill_file(path: &str, content: &str) -> Result<(), String> {
-    let canonical = std::fs::canonicalize(path)
-        .map_err(|e| format!("Failed to resolve skill path {}: {}", path, e))?;
-    std::fs::write(&canonical, content)
-        .map_err(|e| format!("Failed to write {}: {}", canonical.to_string_lossy(), e))
+    Ok((skill.metadata.repository_url.clone(), remote_ref))
 }
 
 #[tauri::command]
 pub async fn check_skill_update(
     state: State<'_, ConfigState>,
+    catalog: State<'_, SkillCatalogState>,
     skill_id: String,
     repo_url: String,
     force: Option<bool>,
 ) -> Result<UpdateCheckResponse, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     {
@@ -167,13 +190,16 @@ pub async fn check_skill_update(
             }
         }
 
-        config.update_check_cache.get(&canonical_skill_id).and_then(|e| {
-            if parsed_repo_ref.is_some() && e.repo_ref.as_ref() == parsed_repo_ref.as_ref() {
-                e.remote_ref.clone()
-            } else {
-                None
-            }
-        })
+        config
+            .update_check_cache
+            .get(&canonical_skill_id)
+            .and_then(|e| {
+                if parsed_repo_ref.is_some() && e.repo_ref.as_ref() == parsed_repo_ref.as_ref() {
+                    e.remote_ref.clone()
+                } else {
+                    None
+                }
+            })
     };
 
     let result = update_checker::check_github_update(&repo_url, local_ref.as_deref()).await;
@@ -188,6 +214,7 @@ pub async fn check_skill_update(
         config.update_check_cache.insert(canonical_skill_id, entry);
         crate::commands::preferences::save_config(&config)?;
     }
+    catalog.invalidate();
 
     let checked_ok = result.error.is_none();
     Ok(UpdateCheckResponse {
@@ -205,10 +232,11 @@ pub async fn check_skill_update(
 #[tauri::command]
 pub fn set_skill_repo(
     state: State<ConfigState>,
+    catalog: State<SkillCatalogState>,
     skill_id: String,
     repo_url: String,
 ) -> Result<Option<String>, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     let mut config = state
@@ -219,6 +247,8 @@ pub fn set_skill_repo(
     if repo_url.trim().is_empty() {
         config.skill_repo_overrides.remove(&canonical_skill_id);
         crate::commands::preferences::save_config(&config)?;
+        drop(config);
+        catalog.invalidate();
         Ok(None)
     } else {
         let canonical =
@@ -229,6 +259,8 @@ pub fn set_skill_repo(
             .skill_repo_overrides
             .insert(canonical_skill_id, canonical.clone());
         crate::commands::preferences::save_config(&config)?;
+        drop(config);
+        catalog.invalidate();
         Ok(Some(canonical))
     }
 }
@@ -237,10 +269,11 @@ pub fn set_skill_repo(
 #[tauri::command]
 pub fn set_skill_install_command(
     state: State<ConfigState>,
+    catalog: State<SkillCatalogState>,
     skill_id: String,
     install_command: String,
 ) -> Result<(), String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     let mut config = state
@@ -255,6 +288,8 @@ pub fn set_skill_install_command(
             .insert(canonical_skill_id, install_command);
     }
     crate::commands::preferences::save_config(&config)?;
+    drop(config);
+    catalog.invalidate();
     Ok(())
 }
 
@@ -262,19 +297,30 @@ pub fn set_skill_install_command(
 #[tauri::command]
 pub fn snapshot_skill_before_update(
     state: State<ConfigState>,
+    catalog: State<SkillCatalogState>,
     skill_id: String,
     _project_path: Option<String>,
     source_repo_url: Option<String>,
     remote_ref: Option<String>,
     reason: Option<String>,
 ) -> Result<SkillVersionEntry, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
-    let file_path = scan_skill_file_path(&state, &canonical_skill_id)?;
-    let current = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+    let file_path = scan_skill_file_path(&scan, &canonical_skill_id)?;
+    let config_snapshot = state
+        .0
+        .lock()
+        .map_err(|_| "Failed to lock config state".to_string())?
+        .clone();
+    let home_dir = dirs::home_dir();
+    let current = read_skill_file_in_scope(
+        std::path::Path::new(&file_path),
+        home_dir.as_deref(),
+        &config_snapshot.project_roots,
+        &config_snapshot.custom_scan_paths,
+    )?;
     let (detected_repo, detected_remote_ref) =
-        read_repo_and_remote_ref_for_skill(&state, &canonical_skill_id)?;
+        read_repo_and_remote_ref_for_skill(&scan, &canonical_skill_id)?;
 
     let mut config = state
         .0
@@ -284,25 +330,42 @@ pub fn snapshot_skill_before_update(
     let reason_text = reason.unwrap_or_else(|| "before-update".to_string());
     let repo_ref = source_repo_url.or(detected_repo);
     let remote_ref = remote_ref.or(detected_remote_ref);
-    let entry = skill_history::create_snapshot(
-        &mut config,
+    let staged = skill_history::stage_snapshot(
+        &config,
         &canonical_skill_id,
         &current,
         &reason_text,
         repo_ref.as_deref(),
         remote_ref.as_deref(),
     )?;
+    let entry = staged.entry.clone();
+    let original_config = config.clone();
+    let mut committed_config = config.clone();
+    let pruned_entries = skill_history::commit_staged_snapshot_for_skill(
+        &mut committed_config,
+        &canonical_skill_id,
+        staged,
+    );
 
-    crate::commands::preferences::save_config(&config)?;
+    if let Err(error) = crate::commands::preferences::save_config(&committed_config) {
+        *config = original_config;
+        skill_history::remove_snapshot_files(std::slice::from_ref(&entry));
+        return Err(error);
+    }
+    *config = committed_config;
+    skill_history::remove_snapshot_files(&pruned_entries);
+    drop(config);
+    catalog.invalidate();
     Ok(entry)
 }
 
 #[tauri::command]
 pub fn list_skill_versions(
     state: State<ConfigState>,
+    catalog: State<SkillCatalogState>,
     skill_id: String,
 ) -> Result<SkillHistoryResponse, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     let config = state
@@ -333,10 +396,11 @@ pub struct SkillSnapshotContentResponse {
 #[tauri::command]
 pub fn read_skill_snapshot(
     state: State<'_, ConfigState>,
+    catalog: State<'_, SkillCatalogState>,
     skill_id: String,
     version_id: String,
 ) -> Result<SkillSnapshotContentResponse, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     let config = state
@@ -370,6 +434,7 @@ pub struct DeleteSkillVersionResult {
     pub deleted: bool,
     pub version_id: String,
     pub remaining_entries: Vec<SkillVersionEntry>,
+    pub archive_cleanup_pending: bool,
 }
 
 /// Permanently remove a single archived version. Returns the new history list
@@ -377,10 +442,11 @@ pub struct DeleteSkillVersionResult {
 #[tauri::command]
 pub fn delete_skill_version(
     state: State<'_, ConfigState>,
+    catalog: State<'_, SkillCatalogState>,
     skill_id: String,
     version_id: String,
 ) -> Result<DeleteSkillVersionResult, String> {
-    let scan = scan_for_commands(&state)?;
+    let scan = scan_for_commands(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
 
     let mut config = state
@@ -388,59 +454,166 @@ pub fn delete_skill_version(
         .lock()
         .map_err(|_| "Failed to lock config state".to_string())?;
 
-    let remaining = skill_history::delete_version(&mut config, &canonical_skill_id, &version_id)?;
-    crate::commands::preferences::save_config(&config)?;
+    let original_config = config.clone();
+    let outcome = skill_history::delete_version(&mut config, &canonical_skill_id, &version_id)?;
+    if let Err(error) = crate::commands::preferences::save_config(&config) {
+        *config = original_config;
+        return Err(error);
+    }
+    let archive_cleanup_pending =
+        skill_history::remove_snapshot_file(&outcome.removed_entry).is_err();
+    drop(config);
+    catalog.invalidate();
 
     Ok(DeleteSkillVersionResult {
         deleted: true,
         version_id,
-        remaining_entries: remaining,
+        remaining_entries: outcome.remaining_entries,
+        archive_cleanup_pending,
     })
 }
 
 #[tauri::command]
 pub fn restore_skill_version(
     state: State<ConfigState>,
+    catalog: State<SkillCatalogState>,
     skill_id: String,
     version_id: String,
     _project_path: Option<String>,
 ) -> Result<RestoreSkillVersionResult, String> {
-    let scan = scan_for_commands(&state)?;
+    // Direct IPC callers can bypass the frontend's single-flight behaviour.
+    // Serialize restores so history and live-file ordering stays deterministic.
+    let _restore_guard = RESTORE_MUTATION_LOCK
+        .lock()
+        .map_err(|_| "Failed to lock restore mutation state".to_string())?;
+
+    // A restore is destructive: do not authorize it from the short-lived
+    // browsing snapshot. Resolve the current file, then bind its identity and
+    // content through the write below.
+    let restore_scope = {
+        let config = state
+            .0
+            .lock()
+            .map_err(|_| "Failed to lock config state".to_string())?;
+        RestoreScope::from(&*config)
+    };
+    let scan = scan_for_mutation(&state, &catalog)?;
     let canonical_skill_id = resolve_canonical_skill_id(&scan, &skill_id);
-    let file_path = scan_skill_file_path(&state, &canonical_skill_id)?;
+    let file_path = scan_skill_file_path(&scan, &canonical_skill_id)?;
+    let home_dir = dirs::home_dir();
 
     let mut config = state
         .0
         .lock()
         .map_err(|_| "Failed to lock config state".to_string())?;
 
-    let entries = config
-        .skill_version_history
-        .get(&canonical_skill_id)
-        .cloned()
-        .unwrap_or_default();
-    let target = entries
-        .iter()
-        .find(|e| e.version_id == version_id)
-        .cloned()
-        .ok_or_else(|| "Requested version not found".to_string())?;
+    // Materialize and validate the selected archive before taking the rollback
+    // snapshot. At the history cap, the rollback snapshot may evict the oldest
+    // archive, including the selected target. The returned content is now a
+    // verified in-memory value, rather than a path that eviction can remove.
+    let snapshot = skill_history::load_restore_target(&config, &canonical_skill_id, &version_id)?;
 
-    let current = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read {}: {}", file_path, e))?;
+    // Check immediately before reading: a root removed after the fresh scan
+    // must not remain authorized by an older configuration snapshot.
+    ensure_restore_scope_is_current(&restore_scope, &config)?;
+    let (current, current_binding) = read_skill_file_with_binding_in_scope(
+        std::path::Path::new(&file_path),
+        home_dir.as_deref(),
+        &restore_scope.project_roots,
+        &restore_scope.custom_scan_paths,
+    )?;
 
-    let _ = skill_history::create_snapshot(
-        &mut config,
+    // Stage the rollback snapshot, then make that history entry durable before
+    // changing the live file. This keeps the pre-restore content recoverable
+    // even if the following atomic replacement fails.
+    let staged_rollback = skill_history::stage_snapshot(
+        &config,
         &canonical_skill_id,
         &current,
         "before-restore",
         None,
         None,
     )?;
+    let staged_entry = staged_rollback.entry.clone();
+    let original_config = config.clone();
+    // Persist cap-plus-one before the live write. A crash or write failure in
+    // this interval retains both the selected target and rollback archive,
+    // rather than durably pruning an archive for a restore that never landed.
+    let mut staged_config = config.clone();
+    skill_history::append_staged_snapshot_for_skill(
+        &mut staged_config,
+        &canonical_skill_id,
+        staged_rollback,
+    );
 
-    let snapshot = skill_history::load_snapshot(&target)?;
-    write_skill_file(&file_path, &snapshot.content)?;
+    if let Err(error) = crate::commands::preferences::save_config(&staged_config) {
+        skill_history::remove_snapshot_files(std::slice::from_ref(&staged_entry));
+        return Err(error);
+    }
+    *config = staged_config;
 
-    crate::commands::preferences::save_config(&config)?;
+    // Keep the final authorization explicit next to the destructive write.
+    // The config mutex prevents a concurrent preference mutation after the
+    // previous check, while the file binding below rejects file replacement or
+    // content drift in the interval after the read.
+    if let Err(error) = ensure_restore_scope_is_current(&restore_scope, &config) {
+        if let Err(rollback_error) =
+            rollback_restore_transaction(&mut config, &original_config, &staged_entry)
+        {
+            return Err(format!(
+                "Restore stopped before the live write: {error}; history rollback also failed: {rollback_error}"
+            ));
+        }
+        return Err(error);
+    }
+    if let Err(error) = write_skill_file_in_scope(
+        std::path::Path::new(&file_path),
+        &snapshot.content,
+        &current_binding,
+        home_dir.as_deref(),
+        &restore_scope.project_roots,
+        &restore_scope.custom_scan_paths,
+    ) {
+        // Once the bound-handle write begins, an I/O failure can leave the
+        // live bytes partially changed. Keep the already-durable rollback
+        // archive and cap-plus-one index in that case instead of deleting the
+        // only guaranteed recovery path.
+        if error.starts_with("Restore write may have modified the bound file") {
+            drop(config);
+            catalog.invalidate();
+            return Err(format!(
+                "Restore may have partially changed the live skill; the durable rollback archive is retained: {error}"
+            ));
+        }
+        if let Err(rollback_error) =
+            rollback_restore_transaction(&mut config, &original_config, &staged_entry)
+        {
+            return Err(format!(
+                "Restore did not change the live skill: {error}; history rollback also failed: {rollback_error}"
+            ));
+        }
+        return Err(format!(
+            "Restore did not change the live skill; the history transaction was rolled back: {error}"
+        ));
+    }
+
+    // Only a successful live restore may trim history. If this final save
+    // fails, leave the safe cap-plus-one state intact rather than losing an
+    // archive after the live file changed.
+    let mut final_config = config.clone();
+    let pruned_entries =
+        skill_history::prune_history_to_cap(&mut final_config, &canonical_skill_id);
+    if let Err(error) = crate::commands::preferences::save_config(&final_config) {
+        drop(config);
+        catalog.invalidate();
+        return Err(format!(
+            "Restore changed the live skill, but history retention is pending: {error}"
+        ));
+    }
+    *config = final_config;
+    skill_history::remove_snapshot_files(&pruned_entries);
+    drop(config);
+    catalog.invalidate();
     Ok(RestoreSkillVersionResult {
         restored: true,
         version_id,
@@ -468,8 +641,23 @@ pub async fn search_marketplaces_aggregated(
 ) -> Result<AggregatedMarketplaceResponse, String> {
     let normalized_limit = marketplaces::normalize_limit(limit.unwrap_or(20) as usize);
     let providers = marketplaces::search_all(&query, normalized_limit).await;
-    Ok(AggregatedMarketplaceResponse {
-        query,
-        providers,
-    })
+    Ok(AggregatedMarketplaceResponse { query, providers })
+}
+
+#[cfg(test)]
+mod restore_scope_tests {
+    use super::*;
+
+    #[test]
+    fn restore_rejects_project_root_removed_after_scope_snapshot() {
+        let expected = RestoreScope {
+            project_roots: vec!["C:/synthetic/project".to_string()],
+            custom_scan_paths: vec!["C:/synthetic/custom/SKILL.md".to_string()],
+        };
+        let current = AppConfig::default();
+
+        let error = ensure_restore_scope_is_current(&expected, &current)
+            .expect_err("a removed configured root must revoke restore authorization");
+        assert!(error.contains("scope changed"));
+    }
 }

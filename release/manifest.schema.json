@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://othmanadi.com/schemas/skill-deck/release-manifest-v1.json",
+  "title": "Skill Deck release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "x-contract": {
+    "schemaVersion": "flagship-release-manifest/v1",
+    "productId": "skill-deck",
+    "productVersion": "0.3.0",
+    "copyrightHolder": "Ahmad Othman Ammar Adi",
+    "publisher": "Ahmad Othman Ammar Adi",
+    "license": "MPL-2.0"
+  },
+  "required": [
+    "schemaVersion",
+    "productId",
+    "productVersion",
+    "audience",
+    "source",
+    "artifacts",
+    "releaseEvidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "flagship-release-manifest/v1"
+    },
+    "productId": {
+      "const": "skill-deck"
+    },
+    "productVersion": {
+      "const": "0.3.0"
+    },
+    "audience": {
+      "enum": [
+        "internal-validation",
+        "authorized-recipient"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "commit",
+        "dirty"
+      ],
+      "properties": {
+        "repository": {
+          "const": "https://github.com/OthmanAdi/skill-deck"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "releaseEvidence": {
+      "$ref": "#/$defs/releaseEvidence"
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "platform",
+        "path",
+        "sizeBytes",
+        "sha256",
+        "signing"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "source-archive",
+            "portable-executable",
+            "installer-msi",
+            "installer-nsis"
+          ]
+        },
+        "platform": {
+          "enum": [
+            "windows-x64",
+            "source-portable"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{64}$"
+        },
+        "signing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "proof"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "signed",
+                "unsigned-exception"
+              ]
+            },
+            "proof": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "releaseEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checksumManifestPath",
+        "noticePaths",
+        "sbomPath",
+        "signingEvidencePaths"
+      ],
+      "properties": {
+        "checksumManifestPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "noticePaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "sbomPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signingEvidencePaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

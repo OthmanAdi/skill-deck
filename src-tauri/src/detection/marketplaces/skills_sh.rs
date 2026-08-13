@@ -220,7 +220,9 @@ pub async fn search(query: &str, limit: usize) -> Result<MarketplaceSearchRespon
         provider: ProviderId::SkillsSh,
         query: raw.query.unwrap_or_else(|| trimmed.to_string()),
         count: raw.count.unwrap_or(items.len()),
-        duration_ms: raw.duration_ms.unwrap_or_else(|| started.elapsed().as_millis() as u64),
+        duration_ms: raw
+            .duration_ms
+            .unwrap_or_else(|| started.elapsed().as_millis() as u64),
         items,
     })
 }

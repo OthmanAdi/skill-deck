@@ -16,12 +16,19 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use walkdir::WalkDir;
 
-use super::registry::get_agent_registry;
+use super::locations::{
+    capture_root_mode_from_process, CaptureRoot, CaptureRootMode, LocationEnvironment,
+};
+use super::registry::{get_agent_registry, get_agent_registry_with_environment};
 use crate::models::{
     AgentId, AgentInfo, ArtifactType, ScanError, ScanResult, Skill, SkillFormat, SkillScope,
 };
-use crate::parsers::{claude_hooks::parse_claude_hooks, parse_frontmatter, skill_md::parse_skill_md};
 use crate::parsers::frontmatter::{yaml_bool, yaml_str, yaml_string_array, yaml_string_list};
+use crate::parsers::{
+    claude_hooks::parse_claude_hooks, parse_frontmatter, skill_md::parse_skill_md,
+};
+
+const CAPTURE_FIXTURE_SKILL_COUNT: usize = 4;
 
 /// Scan all known agent global directories for skills.
 ///
@@ -49,10 +56,41 @@ pub fn scan_all_skills() -> ScanResult {
 /// Given a root we resolve `$PROJECT` the same way `$HOME` is resolved and scan
 /// those paths with `SkillScope::Project`.
 pub fn scan_all_skills_with_roots(project_roots: &[String]) -> ScanResult {
+    match capture_root_mode_from_process() {
+        CaptureRootMode::Normal => scan_all_skills_with_context(
+            get_agent_registry(),
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
+            project_roots,
+            None,
+        ),
+        CaptureRootMode::Capture(capture_root) => {
+            let environment = LocationEnvironment::for_capture(&capture_root);
+            scan_all_skills_with_context(
+                get_agent_registry_with_environment(&environment),
+                capture_root.root().to_path_buf(),
+                &[],
+                Some(&capture_root),
+            )
+        }
+        CaptureRootMode::Invalid(message) => ScanResult {
+            skills: Vec::new(),
+            errors: vec![ScanError {
+                file_path: "SKILL_DECK_CAPTURE_ROOT".to_string(),
+                message,
+            }],
+            scan_duration_ms: 0,
+        },
+    }
+}
+
+fn scan_all_skills_with_context(
+    registry: Vec<AgentInfo>,
+    home: PathBuf,
+    project_roots: &[String],
+    capture_root: Option<&CaptureRoot>,
+) -> ScanResult {
     let start = Instant::now();
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let home_str = home.to_string_lossy().to_string();
-    let registry = get_agent_registry();
 
     let mut all_skills: Vec<Skill> = Vec::new();
     let mut all_errors: Vec<ScanError> = Vec::new();
@@ -80,7 +118,7 @@ pub fn scan_all_skills_with_roots(project_roots: &[String]) -> ScanResult {
         // own version directory and the user can enable/disable plugins
         // independently of what is on disk. Delegate to the plugin scanner so
         // we read the canonical registry instead of guessing.
-        if matches!(agent.id, AgentId::ClaudeCode) {
+        if capture_root.is_none() && matches!(agent.id, AgentId::ClaudeCode) {
             let (plugin_skills, plugin_errors) =
                 crate::agents::claude_plugins::scan_claude_plugins(&home, agent);
             all_skills.extend(plugin_skills);
@@ -88,7 +126,15 @@ pub fn scan_all_skills_with_roots(project_roots: &[String]) -> ScanResult {
         }
     }
 
-    scan_pattern_groups(&order, &groups, SkillScope::Global, &mut all_skills, &mut all_errors);
+    scan_pattern_groups(
+        &order,
+        &groups,
+        SkillScope::Global,
+        None,
+        &mut all_skills,
+        &mut all_errors,
+        capture_root,
+    );
 
     // --- PROJECT scan (per resolved root, deduped across agents) ---
     for root in resolve_project_roots(project_roots) {
@@ -110,12 +156,28 @@ pub fn scan_all_skills_with_roots(project_roots: &[String]) -> ScanResult {
             &proj_order,
             &proj_groups,
             SkillScope::Project,
+            Some(&root),
             &mut all_skills,
             &mut all_errors,
+            capture_root,
         );
     }
 
-    crate::detection::skill_identity::dedupe_skills_by_source(&mut all_skills);
+    dedupe_skills_by_physical_source(&mut all_skills);
+
+    // Screenshot fixtures are intentionally a four-card proof surface. A
+    // malformed fixture should show no source-derived data, rather than a
+    // partial capture that hides a real-path regression.
+    if capture_root.is_some() && all_skills.len() != CAPTURE_FIXTURE_SKILL_COUNT {
+        all_errors.push(ScanError {
+            file_path: "SKILL_DECK_CAPTURE_ROOT".to_string(),
+            message: format!(
+                "capture fixture must resolve exactly {CAPTURE_FIXTURE_SKILL_COUNT} skills, found {}",
+                all_skills.len()
+            ),
+        });
+        all_skills.clear();
+    }
 
     // Build parent/child hierarchy based on path relationships
     build_skill_tree(&mut all_skills);
@@ -138,12 +200,20 @@ fn add_pattern_group(
     groups: &mut HashMap<(String, SkillFormat), Vec<AgentId>>,
 ) {
     for pattern in patterns {
-        let key = (resolve(pattern), format.clone());
+        let resolved = resolve(pattern);
+        let key = (physical_pattern_key(&resolved), format.clone());
         let agents = groups.entry(key.clone()).or_insert_with(|| {
             order.push(key.clone());
             Vec::new()
         });
-        if !agents.contains(agent_id) {
+
+        // A shared store is a physical source, not proof that every compatible
+        // agent is installed or owns its contents. Universal wins even when an
+        // agent-specific directory is a junction/symlink to that same store.
+        if matches!(agent_id, AgentId::Universal) {
+            agents.clear();
+            agents.push(agent_id.clone());
+        } else if !agents.contains(&AgentId::Universal) && !agents.contains(agent_id) {
             agents.push(agent_id.clone());
         }
     }
@@ -155,16 +225,38 @@ fn scan_pattern_groups(
     order: &[(String, SkillFormat)],
     groups: &HashMap<(String, SkillFormat), Vec<AgentId>>,
     scope: SkillScope,
+    project_path: Option<&str>,
     all_skills: &mut Vec<Skill>,
     all_errors: &mut Vec<ScanError>,
+    capture_root: Option<&CaptureRoot>,
 ) {
-    for key in order {
-        let Some(agent_ids) = groups.get(key) else {
-            continue;
-        };
-        let (skills, errors) = scan_pattern_group(&key.0, &key.1, agent_ids, scope.clone());
-        all_skills.extend(skills);
-        all_errors.extend(errors);
+    let mut seen_physical_files = HashSet::new();
+
+    // Shared-store patterns run first. If an agent-specific tree contains a
+    // child junction into `.agents/skills`, the neutral physical source is
+    // parsed first and the later alias is skipped.
+    for universal_first in [true, false] {
+        for key in order {
+            let Some(agent_ids) = groups.get(key) else {
+                continue;
+            };
+            let is_universal = agent_ids.contains(&AgentId::Universal);
+            if is_universal != universal_first {
+                continue;
+            }
+
+            let (skills, errors) = scan_pattern_group(
+                &key.0,
+                &key.1,
+                agent_ids,
+                scope.clone(),
+                project_path,
+                &mut seen_physical_files,
+                capture_root,
+            );
+            all_skills.extend(skills);
+            all_errors.extend(errors);
+        }
     }
 }
 
@@ -176,6 +268,9 @@ fn scan_pattern_group(
     format: &SkillFormat,
     agent_ids: &[AgentId],
     scope: SkillScope,
+    project_path: Option<&str>,
+    seen_physical_files: &mut HashSet<String>,
+    capture_root: Option<&CaptureRoot>,
 ) -> (Vec<Skill>, Vec<ScanError>) {
     let primary_id = agent_ids.first().cloned().unwrap_or(AgentId::Universal);
     let representative = AgentInfo {
@@ -193,7 +288,13 @@ fn scan_pattern_group(
 
     // Parse the matched files once as the representative agent, then re-stamp a
     // copy for every agent that declared this pattern.
-    let (parsed, errors) = match scan_glob_pattern(resolved, &representative, scope) {
+    let (parsed, errors) = match scan_glob_pattern(
+        resolved,
+        &representative,
+        scope,
+        seen_physical_files,
+        capture_root,
+    ) {
         Ok(out) => out,
         Err(e) => (
             Vec::new(),
@@ -207,11 +308,94 @@ fn scan_pattern_group(
     let mut skills = Vec::with_capacity(parsed.len() * agent_ids.len().max(1));
     for base in parsed {
         for agent_id in agent_ids {
-            skills.push(reassign_skill_agent(base.clone(), agent_id));
+            let mut skill = reassign_skill_agent(base.clone(), agent_id);
+            skill.project_path = project_path.map(str::to_string);
+            skills.push(skill);
         }
     }
 
     (skills, errors)
+}
+
+/// Convert textual glob aliases into one physical scan key. Existing roots
+/// are canonicalized so a junction/symlink and its target are parsed once.
+/// Case folding is Windows-only; case-sensitive macOS/Linux volumes retain
+/// their canonical spelling.
+fn physical_pattern_key(pattern: &str) -> String {
+    physical_pattern_key_with(pattern, |path| std::fs::canonicalize(path).ok())
+}
+
+fn physical_pattern_key_with(
+    pattern: &str,
+    canonicalize: impl Fn(&Path) -> Option<PathBuf>,
+) -> String {
+    let normalized = normalize_path_sep(pattern);
+    let wildcard = normalized.find(['*', '?', '[']);
+
+    let (root, suffix) = match wildcard {
+        Some(index) => {
+            let boundary = normalized[..index].rfind('/').unwrap_or(0);
+            (&normalized[..boundary], &normalized[boundary..])
+        }
+        None => (normalized.as_str(), ""),
+    };
+
+    let canonical = canonicalize(Path::new(root)).unwrap_or_else(|| PathBuf::from(root));
+    format!("{}{}", physical_path_identity(&canonical), suffix)
+}
+
+fn physical_path_identity(path: &Path) -> String {
+    physical_path_identity_for_platform(path, cfg!(target_os = "windows"))
+}
+
+fn canonical_file_identity(path: &Path) -> String {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    physical_path_identity(&canonical)
+}
+
+fn physical_path_identity_for_platform(path: &Path, case_insensitive: bool) -> String {
+    let normalized = normalize_path_sep(&path.to_string_lossy());
+    let without_windows_prefix = normalized.strip_prefix("//?/").unwrap_or(&normalized);
+    if case_insensitive {
+        without_windows_prefix.to_lowercase()
+    } else {
+        without_windows_prefix.to_string()
+    }
+}
+
+/// Preserve case-sensitive filesystem identity before invoking the legacy
+/// per-source merge, whose historical normalization lowercases every path.
+/// Bucketing first keeps `Skill/` and `skill/` distinct on Linux and on
+/// case-sensitive macOS volumes while retaining Windows case folding.
+fn dedupe_skills_by_physical_source(skills: &mut Vec<Skill>) {
+    dedupe_skills_by_physical_source_for_platform(skills, cfg!(target_os = "windows"));
+}
+
+fn dedupe_skills_by_physical_source_for_platform(skills: &mut Vec<Skill>, case_insensitive: bool) {
+    let mut buckets: HashMap<String, Vec<Skill>> = HashMap::new();
+    for skill in std::mem::take(skills) {
+        let source = std::fs::canonicalize(&skill.file_path)
+            .unwrap_or_else(|_| PathBuf::from(&skill.file_path));
+        let identity = physical_path_identity_for_platform(&source, case_insensitive);
+        buckets.entry(identity).or_default().push(skill);
+    }
+
+    let mut merged = Vec::new();
+    for mut bucket in buckets.into_values() {
+        crate::detection::skill_identity::dedupe_skills_by_source(&mut bucket);
+        merged.extend(bucket);
+    }
+    merged.sort_by(|left, right| {
+        left.name
+            .to_lowercase()
+            .cmp(&right.name.to_lowercase())
+            .then(
+                left.file_path
+                    .to_lowercase()
+                    .cmp(&right.file_path.to_lowercase()),
+            )
+    });
+    *skills = merged;
 }
 
 /// Re-stamp a parsed skill for a specific agent. The raw `agent:stem` id is
@@ -341,7 +525,11 @@ pub fn scan_custom_paths(custom_scan_paths: &[String]) -> (Vec<Skill>, Vec<ScanE
 }
 
 fn parse_custom_file(path: &Path) -> Result<Skill> {
-    parse_generic_md(AgentId::Custom("custom-scan".to_string()), path, SkillScope::Global)
+    parse_generic_md(
+        AgentId::Custom("custom-scan".to_string()),
+        path,
+        SkillScope::Global,
+    )
 }
 
 fn file_stem_or_default(path: &Path, fallback: &str) -> String {
@@ -357,7 +545,8 @@ fn is_claude_settings_file(path: &Path, agent_id: &AgentId) -> bool {
     }
 
     let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
-    normalized.ends_with("/.claude/settings.json") || normalized.ends_with("/.claude/settings.local.json")
+    normalized.ends_with("/.claude/settings.json")
+        || normalized.ends_with("/.claude/settings.local.json")
 }
 
 fn detect_artifact_type(agent_id: &AgentId, path: &Path) -> ArtifactType {
@@ -369,7 +558,8 @@ fn detect_artifact_type(agent_id: &AgentId, path: &Path) -> ArtifactType {
         .to_lowercase();
 
     if matches!(agent_id, AgentId::ClaudeCode)
-        && (normalized.contains("/.claude/commands/") || normalized.ends_with("/.claude/commands.md"))
+        && (normalized.contains("/.claude/commands/")
+            || normalized.ends_with("/.claude/commands.md"))
     {
         return ArtifactType::Command;
     }
@@ -430,7 +620,10 @@ fn derive_slash_command_from_path(agent_id: &AgentId, path: &Path) -> Option<Str
     let normalized = normalize_path_sep(&path.to_string_lossy().to_lowercase());
 
     if matches!(agent_id, AgentId::ClaudeCode) && normalized.contains("/.claude/commands/") {
-        let file = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        let file = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
         let cmd = sanitize_slash_segment(file);
         if !cmd.is_empty() {
             return Some(format!("/{}", cmd));
@@ -444,7 +637,10 @@ fn derive_slash_command_from_path(agent_id: &AgentId, path: &Path) -> Option<Str
         && normalized.contains("/.claude/plugins/cache/")
         && normalized.contains("/commands/")
     {
-        let file = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+        let file = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
         let cmd = sanitize_slash_segment(file);
         if !cmd.is_empty() {
             return Some(format!("/{}", cmd));
@@ -527,6 +723,8 @@ fn scan_glob_pattern(
     pattern: &str,
     agent: &AgentInfo,
     scope: SkillScope,
+    seen_physical_files: &mut HashSet<String>,
+    capture_root: Option<&CaptureRoot>,
 ) -> Result<(Vec<Skill>, Vec<ScanError>)> {
     let mut skills = Vec::new();
     let mut errors = Vec::new();
@@ -537,6 +735,15 @@ fn scan_glob_pattern(
     let paths = collect_candidate_paths(&normalized)?;
 
     for path in paths {
+        // In a capture session a glob or WalkDir result is never trusted on
+        // its own: a junction below the fixture root must not redirect parsing
+        // into the real profile (or anywhere else).
+        if capture_root.is_some_and(|root| !root.contains_file(&path)) {
+            continue;
+        }
+        if !seen_physical_files.insert(canonical_file_identity(&path)) {
+            continue;
+        }
         match parse_file_for_agent(&path, agent, scope.clone()) {
             Ok(parsed) => skills.extend(parsed),
             Err(e) => errors.push(ScanError {
@@ -675,9 +882,7 @@ pub(crate) fn parse_file_for_agent(
         | SkillFormat::RulesDir => parse_generic_md(agent.id.clone(), path, scope),
 
         // YAML configs (Aider) — treat the whole file as a "skill" with the filename as name
-        SkillFormat::Yaml | SkillFormat::Json => {
-            parse_config_file(agent.id.clone(), path, scope)
-        }
+        SkillFormat::Yaml | SkillFormat::Json => parse_config_file(agent.id.clone(), path, scope),
     }?;
 
     // @agent-context: Post-parse enrichment — detect repo URLs and install commands.
@@ -701,11 +906,7 @@ pub(crate) fn parse_file_for_agent(
 }
 
 /// Generic markdown parser for agents that use .mdc, .md rules, or plain markdown.
-fn parse_generic_md(
-    agent_id: AgentId,
-    path: &Path,
-    scope: SkillScope,
-) -> Result<Skill> {
+fn parse_generic_md(agent_id: AgentId, path: &Path, scope: SkillScope) -> Result<Skill> {
     let content = std::fs::read_to_string(path)?;
     let parsed = parse_frontmatter(&content)?;
 
@@ -835,11 +1036,7 @@ fn parse_generic_md(
 }
 
 /// Parse YAML/JSON config files (Aider, Cody) as single "skills".
-fn parse_config_file(
-    agent_id: AgentId,
-    path: &Path,
-    scope: SkillScope,
-) -> Result<Skill> {
+fn parse_config_file(agent_id: AgentId, path: &Path, scope: SkillScope) -> Result<Skill> {
     let file_stem = file_stem_or_default(path, "config");
 
     let id = format!(
@@ -880,12 +1077,27 @@ fn parse_config_file(
 
 /// Check which agents are installed by testing if their directories exist.
 pub fn detect_installed_agents() -> Vec<AgentInfo> {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let mut registry = get_agent_registry();
+    let (home, mut registry) = match capture_root_mode_from_process() {
+        CaptureRootMode::Normal => (
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")),
+            get_agent_registry(),
+        ),
+        CaptureRootMode::Capture(capture_root) => {
+            let environment = LocationEnvironment::for_capture(&capture_root);
+            (
+                capture_root.root().to_path_buf(),
+                get_agent_registry_with_environment(&environment),
+            )
+        }
+        // Do not resolve the normal registry while an explicitly requested
+        // capture contract is malformed: even registry construction can read
+        // bounded editor settings from a real profile.
+        CaptureRootMode::Invalid(_) => return Vec::new(),
+    };
 
     // API-01: report a real per-agent skill_count instead of a hardcoded 0.
-    // Count each discovered skill once for every agent that sources it (a skill
-    // in the shared store is attributed to all agents that declare that store).
+    // Shared stores are counted under Universal, not copied onto every agent
+    // that happens to support the shared format.
     let scan = scan_all_skills();
     let mut counts: HashMap<AgentId, usize> = HashMap::new();
     for skill in &scan.skills {
@@ -900,7 +1112,7 @@ pub fn detect_installed_agents() -> Vec<AgentInfo> {
     }
 
     for agent in &mut registry {
-        agent.installed = should_scan_agent(agent, &home);
+        agent.installed = is_agent_installed(agent, &home);
         agent.skill_count = counts.get(&agent.id).copied().unwrap_or(0);
     }
 
@@ -908,21 +1120,25 @@ pub fn detect_installed_agents() -> Vec<AgentInfo> {
 }
 
 fn should_scan_agent(agent: &AgentInfo, home: &Path) -> bool {
-    let installed_by_detection_path = agent
-        .global_detection_paths
-        .iter()
-        .any(|p| resolved_path_exists(p, home));
+    is_agent_installed(agent, home)
+        || agent
+            .global_paths
+            .iter()
+            .any(|path| resolved_path_exists(path, home))
+}
 
-    if installed_by_detection_path {
-        return true;
+/// Installation is determined only from agent-specific probes. A compatible
+/// shared skill store is never installation evidence for Cline, Kimi, Warp,
+/// Zed, or any other consumer.
+pub(crate) fn is_agent_installed(agent: &AgentInfo, home: &Path) -> bool {
+    if matches!(agent.id, AgentId::Universal) {
+        return false;
     }
 
-    let global_exists = agent
-        .global_paths
+    agent
+        .global_detection_paths
         .iter()
-        .any(|p| resolved_path_exists(p, home));
-
-    global_exists
+        .any(|path| resolved_path_exists(path, home))
 }
 
 fn resolved_path_exists(pattern: &str, home: &Path) -> bool {
@@ -951,6 +1167,7 @@ fn resolved_path_exists(pattern: &str, home: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agents::locations::CaptureRoot;
     use crate::models::{AgentId, AgentInfo, ArtifactType, SkillFormat, SkillMetadata, SkillScope};
     use std::fs;
     use std::io::Write;
@@ -982,6 +1199,91 @@ mod tests {
             parent_id: None,
             children: vec![],
         }
+    }
+
+    fn write_capture_skill(root: &Path, name: &str) {
+        let directory = root.join(".agents").join("skills").join(name);
+        fs::create_dir_all(&directory).expect("capture skill directory");
+        fs::write(
+            directory.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: synthetic\n---\nfixture"),
+        )
+        .expect("capture skill");
+    }
+
+    #[test]
+    fn capture_context_scans_only_the_four_sentinel_bound_fixture_skills() {
+        let temp = tempfile::tempdir().expect("capture tempdir");
+        fs::write(
+            temp.path().join(".skill-deck-capture-root"),
+            "skill-deck-capture-v1\n",
+        )
+        .expect("capture sentinel");
+        for name in ["one", "two", "three", "four"] {
+            write_capture_skill(temp.path(), name);
+        }
+        let root =
+            CaptureRoot::from_declared_path(temp.path().to_path_buf()).expect("valid capture root");
+        let environment = LocationEnvironment::for_capture(&root);
+
+        let scan = scan_all_skills_with_context(
+            get_agent_registry_with_environment(&environment),
+            root.root().to_path_buf(),
+            &[],
+            Some(&root),
+        );
+
+        assert!(
+            scan.errors.is_empty(),
+            "unexpected errors: {:?}",
+            scan.errors
+        );
+        assert_eq!(scan.skills.len(), CAPTURE_FIXTURE_SKILL_COUNT);
+        assert!(scan
+            .skills
+            .iter()
+            .all(|skill| root.contains_file(Path::new(&skill.file_path))));
+    }
+
+    #[test]
+    fn capture_context_fails_closed_when_a_fixture_skill_is_a_symlink_escape() {
+        let temp = tempfile::tempdir().expect("capture tempdir");
+        fs::write(
+            temp.path().join(".skill-deck-capture-root"),
+            "skill-deck-capture-v1\n",
+        )
+        .expect("capture sentinel");
+        for name in ["one", "two", "three"] {
+            write_capture_skill(temp.path(), name);
+        }
+        let outside = temp.path().with_extension("outside-skill.md");
+        fs::write(&outside, "---\nname: Outside\n---\nnope").expect("outside skill");
+        let link_dir = temp.path().join(".agents").join("skills").join("four");
+        fs::create_dir_all(&link_dir).expect("link directory");
+        let link = link_dir.join("SKILL.md");
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&outside, &link);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&outside, &link);
+        if link_result.is_err() {
+            return;
+        }
+
+        let root =
+            CaptureRoot::from_declared_path(temp.path().to_path_buf()).expect("valid capture root");
+        let environment = LocationEnvironment::for_capture(&root);
+        let scan = scan_all_skills_with_context(
+            get_agent_registry_with_environment(&environment),
+            root.root().to_path_buf(),
+            &[],
+            Some(&root),
+        );
+
+        assert!(scan.skills.is_empty(), "partial capture must fail closed");
+        assert!(scan
+            .errors
+            .iter()
+            .any(|error| error.message.contains("exactly 4 skills")));
     }
 
     #[test]
@@ -1062,6 +1364,26 @@ mod tests {
     }
 
     #[test]
+    fn test_scan_custom_path_with_malformed_fenced_yaml_keeps_visible_body() {
+        let mut file = NamedTempFile::new().unwrap();
+        writeln!(file, "---").unwrap();
+        writeln!(
+            file,
+            "description: No written brief exists yet: a new landing page"
+        )
+        .unwrap();
+        writeln!(file, "---").unwrap();
+        writeln!(file, "# Visible scanned skill").unwrap();
+        writeln!(file, "Readable instructions.").unwrap();
+
+        let (skills, errors) = scan_custom_paths(&[file.path().to_string_lossy().to_string()]);
+
+        assert!(errors.is_empty());
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].description, "Visible scanned skill");
+    }
+
+    #[test]
     fn test_scan_custom_paths_missing_path_reports_error() {
         let (skills, errors) = scan_custom_paths(&["C:/definitely/not/here/skill.md".to_string()]);
         assert_eq!(skills.len(), 0);
@@ -1114,8 +1436,15 @@ mod tests {
             "Q:/definitely/not/here".to_string(),
             "   ".to_string(),
         ]);
-        let norm = existing.replace('\\', "/").trim_end_matches('/').to_string();
-        assert!(roots.contains(&norm), "expected configured root in {:?}", roots);
+        let norm = existing
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_string();
+        assert!(
+            roots.contains(&norm),
+            "expected configured root in {:?}",
+            roots
+        );
         assert!(!roots.iter().any(|r| r.contains("definitely/not/here")));
     }
 
@@ -1136,11 +1465,15 @@ mod tests {
             "{}/**/SKILL.md",
             temp.path().to_string_lossy().replace('\\', "/")
         );
+        let mut seen = HashSet::new();
         let (skills, errors) = scan_pattern_group(
             &pattern,
             &SkillFormat::SkillMd,
             &[AgentId::ClaudeCode, AgentId::Codex],
             SkillScope::Global,
+            None,
+            &mut seen,
+            None,
         );
 
         assert!(errors.is_empty(), "unexpected errors: {:?}", errors);
@@ -1148,5 +1481,191 @@ mod tests {
         let agents: Vec<_> = skills.iter().map(|s| s.agent_id.clone()).collect();
         assert!(agents.contains(&AgentId::ClaudeCode));
         assert!(agents.contains(&AgentId::Codex));
+    }
+
+    #[test]
+    fn shared_store_universal_attribution_overrides_agent_aliases() {
+        let mut order = Vec::new();
+        let mut groups = HashMap::new();
+        let canonical = PathBuf::from("C:/physical/shared");
+
+        for (pattern, agent) in [
+            ("C:/aliases/claude/**/SKILL.md", AgentId::ClaudeCode),
+            (
+                "C:/users/test/.agents/skills/**/SKILL.md",
+                AgentId::Universal,
+            ),
+        ] {
+            let resolved = pattern.to_string();
+            let key = (
+                physical_pattern_key_with(&resolved, |_| Some(canonical.clone())),
+                SkillFormat::SkillMd,
+            );
+            let agents = groups.entry(key.clone()).or_insert_with(|| {
+                order.push(key);
+                Vec::new()
+            });
+            if matches!(agent, AgentId::Universal) {
+                agents.clear();
+                agents.push(agent);
+            } else if !agents.contains(&AgentId::Universal) {
+                agents.push(agent);
+            }
+        }
+
+        assert_eq!(
+            order.len(),
+            1,
+            "junction aliases must share one physical key"
+        );
+        assert_eq!(
+            groups.get(&order[0]),
+            Some(&vec![AgentId::Universal]),
+            "shared store must not inherit arbitrary agent ownership"
+        );
+    }
+
+    #[test]
+    fn physical_identity_folds_case_only_on_windows() {
+        let path = Path::new("C:/Users/Test/.Agents/Skills");
+        assert_eq!(
+            physical_path_identity_for_platform(path, true),
+            "c:/users/test/.agents/skills"
+        );
+        assert_eq!(
+            physical_path_identity_for_platform(path, false),
+            "C:/Users/Test/.Agents/Skills"
+        );
+    }
+
+    #[test]
+    fn dedupe_keeps_case_distinct_sources_on_case_sensitive_platforms() {
+        let upper = make_skill("one", "/home/test/Skills/demo/SKILL.md");
+        let mut lower = make_skill("two", "/home/test/skills/demo/SKILL.md");
+        lower.agent_id = AgentId::Codex;
+        lower.source_agents = vec![AgentId::Codex];
+
+        let mut case_sensitive = vec![upper.clone(), lower.clone()];
+        dedupe_skills_by_physical_source_for_platform(&mut case_sensitive, false);
+        assert_eq!(case_sensitive.len(), 2);
+
+        let mut case_insensitive = vec![upper, lower];
+        dedupe_skills_by_physical_source_for_platform(&mut case_insensitive, true);
+        assert_eq!(case_insensitive.len(), 1);
+    }
+
+    #[test]
+    fn project_scan_records_its_source_root() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let skill_dir = temp.path().join(".agents").join("skills").join("demo");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(
+            skill_dir.join("SKILL.md"),
+            "---\nname: Demo\ndescription: d\n---\nbody",
+        )
+        .expect("write skill");
+        let root = temp.path().to_string_lossy().replace('\\', "/");
+        let pattern = format!("{root}/.agents/skills/**/SKILL.md");
+
+        let mut seen = HashSet::new();
+        let (skills, errors) = scan_pattern_group(
+            &pattern,
+            &SkillFormat::SkillMd,
+            &[AgentId::Universal],
+            SkillScope::Project,
+            Some(&root),
+            &mut seen,
+            None,
+        );
+
+        assert!(errors.is_empty());
+        assert_eq!(skills.len(), 1);
+        assert_eq!(skills[0].scope, SkillScope::Project);
+        assert_eq!(skills[0].project_path.as_deref(), Some(root.as_str()));
+        assert_eq!(skills[0].agent_id, AgentId::Universal);
+    }
+
+    #[test]
+    fn shared_store_does_not_mark_absent_agent_installed() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let shared = temp.path().join(".agents").join("skills");
+        fs::create_dir_all(&shared).expect("create shared store");
+        let agent = AgentInfo {
+            id: AgentId::Warp,
+            display_name: "Warp".to_string(),
+            description: String::new(),
+            color: String::new(),
+            installed: false,
+            skill_count: 0,
+            global_paths: vec![format!(
+                "{}/**/SKILL.md",
+                shared.to_string_lossy().replace('\\', "/")
+            )],
+            global_detection_paths: vec![temp.path().join(".warp").to_string_lossy().to_string()],
+            project_paths: Vec::new(),
+            format: SkillFormat::SkillMd,
+        };
+
+        assert!(should_scan_agent(&agent, temp.path()));
+        assert!(!is_agent_installed(&agent, temp.path()));
+    }
+
+    #[test]
+    fn current_device_probes_detect_hermes_kimi_and_zed_when_present() {
+        let home = dirs::home_dir().expect("home");
+        let registry = get_agent_registry();
+        for id in [AgentId::HermesAgent, AgentId::KimiCodeCli, AgentId::Zed] {
+            let agent = registry
+                .iter()
+                .find(|agent| agent.id == id)
+                .expect("catalog agent");
+            let any_probe_exists = agent
+                .global_detection_paths
+                .iter()
+                .any(|path| resolved_path_exists(path, &home));
+            if any_probe_exists {
+                assert!(
+                    is_agent_installed(agent, &home),
+                    "{id:?} has a device probe but was not detected"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn current_device_shared_junction_targets_remain_universal() {
+        let Some(home) = dirs::home_dir() else {
+            return;
+        };
+        let shared = home.join(".agents").join("skills");
+        let Ok(shared_canonical) = std::fs::canonicalize(&shared) else {
+            return;
+        };
+
+        let scan = scan_all_skills_with_roots(&[]);
+        let shared_skills: Vec<_> = scan
+            .skills
+            .iter()
+            .filter(|skill| {
+                std::fs::canonicalize(&skill.file_path)
+                    .is_ok_and(|path| path.starts_with(&shared_canonical))
+            })
+            .collect();
+
+        assert!(
+            !shared_skills.is_empty(),
+            "existing shared store should produce visible skills"
+        );
+        assert!(
+            shared_skills
+                .iter()
+                .all(|skill| skill.agent_id == AgentId::Universal),
+            "shared junction targets must retain neutral attribution: {:?}",
+            shared_skills
+                .iter()
+                .filter(|skill| skill.agent_id != AgentId::Universal)
+                .map(|skill| (&skill.agent_id, &skill.file_path))
+                .collect::<Vec<_>>()
+        );
     }
 }

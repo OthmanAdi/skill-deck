@@ -1,20 +1,33 @@
 {
   "name": "skill-deck",
-  "version": "0.1.7",
-  "description": "Universal coding agent skill browser — a desktop overlay for browsing, searching, and managing skills across Claude Code, Cursor, Copilot, Codex, and 50+ AI coding agents.",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Searchable local catalog for AI coding-agent skills, rules, prompts, providers, and model paths.",
   "type": "module",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": "22.23.1",
+    "pnpm": "10.13.1"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "tauri": "tauri"
+    "compliance:test": "python -B -m unittest discover -s scripts/release-compliance/tests -v",
+    "compliance:evidence": "python -B scripts/release-compliance/generate_release_evidence.py --root . --package-root src-tauri --output release-evidence",
+    "tauri": "node scripts/release-compliance/run-tauri-remapped.mjs"
   },
-  "license": "MIT",
+  "author": "Ahmad Othman Ammar Adi",
+  "license": "MPL-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OthmanAdi/skill-deck"
+    "url": "git+https://github.com/OthmanAdi/skill-deck.git"
+  },
+  "homepage": "https://github.com/OthmanAdi/skill-deck#readme",
+  "bugs": {
+    "url": "https://github.com/OthmanAdi/skill-deck/issues"
   },
   "keywords": [
     "skill-deck",
@@ -24,6 +37,12 @@
     "copilot",
     "codex",
     "skills",
+    "ai-agent-skills",
+    "prompt-injection-review",
+    "provider-configuration",
+    "local-ai",
+    "model-management",
+    "ki-coding-agenten",
     "agents-md",
     "skill-md",
     "tauri",
@@ -33,23 +52,29 @@
     "@emoji-mart/data": "^1.2.1",
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource/maple-mono": "^5.2.6",
-    "@tauri-apps/api": "^2",
+    "@tauri-apps/api": "^2.11.0",
     "@tauri-apps/plugin-opener": "^2",
     "emoji-mart": "^5.6.0",
     "highlight.js": "^11.11.1"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.6",
-    "@sveltejs/kit": "^2.9.0",
+    "@sveltejs/kit": "^2.70.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "@tauri-apps/cli": "^2",
-    "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-global-shortcut": "^2.3.1",
-    "svelte": "^5.0.0",
+    "svelte": "^5.56.8",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.4.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "cookie": "0.7.2",
+      "postcss": "8.5.18"
+    }
   }
 }

@@ -1,128 +1,331 @@
-name: Release
+name: Release signed Windows build
 
 on:
   push:
     tags:
       - "v*"
-      - "!v*-pro" # premium (pro) tags never trigger the public release
-  workflow_dispatch:
 
 permissions:
   contents: write
+  id-token: write
+
+concurrency:
+  group: skill-deck-windows-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  test:
-    runs-on: ubuntu-22.04
-    name: Test
-    steps:
-      - uses: actions/checkout@v4
-
-      # Edition guard: the public skill-deck repo ships the FREE edition only.
-      # Refuse to build/publish if premium (pro) source is present or the tag is
-      # a -pro tag. `build` needs `test`, so a failure here blocks the release.
-      - name: Guard against premium source on a public release
-        shell: bash
-        run: |
-          if [ -d src-tauri/src/harness ] || [ -f src-tauri/src/bin/harness_cli.rs ] || [ -d src/lib/components/chat ]; then
-            echo "::error::Premium (pro) source detected on a public release tag. The public repo must never build or publish the harness/chat edition."
-            exit 1
-          fi
-          if [[ "${GITHUB_REF_NAME}" == *-pro ]]; then
-            echo "::error::'-pro' tags are private-edition only and must never run the public release workflow."
-            exit 1
-          fi
-          echo "OK: free edition on public tag '${GITHUB_REF_NAME}'."
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Rust tests
-        run: cd src-tauri && cargo test --locked
-
-      - name: Svelte type checks
-        run: pnpm check
-
-      - name: Rust clippy
-        run: cd src-tauri && cargo clippy --locked -- -D warnings
-
-  build:
-    needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-22.04
-            args: ""
-            label: "Linux x64"
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-            label: "macOS ARM64"
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-            label: "macOS x64"
-          - platform: windows-latest
-            args: ""
-            label: "Windows x64"
-
-    runs-on: ${{ matrix.platform }}
-    name: Build (${{ matrix.label }})
+  validate:
+    name: Validate tagged source
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - name: Install Rust stable
+      - name: Require synchronized tag and package versions
+        shell: pwsh
+        run: |
+          $tagVersion = '${{ github.ref_name }}' -replace '^v', ''
+          $packageVersion = (Get-Content -Raw -LiteralPath package.json | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content -Raw -LiteralPath src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $cargoText = Get-Content -Raw -LiteralPath src-tauri/Cargo.toml
+          $cargoMatch = [regex]::Match($cargoText, '(?m)^version\s*=\s*"([^"]+)"')
+          if (-not $cargoMatch.Success) {
+            throw 'Could not read the package version from src-tauri/Cargo.toml.'
+          }
+          $cargoVersion = $cargoMatch.Groups[1].Value
+          $versionFile = (Get-Content -Raw -LiteralPath VERSION).Trim()
+          $versions = @($packageVersion, $tauriVersion, $cargoVersion, $versionFile)
+          if ($versions | Where-Object { $_ -cne $tagVersion }) {
+            throw "Tag ${{ github.ref_name }} does not match every declared version: $($versions -join ', ')."
+          }
+
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Node.js
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          node-version: "22.23.1"
+          cache: pnpm
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Rust tests
-        run: cd src-tauri && cargo test --locked
-
-      - name: Run Svelte type checks
+      - name: Run Svelte and TypeScript checks
         run: pnpm check
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run release compliance tests
+        run: pnpm compliance:test
+
+      - name: Test the remapped-build launcher
+        run: node --test scripts/release-compliance/tests/test_run_tauri_remapped.mjs
+
+      - name: Run Rust tests
+        run: cargo test --locked --all-targets --all-features
+        working-directory: src-tauri
+
+      - name: Run strict Rust lint
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+        working-directory: src-tauri
+
+  build-sign-publish:
+    name: Build, sign, verify, and publish Windows x64
+    needs: validate
+    runs-on: windows-2025
+    env:
+      SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+      SIGNING_ACCOUNT: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+      SIGNING_PROFILE: ${{ vars.AZURE_ARTIFACT_SIGNING_PROFILE }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Require signing identity configuration
+        shell: pwsh
+        run: |
+          $required = @{
+            AZURE_ARTIFACT_SIGNING_ENDPOINT = $env:SIGNING_ENDPOINT
+            AZURE_ARTIFACT_SIGNING_ACCOUNT = $env:SIGNING_ACCOUNT
+            AZURE_ARTIFACT_SIGNING_PROFILE = $env:SIGNING_PROFILE
+            AZURE_CLIENT_ID = $env:AZURE_CLIENT_ID
+            AZURE_TENANT_ID = $env:AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID = $env:AZURE_SUBSCRIPTION_ID
+          }
+          $missing = @($required.GetEnumerator() | Where-Object {
+            [string]::IsNullOrWhiteSpace([string]$_.Value)
+          } | ForEach-Object Key)
+          if ($missing.Count -gt 0) {
+            throw "Signing configuration is incomplete. Missing: $($missing -join ', ')."
+          }
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up pnpm from packageManager
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Skill Deck ${{ github.ref_name }}"
-          releaseBody: "Cross-platform release of Skill Deck."
-          releaseDraft: true
-          prerelease: false
-          args: ${{ matrix.args }}
+          node-version: "22.23.1"
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test the MSI payload verifier
+        shell: pwsh
+        run: pwsh -NoProfile -File scripts/release-compliance/tests/test_check_windows_msi_payload.ps1
+
+      - name: Build portable executable
+        run: pnpm tauri build --no-bundle
+
+      - name: Reject build-machine provenance
+        shell: pwsh
+        run: |
+          python -B scripts/release-compliance/check_binary_provenance.py `
+            --json `
+            --project-root $env:GITHUB_WORKSPACE `
+            src-tauri/target/release/skill-deck.exe
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Portable executable provenance validation failed.'
+          }
+
+      - name: Authenticate to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign portable executable
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\src-tauri\target\release\skill-deck.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify portable executable signature
+        shell: pwsh
+        run: |
+          $signature = Get-AuthenticodeSignature -LiteralPath src-tauri/target/release/skill-deck.exe
+          if ($signature.Status -ne 'Valid') {
+            throw "Portable executable signature is invalid: $($signature.Status)."
+          }
+
+      - name: Bundle the signed application
+        run: pnpm tauri bundle
+
+      - name: Inspect installer payloads
+        shell: pwsh
+        run: |
+          if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) {
+            throw '7z is required to inspect installer payloads.'
+          }
+          $bundle = 'src-tauri/target/release/bundle'
+          $msi = @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.msi')
+          $nsis = @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.exe')
+          if (($msi.Count -ne 1) -or ($nsis.Count -ne 1)) {
+            throw 'Expected exactly one MSI and one NSIS installer.'
+          }
+
+          $inspection = Join-Path $env:RUNNER_TEMP 'skill-deck-package-inspection'
+          $msiExtraction = Join-Path $inspection 'msi'
+          $report = & scripts/release-compliance/check_windows_msi_payload.ps1 `
+            -MsiPath $msi[0].FullName `
+            -ExpectedProductExe 'skill-deck.exe' `
+            -ExpectedProductDirectory 'Skill Deck' `
+            -ExtractRoot $msiExtraction `
+            -ProjectRoot @($env:GITHUB_WORKSPACE)
+          if ($LASTEXITCODE -ne 0) {
+            throw 'MSI payload verification failed.'
+          }
+          New-Item -ItemType Directory -Path $inspection -Force | Out-Null
+          $report | Set-Content -LiteralPath (Join-Path $inspection 'msi-payload.json') -Encoding utf8NoBOM
+
+          $nsisExtraction = Join-Path $inspection 'nsis'
+          New-Item -ItemType Directory -Path $nsisExtraction -Force | Out-Null
+          & 7z x -y "-o$nsisExtraction" -- $nsis[0].FullName | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw 'NSIS extraction failed.'
+          }
+          $files = @(Get-ChildItem -LiteralPath $nsisExtraction -Recurse -File)
+          $products = @($files | Where-Object Name -IEq 'skill-deck.exe')
+          $forbidden = @($files | Where-Object {
+            ($_.Name -match '(?i)^(license[-_]keygen|harness[-_]cli)\.exe$') -or
+            ($_.Extension -ieq '.pdb')
+          })
+          if (($products.Count -ne 1) -or ($forbidden.Count -ne 0)) {
+            throw 'NSIS payload boundary failed.'
+          }
+          python -B scripts/release-compliance/check_binary_provenance.py `
+            --json `
+            --project-root $env:GITHUB_WORKSPACE `
+            $products[0].FullName
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Extracted NSIS executable provenance validation failed.'
+          }
+
+      - name: Sign Windows installers
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\src-tauri\target\release\bundle
+          files-folder-filter: exe,msi
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify every Windows signature
+        shell: pwsh
+        run: |
+          $files = @(
+            Get-Item -LiteralPath src-tauri/target/release/skill-deck.exe
+            Get-ChildItem -LiteralPath src-tauri/target/release/bundle -Recurse -File |
+              Where-Object Extension -in '.exe', '.msi'
+          )
+          if ($files.Count -ne 3) {
+            throw 'Expected one portable executable and two installer artifacts.'
+          }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($signature.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature: $($file.FullName) ($($signature.Status))."
+            }
+          }
+
+      - name: Generate deterministic release evidence
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'skill-deck-release-evidence'
+          python -B scripts/release-compliance/generate_release_evidence.py `
+            --root $env:GITHUB_WORKSPACE `
+            --package-root (Join-Path $env:GITHUB_WORKSPACE 'src-tauri') `
+            --output $output
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release evidence generation failed.'
+          }
+          $evidencePath = Join-Path $output 'release-evidence.json'
+          $evidence = Get-Content -Raw -LiteralPath $evidencePath | ConvertFrom-Json
+          if (($evidence.source.dirty -ne $false) -or
+              ($evidence.source.repository -cne 'https://github.com/OthmanAdi/skill-deck') -or
+              ($evidence.distributionModel -cne 'single-unlocked-product') -or
+              ($evidence.artifacts.Count -ne 3) -or
+              ($evidence.componentCount -le 0) -or
+              ($evidence.resourceCount -le 0)) {
+            throw 'Release evidence contract failed.'
+          }
+
+      - name: Stage signed release package
+        id: stage
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $stage = Join-Path $env:RUNNER_TEMP "Skill-Deck-$tag-Windows-x64"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+
+          Copy-Item -LiteralPath src-tauri/target/release/skill-deck.exe -Destination $stage
+          Get-ChildItem -LiteralPath src-tauri/target/release/bundle -Recurse -File |
+            Where-Object Extension -in '.exe', '.msi' |
+            Copy-Item -Destination $stage
+          Copy-Item -LiteralPath LICENSE -Destination $stage
+          Copy-Item -LiteralPath src-tauri/resources/THIRD_PARTY_NOTICES.txt -Destination $stage
+          Copy-Item -LiteralPath src-tauri/resources/licenses -Destination (Join-Path $stage 'licenses') -Recurse
+          Copy-Item -Path (Join-Path $env:RUNNER_TEMP 'skill-deck-release-evidence/*') -Destination $stage -Recurse
+
+          python -B scripts/release-compliance/check_binary_provenance.py --json --reject-pdb-under $stage
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Staged release provenance validation failed.'
+          }
+
+          $checksumPath = Join-Path $stage 'SHA256SUMS.txt'
+          $checksumLines = Get-ChildItem -LiteralPath $stage -Recurse -File |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($stage, $_.FullName).Replace('\', '/')
+              $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $relative"
+            }
+          $checksumLines | Set-Content -LiteralPath $checksumPath -Encoding utf8NoBOM
+
+          $archive = Join-Path $env:RUNNER_TEMP "Skill-Deck-$tag-Windows-x64.zip"
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $archive -CompressionLevel Optimal
+          $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $archiveChecksum = "$archive.sha256"
+          "$archiveHash  $([System.IO.Path]::GetFileName($archive))" |
+            Set-Content -LiteralPath $archiveChecksum -Encoding ascii
+
+          "archive=$archive" >> $env:GITHUB_OUTPUT
+          "checksum=$archiveChecksum" >> $env:GITHUB_OUTPUT
+
+      - name: Publish signed GitHub Release
+        shell: pwsh
+        run: |
+          gh release create '${{ github.ref_name }}' `
+            '${{ steps.stage.outputs.archive }}' `
+            '${{ steps.stage.outputs.checksum }}' `
+            --repo $env:GITHUB_REPOSITORY `
+            --verify-tag `
+            --title "Skill Deck ${{ github.ref_name }}" `
+            --generate-notes

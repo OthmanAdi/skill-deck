@@ -1,199 +1,192 @@
-<div align="center">
+# Skill Deck
 
-<img src="media/banner.png" alt="Skill Deck" width="640">
+**Durchsuchbarer Katalog für Skills, Regeln, Prompts und Provider von KI-Coding-Agenten.**
 
-### the universal skill browser for AI coding agents
+[English README](README.en.md)
 
-<p>One overlay. Every coding agent on your machine. Searchable in milliseconds.</p>
-
-<p>
-  <img src="https://img.shields.io/badge/Tauri-v2-24C8D8?style=flat-square&logo=tauri&logoColor=white" alt="Tauri">
-  <img src="https://img.shields.io/badge/Rust-1.90-000000?style=flat-square&logo=rust&logoColor=white" alt="Rust">
-  <img src="https://img.shields.io/badge/Svelte-5-FF3E00?style=flat-square&logo=svelte&logoColor=white" alt="Svelte">
-  <img src="https://img.shields.io/badge/agents-50+-6366f1?style=flat-square" alt="Agents">
-  <img src="https://img.shields.io/badge/platforms-win%20%7C%20mac%20%7C%20linux-2c2e3a?style=flat-square" alt="Platforms">
-  <img src="https://img.shields.io/badge/license-MIT-6366f1?style=flat-square" alt="License">
+<p align="center">
+  <img src="media/banner-v2.png" alt="Skill Deck, Katalog und lokale Kontrolloberfläche für KI-Coding-Agenten" width="888">
 </p>
 
-</div>
+[![CI](https://github.com/OthmanAdi/skill-deck/actions/workflows/ci.yml/badge.svg)](https://github.com/OthmanAdi/skill-deck/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/Version-0.3.0-6d5dfc)](CHANGELOG.md)
+[![Plattform](https://img.shields.io/badge/qualifiziert-Windows%20x64-1677ff)](#plattformunterstützung)
+[![Lizenz](https://img.shields.io/badge/Lizenz-MPL--2.0-2f855a)](LICENSE)
 
----
+KI-Coding-Agenten nutzen Skills, Regeln, Befehle, Hooks und Systemprompts. In Unternehmen und größeren Entwicklungsumgebungen ist jedoch oft unklar, wo diese Artefakte liegen, was sie können, welche Anweisungen sie enthalten und über welche Provider oder lokalen Modellpfade sie ausgeführt werden.
 
-## the pain
+Skill Deck macht diesen Bestand sichtbar. Die Windows-Desktop-App findet dokumentierte Agenten-Artefakte, vereinheitlicht sie in einem lokalen Katalog und macht Inhalte, Einstellungen und Provider durchsuchbar. Das hilft bei Inventarisierung und manueller Prüfung, ersetzt aber weder ein Security-Audit noch eine automatische Erkennung von Prompt Injection.
 
-Every coding agent invents its own skill format. Claude Code drops SKILL.md. Cursor has .mdc. Copilot has prompt files. Codex, Windsurf, Gemini, Cline, Roo, Continue, Aider, Amazon Q, JetBrains, Tabnine, Augment — each one with a different layout, a different folder, a different rendering convention.
+Version 0.3.0 ist eine vollständig freigeschaltete Einzelausgabe. Es gibt keine Free/Pro-Trennung, Preise, Produktaktivierung, Lizenzschlüsselprüfung oder bezahlte Funktionssperre.
 
-You install fifty skills across six agents and lose track of what you have, what you actually use, and which ones are stale. You hunt through dotfiles to remember a slash command. You re-read a SKILL.md you wrote three months ago because no UI lets you skim them all.
+## Warum Skill Deck?
 
-## what skill deck does
+- **Verteilte Agenten-Artefakte:** Claude Code, Codex, Cursor, Copilot, Windsurf, Gemini CLI und weitere Werkzeuge verwenden unterschiedliche Dateien und Verzeichnisse.
+- **Unklare Herkunft und Fähigkeiten:** Ohne gemeinsamen Katalog ist schwer nachvollziehbar, welche Skills installiert sind, woher sie stammen und welche Befehle oder Hooks sie bereitstellen.
+- **Prompt-Injection-Risiken brauchen Sichtbarkeit:** Skill Deck zeigt lokale Inhalte zur Prüfung an. Es bewertet oder zertifiziert ihre Sicherheit nicht automatisch.
+- **Provider und Modelle werden schnell unübersichtlich:** Die App macht konfigurierte Provider, das verwaltete lokale Modell und relevante Einstellungen an einer Stelle sichtbar.
+- **Lokale Arbeitsweise:** Suche, Filter, Favoriten, Snapshots, Verlauf und lokale Harness-Protokolle bleiben auf dem Rechner. Netzwerkzugriffe sind unten ausdrücklich dokumentiert.
 
-Press `Ctrl+Shift+K`. A panel slides in. Every skill, command, hook, rule, prompt, and workflow you have across every coding agent, in one searchable list. Click one, see the body. Star the good ones. Snapshot before you let the agent overwrite them.
+## Funktionen
 
-No editor-switching. No dotfile spelunking. One overlay, everything visible, instant.
+- Durchsucht die dokumentierten globalen und projektbezogenen Ablageorte von 56 Coding-Agenten sowie das universelle Format `AGENTS.md`.
+- Vereinheitlicht Skills, Regeln, Commands, Hooks, Prompts, Workflows und Konfiguration in einem gemeinsamen Artefaktmodell.
+- Bietet Live-Suche, Filter, gruppierte Ansichten, Kartenansicht, Favoriten, Update-Prüfung und Snapshot-Verlauf.
+- Durchsucht öffentliche Skills auf skills.sh und ClawHub.
+- Führt skillbezogene Chat-Sitzungen mit Kontextkomprimierung, Werkzeugen und lokalen Sitzungsdaten aus.
+- Unterstützt das verwaltete lokale Modell Jan-nano 4B, einen lokalen Ollama-Endpunkt oder einen benutzerdefinierten Azure-kompatiblen Provider.
+- Öffnet sich über ein konfigurierbares globales Tastenkürzel und unterstützt Tray-, Pin- und Auto-Hide-Modi.
 
-## quickstart in 30 seconds
+## Screenshots
 
-```bash
-git clone https://github.com/OthmanAdi/skill-deck
-cd skill-deck
-pnpm install && pnpm tauri dev
+<table>
+  <tr>
+    <td><img src="media/screenshots/skill-deck-searchable-catalog.png" alt="Skill Deck zeigt einen durchsuchbaren Katalog für Skills und Regeln von KI-Coding-Agenten"></td>
+    <td><img src="media/screenshots/skill-deck-agent-settings-unlocked.png" alt="Skill Deck zeigt vollständig freigeschaltete Agenten-, Provider- und lokale Modelleinstellungen"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Durchsuchbarer Skill-Katalog</strong></td>
+    <td align="center"><strong>Agenten-, Provider- und Modelleinstellungen</strong></td>
+  </tr>
+</table>
+
+Die Aufnahmen zeigen Skill Deck 0.3.0 auf Windows x64 mit synthetischen Demo-Artefakten. Die zugehörigen Aufnahmeinformationen stehen in `media/screenshots/CAPTURE_RECEIPT.md`.
+
+## Plattformunterstützung
+
+Das aktuell qualifizierte Ziel ist **Windows 10/11 x64**. Der Quellcode enthält weiterhin Adapter für macOS und Linux, für Version 0.3.0 werden jedoch keine qualifizierten nativen Pakete für macOS, Linux, Windows ARM64 oder App Stores behauptet.
+
+Eine öffentliche Binärversion gilt erst dann als veröffentlicht, wenn ein signiertes Artefakt auf der GitHub-Releases-Seite vorhanden ist. Lokale Entwickler-Builds sind unsigniert. Der Tag-Workflow darf kein GitHub Release erzeugen, wenn die Authenticode-Konfiguration fehlt oder eine Windows-Signatur ungültig ist.
+
+## Unter Windows aus dem Quellcode bauen
+
+### Voraussetzungen
+
+- Windows 10 oder 11 auf x64
+- [Node.js 22.23.1](https://nodejs.org/)
+- Corepack mit pnpm 10.13.1, festgelegt in `package.json`
+- [Rust stable](https://rustup.rs/)
+- [Windows-Voraussetzungen von Tauri](https://v2.tauri.app/start/prerequisites/), einschließlich Microsoft C++ Build Tools und WebView2
+
+### Installieren und starten
+
+```powershell
+corepack enable
+pnpm install --frozen-lockfile
+pnpm tauri dev
 ```
 
-Press `Ctrl+Shift+K` anywhere on your desktop. The overlay opens. Type. Skills filter live.
+Mit `Ctrl+Shift+K` wird das Overlay ein- oder ausgeblendet. Das Tastenkürzel lässt sich in den Einstellungen ändern.
 
-For a production binary instead of dev mode:
+### Prüfen und bauen
 
-```bash
-pnpm tauri build
-```
-
-Or grab a prebuilt installer from the [latest release](https://github.com/OthmanAdi/skill-deck/releases/latest).
-
-## who supports what
-
-Skill Deck reads from every agent below through one adapter pipeline. The frontend never sees agent-specific formats — everything normalizes to a single Skill struct.
-
-| Agent | Artifacts read |
-|---|---|
-| Claude Code | SKILL.md, slash commands, settings hooks, agents, plugins |
-| Codex | SKILL.md, AGENTS.md |
-| Cursor | SKILL.md, .mdc rules, .cursorrules |
-| GitHub Copilot | .prompt.md, .instructions.md, copilot-instructions.md |
-| Windsurf | SKILL.md, .windsurf/rules, .windsurfrules |
-| Gemini CLI | SKILL.md, GEMINI.md |
-| Cline, Roo Code, Continue | SKILL.md, rules dirs, .clinerules / .roorules |
-| Aider, Amazon Q, JetBrains AI, Tabnine, Augment | per-agent skill + rule files |
-| OpenCode, Crush, Amp, Antigravity, Goose, Kilo, Qwen, Kimi, Droid, Warp, Zencoder, +35 more | SKILL.md under each agent's store and the shared `~/.agents/skills` |
-| Universal | AGENTS.md |
-
-**56 coding agents** plus the universal `AGENTS.md` format, all wired in `registry.rs`. Adding the next one is a single struct entry. See [Adding a New Agent](#adding-a-new-agent).
-
-## features
-
-| | What it does |
-|---|---|
-| **Universal scan** | One pass across all 50+ agents, normalized into a single skill list. |
-| **Live search + facets** | Filter by name, description, tag, intent, language, slash command, hook event. |
-| **On-demand finder** | `Ctrl+F` opens a focused filter panel. State persists per session. |
-| **Tree + grouped views** | Card hierarchies for nested skills, grouped lists by agent with brand colors. |
-| **Marketplace registry** | First-party integration with [skills.sh](https://skills.sh) and [ClawHub](https://clawhub.ai) — search public skills, copy the `npx skills add` command, install in one shell. |
-| **Update detection** | Auto-discovers the GitHub source for each skill and checks for upstream commits behind the GitHub API. |
-| **Snapshot + restore** | Every update writes a content-hashed snapshot. Diff against the prior version side-by-side. Restore in one click. |
-| **Starred + history pills** | Pin the skills you actually use. See installed-since / updated-since timestamps on every card. |
-| **Themes** | System / Dark / Light, all with proper contrast. |
-| **Hotkey + tray + auto-hide** | Global hotkey rebindable from a press-to-capture field (click, press your keys, auto-saves on the main key — supports modifiers + letters / digits / F1-F24 / arrows / Space / Esc / common punctuation). System tray with mode toggles. Auto-hide on focus loss. |
-| **Tooltips that always show** | Badges and chips portal to `document.body` so the overlay's `overflow: hidden` chrome can no longer clip them. |
-
-## under the hood
-
-```
-src-tauri/src/
-├── agents/registry.rs     # the only file you edit to add an agent
-├── agents/scanner.rs      # filesystem glob → adapter dispatch → Vec<Skill>
-├── parsers/               # frontmatter + skill_md + claude_hooks
-├── models/skill.rs        # universal Skill struct, the single source of truth
-├── detection/             # repo detection, update checker, snapshot history
-│   └── marketplaces/      # skills.sh + clawhub providers
-└── commands/              # Tauri IPC surface (scan, star, snapshot, restore, etc.)
-
-src/lib/
-├── components/            # Svelte 5 overlay UI
-├── stores/                # runes-based state (no writable/derived stores)
-└── types/                 # TypeScript mirrors of Rust models
-```
-
-**Key rule.** The Svelte frontend never sees agent-specific shapes. Every adapter normalizes to `models/skill.rs`. Adding an agent is one struct edit; everything else cascades automatically.
-
-Detailed discovery + parser notes: [`docs/skill-discovery.md`](docs/skill-discovery.md).
-
-## adding a new agent
-
-1. Add a variant to the `AgentId` enum in `src-tauri/src/models/skill.rs`.
-2. Add one entry to `src-tauri/src/agents/registry.rs` with `display_name`, `paths` (using `$HOME` / `$PROJECT`), `format`, `brand_color`.
-3. If the format is novel, add a parser in `src-tauri/src/parsers/`. Otherwise `frontmatter.rs` handles it.
-
-The scanner picks it up automatically. No other code changes needed.
-
-## install paths
-
-Prebuilt binaries via GitHub Releases:
-
-- **Windows x64** — NSIS installer (`.exe`), MSI, or raw executable
-- **macOS** — ARM64 and x64 platform bundles
-- **Linux x64** — AppImage / deb / rpm
-
-Latest release: [`/releases/latest`](https://github.com/OthmanAdi/skill-deck/releases/latest)
-
-Build from source:
-
-```bash
-pnpm install
-pnpm tauri build
-# binaries under src-tauri/target/release/
-```
-
-## signing and updates
-
-The prebuilt installers are not yet code-signed, so the first launch shows a warning:
-
-- **Windows**: SmartScreen says "Windows protected your PC". Click **More info**, then **Run anyway**.
-- **macOS**: Gatekeeper may say the app cannot be opened. Right-click the app and choose **Open**, or run `xattr -dr com.apple.quarantine "/Applications/Skill Deck.app"`.
-
-There is no in-app auto-updater yet. The "Update detection" feature checks your installed *skills* against their GitHub sources; it does not update the app itself. To move to a newer Skill Deck, grab the latest installer from [Releases](https://github.com/OthmanAdi/skill-deck/releases/latest).
-
-## platform support
-
-| Capability | Windows | macOS | Linux |
-|---|---|---|---|
-| Overlay + scan + search + Card View + facets | ✓ | ✓ | ✓ |
-| Global hotkey + tray | ✓ | ✓ | ✓ |
-| Marketplace registry (skills.sh + ClawHub) | ✓ | ✓ | ✓ |
-| Snapshot + diff + restore | ✓ | ✓ | ✓ |
-| Update detection (GitHub API) | ✓ | ✓ | ✓ |
-
-## tech stack
-
-| Layer | Technology |
-|---|---|
-| Desktop shell | [Tauri v2](https://tauri.app) |
-| Backend | Rust 1.90, tokio, serde, [gray_matter](https://crates.io/crates/gray_matter), reqwest |
-| Frontend | [Svelte 5](https://svelte.dev) (runes), SvelteKit 2, Tailwind CSS v4, TypeScript |
-| Marketplace clients | reqwest against [skills.sh](https://skills.sh) + [ClawHub](https://clawhub.ai) public APIs |
-| Syntax highlight | [highlight.js](https://highlightjs.org) |
-
-## built on the shoulders of
-
-- [Tauri](https://github.com/tauri-apps/tauri) — the desktop runtime that makes Rust + Svelte ship as one binary
-- [Svelte 5](https://github.com/sveltejs/svelte) — runes-based reactive UI that compiles to almost nothing
-- [skills.sh](https://skills.sh) + [ClawHub](https://clawhub.ai) — the public skill marketplaces this app reads
-- [highlight.js](https://github.com/highlightjs/highlight.js) — the syntax highlighter used in skill body preview + diff view
-- [gray_matter](https://github.com/the-alchemists-of-arland/gray-matter-rs) — the YAML + markdown frontmatter parser at the heart of the universal adapter
-
-## project setup for AI agents working on this repo
-
-This repo is instrumented for multi-agent development. Each agent gets its own briefing file at the root:
-
-| File | Read by |
-|---|---|
-| `CLAUDE.md` | Claude Code |
-| `AGENTS.md` | Codex, Copilot, all universal-AGENTS.md aware tools |
-| `GEMINI.md` | Gemini CLI |
-| `.cursorrules` | Cursor |
-| `.windsurfrules` | Windsurf |
-| `.github/copilot-instructions.md` | GitHub Copilot |
-
-## contributing
-
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md) before opening a pull request.
-
-```bash
-cd src-tauri && cargo test
-cargo clippy -- -D warnings
+```powershell
 pnpm check
+pnpm compliance:test
+Push-Location src-tauri
+cargo test --locked
+cargo clippy --locked -- -D warnings
+Pop-Location
+pnpm tauri build
 ```
 
-Pull requests welcome — particularly new adapters in `registry.rs`, new parsers in `parsers/`, and new marketplace providers in `detection/marketplaces/`.
+Die Windows-Buildausgabe liegt unter `src-tauri/target/release/`. Ein lokaler Build ist kein offizielles Release und nicht vom Projekt signiert.
 
-## license
+## Unterstützte Agenten und Formate
 
-MIT — [Ahmad Adi](https://github.com/OthmanAdi).
+| Ökosystem | Beispiele gefundener Artefakte |
+|---|---|
+| Claude Code | `SKILL.md`, Slash Commands, Agenten, Plugins, Settings Hooks |
+| Codex | `SKILL.md`, `AGENTS.md` |
+| Cursor | Skills, `.mdc`-Regeln, `.cursorrules` |
+| GitHub Copilot | `.prompt.md`, `.instructions.md`, `copilot-instructions.md` |
+| Windsurf | Skills, Regeln, `.windsurfrules` |
+| Gemini CLI | `SKILL.md`, `GEMINI.md` |
+| Cline, Roo Code, Continue | Skills und agentenspezifische Regeldateien |
+| Aider, Amazon Q, JetBrains AI, Tabnine, Augment | Dokumentierte globale und projektbezogene Artefaktspeicher |
+| OpenCode, Crush, Amp, Antigravity, Goose, Kilo, Qwen, Kimi, Droid, Warp, Zencoder und weitere | Skills in Agentenspeichern und im gemeinsamen Pfad `~/.agents/skills` |
+| Universal | `AGENTS.md` |
+
+Der vollständige Discovery-Vertrag steht in [docs/skill-discovery.md](docs/skill-discovery.md).
+
+## Datenschutz und Netzwerkzugriffe
+
+Discovery, Parsing, Filter, Favoriten, Snapshots, Chatverlauf und Harness-Telemetrie werden lokal verarbeitet und gespeichert. Skill Deck betreibt keinen eigenen Produkt-Telemetriedienst und lädt gefundene Artefakte standardmäßig nicht hoch.
+
+Einige Funktionen verwenden bewusst das Netzwerk:
+
+- Die Marketplace-Suche fragt skills.sh und ClawHub ab.
+- Skill-Update-Prüfungen fragen die konfigurierte GitHub-Quelle ab.
+- Websuche und Web Fetch kontaktieren den ausgewählten Suchanbieter oder die angeforderte Seite, wenn diese Werkzeuge benutzt werden.
+- Bei Nutzung eines entfernten KI-Providers erhält dieser die Unterhaltung und den ausgewählten Kontext. Provider-Zugangsdaten werden lokal gespeichert und in der Oberfläche maskiert ausgegeben.
+- Das verwaltete Jan-nano-Modell wird bei der ersten Nutzung aus einer festgelegten Hugging-Face-Revision geladen, mit SHA-256 geprüft und danach lokal über die mitgelieferte Windows-x64-Laufzeit von llama.cpp bereitgestellt.
+
+Vor der Verarbeitung sensibler Inhalte sollten Provider-, Webtool- und Modelleinstellungen geprüft werden. Hinweise zur privaten Meldung von Schwachstellen stehen in [SECURITY.md](SECURITY.md).
+
+## Architektur
+
+```text
+dokumentierte Agentenpfade
+          |
+          v
+Rust Registry + Scanner -> Parser -> universelles Skill-Modell
+          |                              |
+          |                              v
+          +-----------------------> Svelte-5-Overlay
+                                         |
+                                         v
+                              lokale Einstellungen und Historie
+```
+
+| Bereich | Verantwortung |
+|---|---|
+| `src-tauri/src/agents/` | Agenten-Registry, dokumentierte Orte und Dateisystem-Scan |
+| `src-tauri/src/parsers/` | Markdown-, Frontmatter- und Settings-Hook-Parsing |
+| `src-tauri/src/models/` | Universelle IPC-Datenstrukturen |
+| `src-tauri/src/detection/` | Discovery-Metadaten, Repositories, Marketplaces, Updates und Snapshots |
+| `src-tauri/src/harness/` | Provider, Tools, Kontextverwaltung, Modell-Lebenszyklus und lokale Telemetrie |
+| `src/lib/` | Svelte-5-Komponenten, Stores, Typen und Darstellung |
+| `src/routes/` | Einstiegspunkt des Desktop-Overlays |
+
+Die Oberfläche kennt keine agentenspezifischen Quellformate. Jeder Adapter erzeugt dasselbe universelle Modell, bevor Daten die Tauri-IPC-Grenze passieren.
+
+## Einen Agenten ergänzen
+
+1. Agentenkennung in `src-tauri/src/models/skill.rs` ergänzen.
+2. Dokumentierte Pfade und Format in `src-tauri/src/agents/registry.rs` eintragen.
+3. Nur dann einen Parser hinzufügen, wenn das Format nicht über die bestehende Markdown-/Frontmatter-Pipeline verarbeitet werden kann.
+4. Fokussierte Scanner- und Parser-Tests ergänzen und `docs/skill-discovery.md` aktualisieren.
+
+Der vollständige Entwicklungs- und Pull-Request-Ablauf steht in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Releases und Integrität
+
+Windows-Releases werden durch `v*`-Tags ausgelöst. Der Workflow prüft den Quellstand, verlangt konfigurierte Azure Artifact Signing-Werte, signiert die portable Anwendung vor dem Bundling, signiert beide Installer und prüft anschließend jede Authenticode-Signatur. Erst danach werden Checksummen und Release-Evidence erzeugt und ein GitHub Release angelegt. Es gibt keinen Fallback für unsignierte offizielle Binärdateien.
+
+Die Release-Evidence enthält unter anderem eine CycloneDX-SBOM, ein Inventar deklarierter Abhängigkeitslizenzen, Checksummen, Laufzeit- und Notice-Belege sowie Prüfungen auf unerwünschte Buildpfade. Diese technische Evidence ersetzt keine rechtliche Prüfung und ist keine Security-Zertifizierung.
+
+## Drittanbieter- und Modellhinweise
+
+Der Quellcode von Skill Deck steht unter der Mozilla Public License 2.0 (`MPL-2.0`). Mitgelieferte und heruntergeladene Komponenten behalten ihre eigenen Lizenzen und Zuordnungen:
+
+- Aktive Drittanbieterhinweise: `src-tauri/resources/THIRD_PARTY_NOTICES.txt`
+- Komponentenlizenzen: `src-tauri/resources/licenses/`
+- Lokale Windows-x64-Laufzeit: festgelegter llama.cpp-Build unter MIT-Lizenz
+- Jan-nano 4B Q4_K_M: Download bei Bedarf aus einer festgelegten Revision; Modellkarten-Metadaten deklarieren Apache-2.0. Revision, Größe, SHA-256, Zuordnung und Lizenztext sind bei den Laufzeithinweisen dokumentiert.
+- Der Notice-Korpus unter `release/legal-corpus/` dient der Compliance-Prüfung und ist keine Rechtsberatung.
+
+Die Projektlizenz gilt für den von Skill Deck veröffentlichten Quellcode. Sie ersetzt oder verändert keine Drittanbieter-, Laufzeit- oder Modelllizenz.
+
+## Autor
+
+Skill Deck wird in Berlin von **Ahmad Othman Ammar Adi**, einem syrischstämmigen Softwareentwickler, entwickelt und veröffentlicht. Der Schwerpunkt liegt auf nachvollziehbaren, lokalen Werkzeugen für die praktische Arbeit mit KI-Coding-Agenten. Die vollständigen Angaben stehen in [AUTHORS.md](AUTHORS.md).
+
+## Mitwirken
+
+Fehlerberichte, fokussierte Korrekturen, Dokumentation, neue Agentenadapter und Parser-Tests sind willkommen. Bitte vor der Mitarbeit [CONTRIBUTING.md](CONTRIBUTING.md) und den [Code of Conduct](CODE_OF_CONDUCT.md) lesen.
+
+Sicherheitsprobleme gehören nicht in öffentliche Issues. Der private Meldeweg steht in [SECURITY.md](SECURITY.md).
+
+## Lizenz
+
+Skill Deck wird unter der [Mozilla Public License 2.0](LICENSE) veröffentlicht. Copyright (c) 2026 Ahmad Othman Ammar Adi. Drittanbieter- und Modelllizenzen bleiben davon unberührt.

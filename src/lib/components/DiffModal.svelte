@@ -9,15 +9,19 @@
     When the skill has only one archive, COMPARE falls back to "Current file"
     automatically because there is nothing else to compare to.
 
-  Visuals follow FullSkillModal: glass surface, fade backdrop, fly-in panel,
-  focus trap, Escape to close. The diff renders as a side-by-side table with
-  per-line gutter numbers and red / green tint for removed / added lines.
+  PHOSPHOR modal (DESIGN 6/8), matching FullSkillModal: .scrim backdrop +
+  .layer-modal panel (surface-0, radius-lg, --shadow-modal), scale(0.98->1)+fade
+  entrance at --motion-enter, a Tab focus trap + focus restore, Escape to close.
+  The diff renders as a side-by-side table in the one mono voice (--font-ui) with
+  tabular gutter numbers and --color-ok / --color-error subtle tints for the
+  added / removed lines.
 -->
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { fade, fly } from "svelte/transition";
   import { cubicOut } from "svelte/easing";
 
+  import Spinner from "./ui/Spinner.svelte";
   import {
     closeDiffModal,
     readSkillSnapshot,
@@ -207,6 +211,54 @@
     }
   }
 
+  // Tab focus trap + Escape, propagated from FullSkillModal (the reference
+  // implementation) so focus can never walk out of the open diff dialog into
+  // the scrim-covered content behind it.
+  function handleWindowKeydown(e: KeyboardEvent) {
+    if (!open) return;
+
+    if (e.key === "Tab") {
+      const focusable = panelEl
+        ? Array.from(
+            panelEl.querySelectorAll<HTMLElement>(
+              'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )
+          ).filter((el) => !el.hasAttribute("disabled") && el.offsetParent !== null)
+        : [];
+
+      if (focusable.length > 0) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement as HTMLElement | null;
+        const activeInside = !!active && !!panelEl?.contains(active);
+
+        if (!activeInside) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+
+        if (e.shiftKey && active === first) {
+          e.preventDefault();
+          last.focus();
+          return;
+        }
+
+        if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+          return;
+        }
+      }
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDiffModal();
+    }
+  }
+
   $effect(() => {
     if (open) {
       previousFocusEl =
@@ -224,16 +276,18 @@
     if (!content) return;
     try {
       await navigator.clipboard.writeText(content);
-      showToast(`Copied ${kind}`);
+      showToast(`Copied ${kind}`, "ok");
     } catch {
-      showToast(`Could not copy ${kind}`);
+      showToast(`Could not copy ${kind}`, "error");
     }
   }
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 {#if open}
   <div
-    class="fixed inset-0 z-[210] flex items-center justify-center bg-black/55 px-4"
+    class="scrim z-[210] flex items-center justify-center px-4"
     transition:fade={{ duration: 140 }}
     onclick={handleBackdropClick}
     onkeydown={handleBackdropKeydown}
@@ -241,9 +295,9 @@
   >
     <div
       bind:this={panelEl}
-      class="flex max-h-[88vh] w-full max-w-[860px] flex-col overflow-hidden rounded-lg border shadow-2xl"
-      style="background: var(--color-surface-1); border-color: var(--color-border);"
-      transition:fly={{ y: 12, duration: 180, easing: cubicOut }}
+      class="layer-modal modal-panel-enter flex max-h-[88vh] w-full max-w-[860px] flex-col overflow-hidden"
+      style="transform-origin: center;"
+      out:fly={{ y: 6, duration: 140, easing: cubicOut }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="diff-modal-title"
@@ -251,22 +305,20 @@
       <!-- Header -->
       <header
         class="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3"
-        style="border-color: var(--color-border); background: var(--color-surface-2);"
+        style="border-color: var(--color-border); background: var(--color-surface-1);"
       >
         <div class="min-w-0 flex-1">
-          <p
-            class="truncate text-[10px] uppercase tracking-[0.08em] text-[var(--color-text-muted)]"
-          >
+          <p class="u-caps truncate">
             {mode === "compare" ? "Compare archives" : "Archive preview"}
           </p>
           <h2
             id="diff-modal-title"
-            class="truncate text-[14px] font-semibold text-[var(--color-text-primary)]"
+            class="truncate font-display text-lg font-semibold text-[var(--color-text-primary)]"
           >
             {skill?.name ?? "Skill"}
           </h2>
           {#if skill}
-            <p class="truncate font-mono text-[9px] text-[var(--color-text-muted)]">
+            <p class="truncate text-2xs text-[var(--color-text-muted)]">
               {skill.filePath}
             </p>
           {/if}
@@ -275,9 +327,7 @@
         <button
           bind:this={closeButtonEl}
           type="button"
-          class="rounded-md border px-2 py-1 text-[10px] font-medium transition-colors duration-150
-            hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)]"
-          style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-secondary);"
+          class="btn-secondary btn-sm"
           onclick={closeDiffModal}
           aria-label="Close diff dialog"
         >
@@ -287,27 +337,19 @@
 
       <!-- Controls / metadata bar -->
       <div
-        class="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2 text-[10px]"
+        class="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2 text-2xs"
         style="border-color: var(--color-border); background: var(--color-surface-1); color: var(--color-text-secondary);"
       >
         {#if mode === "compare"}
           <span class="font-medium text-[var(--color-text-muted)]">Comparing</span>
           {#if leftMeta}
-            <span
-              class="instant-tooltip rounded-md border px-1.5 py-0.5"
-              style="border-color: var(--color-border); background: var(--color-surface-2);"
-              data-tooltip={leftMeta.sub}
-            >
+            <span class="badge-meta instant-tooltip" data-tooltip={leftMeta.sub}>
               {leftMeta.label}
             </span>
           {/if}
           <span class="text-[var(--color-text-muted)]">vs</span>
 
-          <select
-            class="rounded-md border px-1.5 py-0.5 text-[10px] focus:outline-none"
-            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-primary);"
-            bind:value={compareWith}
-          >
+          <select class="field" bind:value={compareWith} aria-label="Compare against">
             {#if otherEntries.length === 0}
               <option value={CURRENT_FILE_SENTINEL}>Current file (only option)</option>
             {:else}
@@ -319,33 +361,31 @@
           </select>
 
           {#if diff}
-            <span class="ml-auto flex items-center gap-1.5 text-[var(--color-text-muted)]">
-              <span class="rounded-md border px-1.5 py-0.5"
-                style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-accent);">
+            <span class="ml-auto flex items-center gap-2 text-[var(--color-text-muted)]">
+              <span
+                class="inline-flex items-center rounded-xs border px-1.5 py-0.5 tabular-nums"
+                style="border-color: var(--color-border); background: var(--color-ok-subtle); color: var(--color-ok);"
+              >
                 +{diff.summary.added}
               </span>
-              <span class="rounded-md border px-1.5 py-0.5"
-                style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-error);">
+              <span
+                class="inline-flex items-center rounded-xs border px-1.5 py-0.5 tabular-nums"
+                style="border-color: var(--color-border); background: var(--color-error-subtle); color: var(--color-error);"
+              >
                 -{diff.summary.removed}
               </span>
-              <span class="opacity-75">{diff.summary.unchanged} unchanged</span>
+              <span class="tabular-nums opacity-75">{diff.summary.unchanged} unchanged</span>
             </span>
           {/if}
         {:else if leftMeta}
-          <span
-            class="instant-tooltip rounded-md border px-1.5 py-0.5"
-            style="border-color: var(--color-border); background: var(--color-surface-2);"
-            data-tooltip={leftMeta.sub}
-          >
+          <span class="badge-meta instant-tooltip" data-tooltip={leftMeta.sub}>
             {leftMeta.label}
           </span>
           <span class="text-[var(--color-text-muted)]">{leftMeta.sub}</span>
 
           <button
             type="button"
-            class="ml-auto rounded-md border px-1.5 py-0.5 text-[10px] font-medium transition-colors duration-150
-              hover:bg-[var(--color-surface-3)] hover:text-[var(--color-accent)]"
-            style="border-color: var(--color-border); background: var(--color-surface-2); color: var(--color-text-secondary);"
+            class="btn-secondary btn-sm ml-auto"
             onclick={() => copyContent(leftContent, "snapshot")}
           >
             Copy text
@@ -356,15 +396,12 @@
       <!-- Body -->
       <div class="diff-body min-h-0 flex-1 overflow-auto">
         {#if loading}
-          <div class="flex items-center gap-2 px-4 py-6 text-[11px] text-[var(--color-text-muted)]">
-            <span
-              class="h-3 w-3 rounded-full border-[1.5px] border-[var(--color-accent)] border-t-transparent"
-              style="animation: refresh-spin 0.7s linear infinite;"
-            ></span>
+          <div class="flex items-center gap-2 px-4 py-6 text-xs text-[var(--color-text-muted)]">
+            <Spinner size={14} label="Loading snapshot" />
             Loading snapshot...
           </div>
         {:else if errorMessage}
-          <div class="px-4 py-6 text-[11px] text-[var(--color-error)]">{errorMessage}</div>
+          <div class="px-4 py-6 text-xs text-[var(--color-error)]">{errorMessage}</div>
         {:else if mode === "view"}
           {#if viewRendered}
             <div
@@ -374,13 +411,13 @@
               {@html viewRendered.html}
             </div>
           {:else}
-            <p class="px-4 py-6 text-[11px] text-[var(--color-text-muted)]">No content available</p>
+            <p class="px-4 py-6 text-xs text-[var(--color-text-muted)]">No content available</p>
           {/if}
         {:else if highlightedDiffRows && diff}
           {@const truncated = diff.summary.truncated}
           <table
-            class="hljs w-full border-separate text-[11px] font-mono leading-snug"
-            style="background: var(--color-code-bg); border-spacing: 0;"
+            class="hljs w-full border-separate text-xs leading-snug"
+            style="background: var(--color-code-bg); border-spacing: 0; font-family: var(--font-ui);"
             data-language={diffLanguage}
           >
             <colgroup>
@@ -396,22 +433,24 @@
                 <tr
                   class="align-top"
                   style="background: {row.kind === 'add'
-                    ? 'rgba(46, 160, 67, 0.10)'
+                    ? 'var(--color-ok-subtle)'
                     : row.kind === 'remove'
-                      ? 'rgba(248, 81, 73, 0.10)'
+                      ? 'var(--color-error-subtle)'
                       : 'transparent'};"
                 >
                   <td
-                    class="select-none px-2 text-right text-[9px] text-[var(--color-text-muted)]"
+                    class="select-none px-2 text-right text-2xs tabular-nums text-[var(--color-text-muted)]"
                     style="border-right: 1px solid var(--color-border);"
                   >
                     {row.leftNumber ?? ""}
                   </td>
                   <td
-                    class="px-1 text-center text-[var(--color-text-muted)]"
-                    style="border-right: 1px solid var(--color-border);"
+                    class="select-none px-1 text-center"
+                    style="border-right: 1px solid var(--color-border); color: {row.kind === 'remove'
+                      ? 'var(--color-error)'
+                      : 'var(--color-text-muted)'};"
                   >
-                    {row.kind === "remove" ? "-" : row.kind === "add" ? "" : ""}
+                    {row.kind === "remove" ? "-" : ""}
                   </td>
                   <td
                     class="diff-code-cell whitespace-pre-wrap break-words px-2"
@@ -419,16 +458,18 @@
                   >{@html row.leftHtml}</td>
 
                   <td
-                    class="select-none px-2 text-right text-[9px] text-[var(--color-text-muted)]"
+                    class="select-none px-2 text-right text-2xs tabular-nums text-[var(--color-text-muted)]"
                     style="border-right: 1px solid var(--color-border);"
                   >
                     {row.rightNumber ?? ""}
                   </td>
                   <td
-                    class="px-1 text-center text-[var(--color-text-muted)]"
-                    style="border-right: 1px solid var(--color-border);"
+                    class="select-none px-1 text-center"
+                    style="border-right: 1px solid var(--color-border); color: {row.kind === 'add'
+                      ? 'var(--color-ok)'
+                      : 'var(--color-text-muted)'};"
                   >
-                    {row.kind === "add" ? "+" : row.kind === "remove" ? "" : ""}
+                    {row.kind === "add" ? "+" : ""}
                   </td>
                   <td
                     class="diff-code-cell whitespace-pre-wrap break-words px-2"
@@ -439,7 +480,7 @@
           </table>
           {#if truncated}
             <p
-              class="border-t px-4 py-2 text-[10px] text-[var(--color-text-muted)]"
+              class="border-t px-4 py-2 text-2xs text-[var(--color-text-muted)]"
               style="border-color: var(--color-border); background: var(--color-surface-1);"
             >
               Diff truncated to the first 4000 lines per side. Use the View action
@@ -451,3 +492,17 @@
     </div>
   </div>
 {/if}
+
+<style>
+  /* Modal entrance (DESIGN 7): shared popover-in recipe (scale 0.98->1 + fade)
+     at the modal tier — --motion-enter, emphasized ease. No `both` fill so the
+     Svelte out: transition wins on exit; reduced-motion -> opacity-only. */
+  .modal-panel-enter {
+    animation: popover-in var(--motion-enter) var(--ease-emphasized);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .modal-panel-enter {
+      animation-name: u-fade-in;
+    }
+  }
+</style>

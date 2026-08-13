@@ -18,7 +18,7 @@
   style="background: var(--color-surface-2);"
 >
   {#if store.activeTab === "registry"}
-    <div class="flex shrink-0 items-center gap-1.5 text-[9.5px] tabular-nums text-[var(--color-text-secondary)]">
+    <div class="flex shrink-0 items-center gap-1.5 text-2xs tabular-nums text-[var(--color-text-secondary)]">
       <span class="opacity-80">Registry search</span>
       {#if store.registryDurationMs > 0}
         <span class="opacity-50">·</span>
@@ -26,7 +26,7 @@
       {/if}
     </div>
   {:else}
-    <div class="flex shrink-0 items-center gap-1.5 text-[9.5px] tabular-nums text-[var(--color-text-secondary)]">
+    <div class="flex shrink-0 items-center gap-1.5 text-2xs tabular-nums text-[var(--color-text-secondary)]">
       <span class="opacity-80">{store.scanDurationMs}ms</span>
       {#if timeSinceScan}
         <span class="opacity-50">·</span>
