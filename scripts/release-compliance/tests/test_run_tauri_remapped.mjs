@@ -10,11 +10,23 @@ import {
   requiresRemapping,
   resolveTauriCliScript,
   runTauri,
+  slashVariants,
   splitEffectiveRustflags,
 } from "../run-tauri-remapped.mjs";
 
 const WINDOWS_PROJECT = String.raw`C:\Users\Build User\skill deck`;
-const WINDOWS_SYSROOT = String.raw`C:\Users\Build User\.rustup\toolchains\stable`;
+const FIXTURE_HOME = path.join(
+  path.parse(process.cwd()).root,
+  "skill-deck-fixture",
+  "Build User",
+);
+const FIXTURE_PROJECT = path.join(FIXTURE_HOME, "skill deck");
+const FIXTURE_SYSROOT = path.join(
+  FIXTURE_HOME,
+  ".rustup",
+  "toolchains",
+  "stable",
+);
 
 function encodedFlags(env) {
   return env.CARGO_ENCODED_RUSTFLAGS.split(ENCODED_FLAG_SEPARATOR);
@@ -27,6 +39,13 @@ test("build and bundle remap while dev passes through", () => {
   assert.equal(requiresRemapping(["info"]), false);
 });
 
+test("slash variants preserve both Windows path separators", () => {
+  assert.deepEqual(slashVariants(WINDOWS_PROJECT), [
+    WINDOWS_PROJECT.replaceAll("\\", "/"),
+    WINDOWS_PROJECT,
+  ]);
+});
+
 test("encoded flags are preserved and remaps handle spaces and slash variants", () => {
   const existing = [
     "-Copt-level=2",
@@ -36,15 +55,16 @@ test("encoded flags are preserved and remaps handle spaces and slash variants", 
     baseEnv: {
       CARGO_ENCODED_RUSTFLAGS: existing,
       RUSTFLAGS: '"unterminated',
-      CARGO_HOME: String.raw`C:\Users\Build User\.cargo`,
-      RUSTUP_HOME: String.raw`C:\Users\Build User\.rustup`,
-      CARGO_TARGET_DIR: `${WINDOWS_PROJECT}\\src-tauri\\target`,
+      CARGO_HOME: path.join(FIXTURE_HOME, ".cargo"),
+      RUSTUP_HOME: path.join(FIXTURE_HOME, ".rustup"),
+      CARGO_TARGET_DIR: path.join(FIXTURE_PROJECT, "src-tauri", "target"),
     },
-    projectRoot: WINDOWS_PROJECT,
-    userHome: String.raw`C:\Users\Build User`,
-    rustcSysroot: WINDOWS_SYSROOT,
+    projectRoot: FIXTURE_PROJECT,
+    userHome: FIXTURE_HOME,
+    rustcSysroot: FIXTURE_SYSROOT,
   });
   const flags = encodedFlags(env);
+  const fixtureTarget = path.join(FIXTURE_PROJECT, "src-tauri", "target");
   assert.deepEqual(flags.slice(0, 2), [
     "-Copt-level=2",
     "--cfg=existing_flag",
@@ -54,19 +74,19 @@ test("encoded flags are preserved and remaps handle spaces and slash variants", 
   const remaps = flags.slice(2);
   assert.ok(
     remaps.includes(
-      `--remap-path-prefix=${WINDOWS_PROJECT}=/skill-deck/source`,
+      `--remap-path-prefix=${FIXTURE_PROJECT}=/skill-deck/source`,
     ),
   );
   assert.ok(
     remaps.includes(
-      `--remap-path-prefix=${WINDOWS_PROJECT.replaceAll("\\", "/")}=/skill-deck/source`,
+      `--remap-path-prefix=${FIXTURE_PROJECT.replaceAll("\\", "/")}=/skill-deck/source`,
     ),
   );
   assert.ok(
     remaps.some(
       (flag) =>
         flag ===
-        `--remap-path-prefix=${WINDOWS_PROJECT}\\src-tauri\\target=/skill-deck/target`,
+        `--remap-path-prefix=${fixtureTarget}=/skill-deck/target`,
     ),
   );
   assert.equal(new Set(remaps).size, remaps.length);
@@ -78,18 +98,18 @@ test("encoded flags are preserved and remaps handle spaces and slash variants", 
   assert.deepEqual(sourceLengths, [...sourceLengths].sort((a, b) => a - b));
   assert.ok(
     remaps.indexOf(
-      `--remap-path-prefix=${WINDOWS_PROJECT}=/skill-deck/source`,
+      `--remap-path-prefix=${FIXTURE_PROJECT}=/skill-deck/source`,
     ) <
       remaps.indexOf(
-        `--remap-path-prefix=${WINDOWS_PROJECT}\\src-tauri\\target=/skill-deck/target`,
+        `--remap-path-prefix=${fixtureTarget}=/skill-deck/target`,
       ),
   );
   assert.ok(
     remaps.indexOf(
-      String.raw`--remap-path-prefix=C:\Users\Build User\.rustup=/rust/rustup-home`,
+      `--remap-path-prefix=${path.join(FIXTURE_HOME, ".rustup")}=/rust/rustup-home`,
     ) <
       remaps.indexOf(
-        `--remap-path-prefix=${WINDOWS_SYSROOT}=/rust/sysroot`,
+        `--remap-path-prefix=${FIXTURE_SYSROOT}=/rust/sysroot`,
       ),
   );
 });
