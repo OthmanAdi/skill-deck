@@ -328,10 +328,10 @@ class BinaryProvenanceTests(unittest.TestCase):
     def test_cli_emits_only_normalized_evidence_never_raw_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            private_prefix = root / "A User" / "private-project"
+            private_prefix = r"C:\Users\A User\private-project"
             artifact = root / "candidate.exe"
             artifact.write_bytes(
-                (str(private_prefix) + "/src/main.rs").encode("ascii")
+                (private_prefix + r"\src\main.rs").encode("ascii")
             )
             result = subprocess.run(
                 [
@@ -340,7 +340,7 @@ class BinaryProvenanceTests(unittest.TestCase):
                     str(SCRIPT),
                     "--json",
                     "--project-root",
-                    str(private_prefix),
+                    private_prefix,
                     str(artifact),
                 ],
                 check=False,
@@ -351,7 +351,7 @@ class BinaryProvenanceTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         report = json.loads(result.stdout)
         self.assertFalse(report["passed"])
-        self.assertNotIn(str(private_prefix), result.stdout)
+        self.assertNotIn(private_prefix, result.stdout)
         self.assertNotIn(str(artifact), result.stdout)
         self.assertEqual(result.stderr, "")
         self.assertEqual(
