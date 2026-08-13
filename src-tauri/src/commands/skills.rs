@@ -1362,7 +1362,7 @@ mod catalog_tests {
         {
             assert_eq!(
                 result.expect_err("late path swap must fail closed"),
-                "Skill path changed during restore"
+                "Restore write may have modified the bound file: skill path changed during restore"
             );
             assert_eq!(
                 fs::read_to_string(&skill).expect("replacement remains readable"),
